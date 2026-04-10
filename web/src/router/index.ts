@@ -1,40 +1,28 @@
 import { createRouter, createWebHistory } from 'vue-router'
-
-import CalibrationView from '@/views/CalibrationView.vue'
-import DeviceManagementView from '@/views/DeviceManagementView.vue'
-import MeasurementView from '@/views/MeasurementView.vue'
-import ModuleHubView from '@/views/ModuleHubView.vue'
+import HomeView from '../views/HomeView.vue'
 
 const router = createRouter({
-  history: createWebHistory(),
+  history: createWebHistory(import.meta.env.BASE_URL),
   routes: [
     {
       path: '/',
-      name: 'module-hub',
-      component: ModuleHubView
+      name: 'home',
+      component: HomeView
     },
     {
-      path: '/workbench',
-      redirect: '/module/device-management'
+      path: '/measurement',
+      name: 'measurement',
+      component: () => import('../views/measurement/CalibrationView.vue')
     },
     {
-      path: '/module/device-management',
-      name: 'module-device-management',
-      component: DeviceManagementView
+      path: '/multi-pressure',
+      name: 'multi-pressure',
+      component: () => import('../views/measurement/PressureWorkbenchView.vue')
     },
     {
-      path: '/module/measurement',
-      name: 'module-measurement',
-      component: MeasurementView
-    },
-    {
-      path: '/module/calibration',
-      name: 'module-calibration',
-      component: CalibrationView
-    },
-    {
-      path: '/:pathMatch(.*)*',
-      redirect: '/'
+      path: '/calibration',
+      name: 'calibration',
+      component: () => import('../views/calibration/MainView.vue')
     }
   ]
 })
