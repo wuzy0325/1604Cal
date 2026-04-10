@@ -1,0 +1,59 @@
+import { flushPromises, mount } from '@vue/test-utils'
+import { createPinia, setActivePinia } from 'pinia'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+
+import DeviceSelectionPanel from '../DeviceSelectionPanel.vue'
+import * as apiClient from '@/services/apiClient'
+
+vi.mock('@/services/apiClient', () => ({
+  fetchDevices: vi.fn()
+}))
+
+describe('DeviceSelectionPanel', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    vi.clearAllMocks()
+
+    vi.mocked(apiClient.fetchDevices).mockResolvedValue([
+      {
+        id: 'm1',
+        name: 'measure-1',
+        type: 'measure',
+        model: 'WTN1604',
+        host: '192.168.1.10',
+        port: 9000,
+        unit: 'kPa',
+        status: 'connected'
+      },
+      {
+        id: 'p1',
+        name: 'pressure-1',
+        type: 'pressure',
+        model: 'ConST 820',
+        host: '192.168.1.11',
+        port: 7001,
+        unit: 'kPa',
+        status: 'connected'
+      }
+    ])
+  })
+
+  it('loads device options and allows selecting for module', async () => {
+    const wrapper = mount(DeviceSelectionPanel, {
+      props: {
+        moduleKey: 'measurement'
+      }
+    })
+
+    await flushPromises()
+
+    const selects = wrapper.findAll('select')
+    expect(selects.length).toBeGreaterThanOrEqual(2)
+
+    await selects[0].setValue('m1')
+    await selects[1].setValue('p1')
+
+    expect(wrapper.text()).toContain('measure-1')
+    expect(wrapper.text()).toContain('pressure-1')
+  })
+})

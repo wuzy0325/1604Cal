@@ -1,0 +1,8 @@
+.worktrees/
+worktrees/
+npm-cache/
+
+web/node_modules/
+web/dist/
+
+*.log
