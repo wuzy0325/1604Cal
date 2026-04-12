@@ -8,24 +8,25 @@
           <div class="device-type">压力控制器</div>
         </div>
       </div>
-      <DeviceStatusBadge :status="status" />
+      <DeviceStatusBadge :status="deviceStatus" />
     </div>
     
     <div class="connection-control">
-      <el-input v-model="ip" placeholder="IP地址" />
-      <el-input-number v-model="port" :min="1" :max="65535" controls-position="right" />
+      <el-input v-model="ip" placeholder="IP地址" :disabled="isConnected" />
+      <el-input-number v-model="port" :min="1" :max="65535" controls-position="right" :disabled="isConnected" />
       <el-button 
-        :type="status === 'connected' ? 'danger' : 'primary'"
+        :type="isConnected ? 'danger' : 'primary'"
+        :loading="isConnecting"
         @click="toggleConnection"
       >
-        {{ status === 'connected' ? '断开' : '连接' }}
+        {{ isConnected ? '断开' : '连接' }}
       </el-button>
     </div>
     
-    <div v-if="status === 'connected'" class="pressure-control">
+    <div v-if="isConnected" class="pressure-control">
       <div class="current-pressure">
         <span class="label">当前压力:</span>
-        <span class="value">{{ currentPressure.toFixed(2) }} kPa</span>
+        <span class="value">{{ currentPressure?.toFixed(2) || '--' }} kPa</span>
       </div>
       <div class="pressure-actions">
         <el-button @click="adjustPressure(-1)">
@@ -44,20 +45,48 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import { FirstAidKit, ArrowUp, ArrowDown } from '@element-plus/icons-vue'
 import DeviceStatusBadge from '@/components/common/DeviceStatusBadge.vue'
+import { useMeasurementDeviceStore } from '@/stores/measurement/deviceStore'
+
+const emit = defineEmits<{
+  connect: [deviceId: string]
+  disconnect: [deviceId: string]
+}>()
+
+const deviceStore = useMeasurementDeviceStore()
 
 const ip = ref('192.168.1.101')
 const port = ref(502)
-const status = ref<'connected' | 'disconnected'>('disconnected')
-const currentPressure = ref(0)
 const targetPressure = ref(100)
 
-const toggleConnection = () => {
-  status.value = status.value === 'connected' ? 'disconnected' : 'connected'
-  if (status.value === 'connected') {
-    currentPressure.value = 0
+// 获取第一个打压设备
+const device = computed(() => deviceStore.pressureDevices[0])
+const deviceId = computed(() => device.value?.id)
+
+// 计算状态
+const isConnected = computed(() => device.value?.status === 'connected')
+const isConnecting = computed(() => device.value?.status === 'connecting')
+const deviceStatus = computed(() => {
+  if (!device.value) return 'disconnected'
+  if (device.value.status === 'connected') return 'connected'
+  if (device.value.status === 'connecting') return 'disconnected'
+  if (device.value.status === 'error') return 'error'
+  return 'disconnected'
+})
+const currentPressure = computed(() => device.value?.currentPressure)
+
+const toggleConnection = async () => {
+  if (!deviceId.value) {
+    // 如果没有设备，需要先生成一个临时ID
+    return
+  }
+
+  if (isConnected.value) {
+    emit('disconnect', deviceId.value)
+  } else {
+    emit('connect', deviceId.value)
   }
 }
 
@@ -67,7 +96,10 @@ const adjustPressure = (delta: number) => {
 
 const setPressure = () => {
   console.log(`设定压力: ${targetPressure.value}`)
-  currentPressure.value = targetPressure.value
+  // 这里应该调用实际的设定压力API
+  if (device.value) {
+    device.value.currentPressure = targetPressure.value
+  }
 }
 </script>
 

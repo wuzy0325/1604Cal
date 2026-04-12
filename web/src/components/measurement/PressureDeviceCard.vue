@@ -28,16 +28,7 @@
 
 <script setup lang="ts">
 import DeviceStatusBadge from '@/components/common/DeviceStatusBadge.vue'
-
-interface PressureDevice {
-  id: string
-  name: string
-  ip: string
-  port: number
-  status: 'connected' | 'disconnected'
-  currentPressure?: number
-  unit: string
-}
+import type { PressureDevice } from '@/stores/measurement/deviceStore'
 
 const props = defineProps<{
   device: PressureDevice

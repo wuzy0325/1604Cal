@@ -5,8 +5,11 @@
       <div class="actions">
         <div class="point-count">
           <label>压力点个数:</label>
-          <el-input-number v-model="pointCount" :min="1" :max="50" size="small" />
+          <el-input-number v-model="localPointCount" :min="1" :max="50" size="small" />
         </div>
+        <el-button type="primary" size="small" @click="emitGenerate">
+          生成压力点
+        </el-button>
         <div class="progress">
           <label>完成进度:</label>
           <el-progress :percentage="progressPercent" :stroke-width="8" style="width: 120px" />
@@ -14,7 +17,7 @@
       </div>
     </div>
     
-    <el-table :data="points" border stripe class="point-table">
+    <el-table :data="props.points" border stripe class="point-table">
       <el-table-column type="index" label="序号" width="60" />
       <el-table-column label="状态" width="100">
         <template #default="{ row }">
@@ -39,7 +42,7 @@
             v-if="row.status === 'pending_press'"
             type="primary" 
             size="small"
-            @click="pressurize(row)"
+            @click="emitPressurize(row.id)"
           >
             打压
           </el-button>
@@ -47,7 +50,7 @@
             v-else-if="row.status === 'pending_confirm'"
             type="success" 
             size="small"
-            @click="confirm(row)"
+            @click="emitConfirm(row.id)"
           >
             确认
           </el-button>
@@ -60,7 +63,7 @@
             v-if="row.status === 'pending_collect'"
             type="primary" 
             size="small"
-            @click="collect(row)"
+            @click="emitCollect(row.id)"
           >
             采集
           </el-button>
@@ -69,7 +72,7 @@
             type="warning" 
             link
             size="small"
-            @click="recollect(row)"
+            @click="emitCollect(row.id)"
           >
             重新采集
           </el-button>
@@ -77,8 +80,8 @@
         </template>
       </el-table-column>
       <el-table-column label="操作" width="80">
-        <template #default="{ row, $index }">
-          <el-button type="danger" link size="small" @click="removePoint($index)">
+        <template #default="{ $index }">
+          <el-button type="danger" link size="small" @click="emitRemove($index)">
             删除
           </el-button>
         </template>
@@ -89,26 +92,29 @@
 
 <script setup lang="ts">
 import { ref, computed } from 'vue'
+import type { PressurePoint, CalibrationParams } from '@/stores/calibration'
+
+const props = defineProps<{
+  points: PressurePoint[]
+  params?: CalibrationParams
+}>()
+
+const emit = defineEmits<{
+  generate: []
+  pressurize: [pointId: string]
+  confirm: [pointId: string]
+  collect: [pointId: string]
+  remove: [index: number]
+}>()
+
+const localPointCount = ref(props.params?.points || 10)
 
 type PointStatus = 'pending_press' | 'pending_confirm' | 'pending_collect' | 'completed'
 
-interface PressurePoint {
-  targetPressure: number
-  status: PointStatus
-}
-
-const pointCount = ref(5)
-const points = ref<PressurePoint[]>([
-  { targetPressure: 10, status: 'completed' },
-  { targetPressure: 20, status: 'completed' },
-  { targetPressure: 30, status: 'pending_collect' },
-  { targetPressure: 40, status: 'pending_confirm' },
-  { targetPressure: 50, status: 'pending_press' }
-])
-
 const progressPercent = computed(() => {
-  const completed = points.value.filter(p => p.status === 'completed').length
-  return Math.round((completed / points.value.length) * 100)
+  if (props.points.length === 0) return 0
+  const completed = props.points.filter(p => p.status === 'completed').length
+  return Math.round((completed / props.points.length) * 100)
 })
 
 const getStatusType = (status: PointStatus) => {
@@ -131,28 +137,24 @@ const getStatusText = (status: PointStatus) => {
   return map[status]
 }
 
-const pressurize = (row: PressurePoint) => {
-  console.log('打压:', row.targetPressure)
-  row.status = 'pending_confirm'
+const emitGenerate = () => {
+  emit('generate')
 }
 
-const confirm = (row: PressurePoint) => {
-  console.log('确认压力:', row.targetPressure)
-  row.status = 'pending_collect'
+const emitPressurize = (pointId: string) => {
+  emit('pressurize', pointId)
 }
 
-const collect = (row: PressurePoint) => {
-  console.log('采集数据:', row.targetPressure)
-  row.status = 'completed'
+const emitConfirm = (pointId: string) => {
+  emit('confirm', pointId)
 }
 
-const recollect = (row: PressurePoint) => {
-  console.log('重新采集:', row.targetPressure)
-  row.status = 'pending_collect'
+const emitCollect = (pointId: string) => {
+  emit('collect', pointId)
 }
 
-const removePoint = (index: number) => {
-  points.value.splice(index, 1)
+const emitRemove = (index: number) => {
+  emit('remove', index)
 }
 </script>
 

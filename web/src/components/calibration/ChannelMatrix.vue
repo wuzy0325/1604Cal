@@ -11,13 +11,13 @@
     
     <div class="matrix-grid">
       <div 
-        v-for="(selected, index) in channels" 
+        v-for="(selected, index) in localChannels" 
         :key="index"
         class="channel-item"
         :class="{ selected }"
         @click="toggleChannel(index)"
       >
-        <el-checkbox v-model="channels[index]" @click.stop>
+        <el-checkbox v-model="localChannels[index]" @click.stop @change="emitUpdate">
           CH{{ index + 1 }}
         </el-checkbox>
       </div>
@@ -31,23 +31,58 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { Warning } from '@element-plus/icons-vue'
 
-const channels = ref<boolean[]>(new Array(16).fill(false))
+const props = defineProps<{
+  selectedChannels?: number[]
+}>()
 
-const selectedCount = computed(() => channels.value.filter(Boolean).length)
+const emit = defineEmits<{
+  'update:selectedChannels': [channels: number[]]
+}>()
 
+// 本地状态 - 16个通道的选中状态
+const localChannels = ref<boolean[]>(new Array(16).fill(false))
+
+// 从props同步初始值
+watch(() => props.selectedChannels, (newVal) => {
+  if (newVal) {
+    localChannels.value = new Array(16).fill(false).map((_, i) => newVal.includes(i + 1))
+  }
+}, { immediate: true })
+
+// 计算选中的数量
+const selectedCount = computed(() => localChannels.value.filter(Boolean).length)
+
+// 计算选中的通道编号（1-16）
+const selectedChannelNumbers = computed(() => {
+  return localChannels.value
+    .map((selected, index) => selected ? index + 1 : null)
+    .filter((num): num is number => num !== null)
+})
+
+// 切换通道
 const toggleChannel = (index: number) => {
-  channels.value[index] = !channels.value[index]
+  localChannels.value[index] = !localChannels.value[index]
+  emitUpdate()
 }
 
+// 全选
 const selectAll = () => {
-  channels.value.fill(true)
+  localChannels.value.fill(true)
+  emitUpdate()
 }
 
+// 清空
 const clearAll = () => {
-  channels.value.fill(false)
+  localChannels.value.fill(false)
+  emitUpdate()
+}
+
+// 触发更新事件
+const emitUpdate = () => {
+  emit('update:selectedChannels', selectedChannelNumbers.value)
 }
 </script>
 

@@ -4,49 +4,70 @@
       <!-- 第一行：进度指示器 + 设备面板 -->
       <div class="row row-3">
         <div class="col col-progress">
-          <ProgressIndicator :current-step="currentStep" />
+          <ProgressIndicator :current-step="calibrationStore.currentStep" />
         </div>
         <div class="col col-device-1604">
-          <Device1604Panel />
+          <Device1604Panel 
+            @connect="calibrationStore.connectDevice1604"
+            @disconnect="calibrationStore.disconnectDevice1604"
+          />
         </div>
         <div class="col col-device-press">
-          <PressDevicePanel />
+          <PressDevicePanel 
+            @connect="calibrationStore.connectPressDevice"
+            @disconnect="calibrationStore.disconnectPressDevice"
+          />
         </div>
       </div>
       
       <!-- 第二行：通道选择 + 校准控制 -->
       <div class="row row-2">
         <div class="col col-channels">
-          <ChannelMatrix />
+          <ChannelMatrix 
+            :selected-channels="calibrationStore.selectedChannels"
+            @update:selected-channels="calibrationStore.setSelectedChannels"
+          />
         </div>
         <div class="col col-control">
           <CalibrationControlPanel
-            :device1604-connected="device1604Connected"
-            :press-device-connected="pressDeviceConnected"
-            :channels-selected="channelsSelected"
-            :has-collected-data="hasCollectedData"
-            @start="startCalibration"
-            @fit="fitData"
-            @end="endCalibration"
+            :device1604-connected="calibrationStore.device1604Connected"
+            :press-device-connected="calibrationStore.pressDeviceConnected"
+            :channels-selected="calibrationStore.channelsSelected"
+            :has-collected-data="calibrationStore.hasCollectedData"
+            @start="calibrationStore.startCalibration"
+            @fit="calibrationStore.fitData"
+            @end="calibrationStore.endCalibration"
           />
         </div>
       </div>
       
       <!-- 第三行：压力点列表 -->
       <div class="row row-full">
-        <PressurePointList />
+        <PressurePointList 
+          :points="calibrationStore.pressurePoints"
+          :params="calibrationStore.calibrationParams"
+          @generate="calibrationStore.generatePressurePoints"
+          @pressurize="calibrationStore.pressurize"
+          @confirm="calibrationStore.confirmPressure"
+          @collect="calibrationStore.collectData"
+          @remove="calibrationStore.removePressurePoint"
+        />
       </div>
       
       <!-- 第四行：数据表格 -->
       <div class="row row-full">
-        <CalibrationDataTable :data="calibrationData" :selected-channels="[1, 2, 3, 4, 5]" />
+        <CalibrationDataTable 
+          :points="calibrationStore.pressurePoints"
+          :selected-channels="calibrationStore.selectedChannels"
+        />
       </div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { onMounted } from 'vue'
+import { storeToRefs } from 'pinia'
 import ProgressIndicator from '@/components/calibration/ProgressIndicator.vue'
 import Device1604Panel from '@/components/calibration/Device1604Panel.vue'
 import PressDevicePanel from '@/components/calibration/PressDevicePanel.vue'
@@ -54,46 +75,17 @@ import ChannelMatrix from '@/components/calibration/ChannelMatrix.vue'
 import CalibrationControlPanel from '@/components/calibration/CalibrationControlPanel.vue'
 import PressurePointList from '@/components/calibration/PressurePointList.vue'
 import CalibrationDataTable from '@/components/calibration/CalibrationDataTable.vue'
+import { useCalibrationStore } from '@/stores/calibration'
+import { useMeasurementDeviceStore } from '@/stores/measurement/deviceStore'
 
-// 标定数据类型
-type CalibrationData = {
-  point: number
-  targetPressure: number
-  channelData: number[]
-  status: 'collected' | 'pending'
-}
+// Store
+const calibrationStore = useCalibrationStore()
+const deviceStore = useMeasurementDeviceStore()
 
-// 当前步骤
-const currentStep = ref(0)
-
-// 设备连接状态（应从store获取）
-const device1604Connected = ref(false)
-const pressDeviceConnected = ref(false)
-const channelsSelected = ref(false)
-const hasCollectedData = ref(false)
-
-// 模拟数据
-const calibrationData = ref<CalibrationData[]>([
-  { point: 1, targetPressure: 10, channelData: [10.001, 10.002, 10.000, 10.001, 9.999], status: 'collected' },
-  { point: 2, targetPressure: 20, channelData: [20.001, 20.002, 20.000, 20.001, 19.999], status: 'collected' },
-  { point: 3, targetPressure: 30, channelData: [30.001, 30.002, 30.000, 30.001, 29.999], status: 'collected' }
-])
-
-// 操作
-const startCalibration = () => {
-  console.log('开始校准')
-  currentStep.value = 2
-}
-
-const fitData = () => {
-  console.log('数据拟合')
-  currentStep.value = 4
-}
-
-const endCalibration = () => {
-  console.log('结束校准')
-  currentStep.value = 5
-}
+// 页面加载时获取设备列表
+onMounted(() => {
+  deviceStore.loadDevices()
+})
 </script>
 
 <style scoped lang="scss">

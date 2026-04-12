@@ -11,13 +11,14 @@
 import { computed } from 'vue'
 
 const props = defineProps<{
-  status: 'connected' | 'disconnected' | 'error'
+  status: 'connected' | 'disconnected' | 'connecting' | 'error'
 }>()
 
 const statusText = computed(() => {
   const map = {
     connected: '已连接',
     disconnected: '未连接',
+    connecting: '连接中',
     error: '错误'
   }
   return map[props.status]
@@ -42,9 +43,24 @@ const statusText = computed(() => {
     color: var(--text-secondary);
   }
   
+  &.connecting {
+    background: rgba(59, 130, 246, 0.2);
+    color: var(--status-info);
+    animation: pulse 1.5s infinite;
+  }
+  
   &.error {
     background: rgba(239, 68, 68, 0.2);
     color: var(--status-error);
+  }
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.6;
   }
 }
 </style>

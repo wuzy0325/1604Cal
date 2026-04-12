@@ -8,23 +8,24 @@
           <div class="device-type">计量采集设备</div>
         </div>
       </div>
-      <DeviceStatusBadge :status="status" />
+      <DeviceStatusBadge :status="deviceStatus" />
     </div>
-
+    
     <div class="connection-control">
       <div class="input-group">
         <span class="prefix">TCP://</span>
-        <el-input v-model="ip" placeholder="192.168.1.100" />
+        <el-input v-model="ip" placeholder="192.168.1.100" :disabled="isConnected" />
       </div>
-      <el-button
-        :type="status === 'connected' ? 'danger' : 'primary'"
+      <el-button 
+        :type="isConnected ? 'danger' : 'primary'"
+        :loading="isConnecting"
         @click="toggleConnection"
       >
-        {{ status === 'connected' ? '断开' : '连接' }}
+        {{ isConnected ? '断开' : '连接' }}
       </el-button>
     </div>
-
-    <div v-if="status === 'connected'" class="device-status">
+    
+    <div v-if="isConnected" class="device-status">
       <div class="status-row">
         <span class="label">阀门状态:</span>
         <el-tag :type="valveStatus === 'open' ? 'success' : 'info'" size="small">
@@ -40,15 +41,15 @@
         <span>设备需要校准</span>
       </div>
     </div>
-
-    <div v-if="status === 'connected'" class="valve-control">
-      <el-button
+    
+    <div v-if="isConnected" class="valve-control">
+      <el-button 
         :type="valveStatus === 'open' ? 'primary' : 'default'"
         @click="valveStatus = 'open'"
       >
         打开阀门
       </el-button>
-      <el-button
+      <el-button 
         :type="valveStatus === 'close' ? 'primary' : 'default'"
         @click="valveStatus = 'close'"
       >
@@ -59,17 +60,48 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import { Cpu, Warning } from '@element-plus/icons-vue'
 import DeviceStatusBadge from '@/components/common/DeviceStatusBadge.vue'
+import { useMeasurementDeviceStore } from '@/stores/measurement/deviceStore'
+
+const emit = defineEmits<{
+  connect: [deviceId: string]
+  disconnect: [deviceId: string]
+}>()
+
+const deviceStore = useMeasurementDeviceStore()
 
 const ip = ref('192.168.1.100')
-const status = ref<'connected' | 'disconnected'>('disconnected')
 const valveStatus = ref<'open' | 'close'>('close')
 const needCalibration = ref(false)
 
-const toggleConnection = () => {
-  status.value = status.value === 'connected' ? 'disconnected' : 'connected'
+// 获取第一个计量设备
+const device = computed(() => deviceStore.measureDevices[0])
+const deviceId = computed(() => device.value?.id)
+
+// 计算状态
+const isConnected = computed(() => device.value?.status === 'connected')
+const isConnecting = computed(() => device.value?.status === 'connecting')
+const deviceStatus = computed(() => {
+  if (!device.value) return 'disconnected'
+  if (device.value.status === 'connected') return 'connected'
+  if (device.value.status === 'connecting') return 'disconnected'
+  if (device.value.status === 'error') return 'error'
+  return 'disconnected'
+})
+
+const toggleConnection = async () => {
+  if (!deviceId.value) {
+    // 如果没有设备，需要先生成一个临时ID
+    return
+  }
+
+  if (isConnected.value) {
+    emit('disconnect', deviceId.value)
+  } else {
+    emit('connect', deviceId.value)
+  }
 }
 </script>
 

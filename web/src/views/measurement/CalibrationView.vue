@@ -217,7 +217,15 @@ const getStatusText = (status: string) => {
   return map[status] || status
 }
 
-const getChannelClass = (row: any, index: number) => {
+interface TableRow {
+  index: number
+  status: string
+  targetValue: number
+  channelValues: (number | null)[]
+  timestamp: string
+}
+
+const getChannelClass = (row: TableRow, index: number) => {
   const value = row.channelValues[index]
   if (!value) return ''
   const diff = Math.abs(value - row.targetValue)

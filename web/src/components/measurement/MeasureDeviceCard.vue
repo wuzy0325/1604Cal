@@ -28,14 +28,7 @@
 
 <script setup lang="ts">
 import DeviceStatusBadge from '@/components/common/DeviceStatusBadge.vue'
-
-interface MeasureDevice {
-  id: string
-  name: string
-  model: string
-  channels: number
-  status: 'connected' | 'disconnected'
-}
+import type { MeasureDevice } from '@/stores/measurement/deviceStore'
 
 const props = defineProps<{
   device: MeasureDevice
