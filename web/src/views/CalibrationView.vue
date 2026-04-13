@@ -6,7 +6,7 @@
           <p class="module-caption">
             Calibration Workbench
           </p>
-          <h1>标定模块</h1>
+          <h1>标定工作台</h1>
           <p class="module-description">
             本模块承接 1604标定软件流程，依赖已选择设备执行会话状态机与报告输出。
           </p>
@@ -35,7 +35,8 @@
             class="switch-btn switch-btn-ghost"
             :to="{ name: 'module-hub' }"
           >
-            返回模块入口
+            <el-icon><ArrowLeft /></el-icon>
+            返回
           </RouterLink>
         </nav>
       </header>
@@ -48,43 +49,66 @@
 
         <section class="module-card grid-control">
           <header class="card-header">
-            <div>
-              <h2>标定流程控制</h2>
-              <p class="card-subtitle">
-                当前会话状态：<strong>{{ sessionState }}</strong>
-              </p>
+            <div class="header-title">
+              <el-icon class="card-icon">
+                <SetUp />
+              </el-icon>
+              <div>
+                <h2>标定流程控制</h2>
+                <p class="card-subtitle">
+                  当前会话状态：
+                  <span :class="['status-badge', `status-${sessionState}`]">
+                    {{ sessionStateText }}
+                  </span>
+                </p>
+              </div>
             </div>
           </header>
 
           <div class="actions">
             <button
               type="button"
+              class="btn btn-success"
+              :disabled="sessionState === 'running'"
               @click="handleSessionAction('start')"
             >
+              <el-icon><VideoPlay /></el-icon>
               开始
             </button>
             <button
               type="button"
+              class="btn btn-warning"
+              :disabled="sessionState !== 'running'"
               @click="handleSessionAction('pause')"
             >
+              <el-icon><VideoPause /></el-icon>
               暂停
             </button>
             <button
               type="button"
+              class="btn btn-primary"
+              :disabled="sessionState !== 'paused'"
               @click="handleSessionAction('resume')"
             >
+              <el-icon><RefreshRight /></el-icon>
               继续
             </button>
             <button
               type="button"
+              class="btn btn-danger"
+              :disabled="sessionState === 'idle'"
               @click="handleSessionAction('stop')"
             >
+              <el-icon><CloseBold /></el-icon>
               停止
             </button>
           </div>
 
           <div class="template-section">
-            <h3>报告模板选择</h3>
+            <h3>
+              <el-icon><Document /></el-icon>
+              报告模板选择
+            </h3>
             <div class="inputs">
               <label>
                 测点数
@@ -104,22 +128,25 @@
               </label>
               <button
                 type="button"
+                class="btn btn-primary"
                 @click="handleSelectTemplate"
               >
+                <el-icon><FolderOpened /></el-icon>
                 选择模板
               </button>
+            </div>            <div class="template-result">
+              <el-icon><DocumentChecked /></el-icon>
+              <span>当前模板：{{ templateFilename || '未选择' }}</span>
             </div>
-            <p class="template-result">
-              当前模板：{{ templateFilename || '未选择' }}
-            </p>
           </div>
 
-          <p
+          <div
             v-if="errorMessage"
-            class="error"
+            class="error-message"
           >
-            错误：{{ errorMessage }}
-          </p>
+            <el-icon><Warning /></el-icon>
+            {{ errorMessage }}
+          </div>
         </section>
 
         <RealtimeDataPanel class="grid-data" />
@@ -129,24 +156,47 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import { RouterLink } from 'vue-router'
+import {
+  ArrowLeft,
+  SetUp,
+  VideoPlay,
+  VideoPause,
+  RefreshRight,
+  CloseBold,
+  Document,
+  DocumentChecked,
+  FolderOpened,
+  Warning
+} from '@element-plus/icons-vue'
 
 import DeviceSelectionPanel from '@/components/DeviceSelectionPanel.vue'
 import RealtimeDataPanel from '@/components/RealtimeDataPanel.vue'
 import { selectReportTemplate, triggerSessionAction } from '@/services/apiClient'
 
-const sessionState = ref('idle')
+type SessionState = 'idle' | 'running' | 'paused'
+
+const sessionState = ref<SessionState>('idle')
 const templatePoints = ref(5)
 const templateMode = ref<'single' | 'return'>('single')
 const templateFilename = ref('')
 const errorMessage = ref('')
 
+const sessionStateText = computed(() => {
+  const map: Record<SessionState, string> = {
+    idle: '空闲',
+    running: '运行中',
+    paused: '已暂停'
+  }
+  return map[sessionState.value]
+})
+
 async function handleSessionAction(action: 'start' | 'pause' | 'resume' | 'stop') {
   errorMessage.value = ''
   try {
     const data = await triggerSessionAction(action)
-    sessionState.value = data.state
+    sessionState.value = data.state as SessionState
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : '会话操作失败'
   }
@@ -163,108 +213,99 @@ async function handleSelectTemplate() {
 }
 </script>
 
-<style scoped>
+<style scoped lang="scss">
 .module-page {
-  background:
-    radial-gradient(circle at 15% 10%, rgb(148 163 184 / 16%), transparent 35%),
-    linear-gradient(160deg, #dbe3ea 0%, #eef2f6 46%, #dbe3ea 100%);
+  padding: var(--spacing-xl);
   min-height: 100vh;
-  padding: 16px;
 }
 
 .desktop-shell {
-  background: #f8fafc;
-  border: 1px solid #b8c6d3;
-  border-radius: 16px;
-  box-shadow: 0 16px 42px rgb(15 23 42 / 14%);
+  max-width: 1600px;
   margin: 0 auto;
-  max-width: 1728px;
-  min-height: min(972px, calc(100vh - 32px));
-  padding: 18px;
-  width: min(1728px, calc(100vw - 32px));
 }
 
 .module-header {
   align-items: flex-start;
-  border-bottom: 1px solid #d6e0ea;
+  border-bottom: 1px solid var(--border-color);
   display: flex;
-  gap: 12px;
+  gap: var(--spacing-lg);
   justify-content: space-between;
-  margin-bottom: 14px;
-  padding-bottom: 14px;
+  margin-bottom: var(--spacing-lg);
+  padding-bottom: var(--spacing-lg);
 }
 
 .module-caption {
-  color: #475569;
+  color: var(--accent-primary);
   font-size: 12px;
   letter-spacing: 0.08em;
-  margin: 0;
+  margin: 0 0 var(--spacing-xs);
   text-transform: uppercase;
+  font-weight: 600;
 }
 
 .module-header h1 {
-  color: #0f172a;
-  margin: 6px 0;
+  color: var(--text-primary);
+  margin: 0 0 var(--spacing-sm);
+  font-size: 24px;
+  font-weight: 600;
 }
 
 .module-description {
-  color: #334155;
+  color: var(--text-secondary);
   margin: 0;
   max-width: 760px;
+  font-size: 14px;
+  line-height: 1.5;
 }
 
 .module-switch {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: var(--spacing-sm);
 }
 
 .switch-btn {
-  background: #e2e8f0;
-  border: 1px solid #cbd5e1;
-  border-radius: 8px;
-  color: #0f172a;
-  padding: 7px 11px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  color: var(--text-secondary);
+  padding: var(--spacing-sm) var(--spacing-md);
   text-decoration: none;
+  font-size: 14px;
+  transition: all 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  
+  &:hover {
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+  }
+  
+  .el-icon {
+    font-size: 14px;
+  }
 }
 
 .switch-btn.active {
-  background: #0f172a;
-  border-color: #0f172a;
-  color: #f8fafc;
+  background: var(--accent-primary);
+  border-color: var(--accent-primary);
+  color: var(--text-primary);
 }
 
 .switch-btn-ghost {
-  background: #f8fafc;
+  background: transparent;
 }
 
-/* 间距系统: xs(8) sm(12) md(16) lg(24) xl(32) */
 .workspace-grid {
   display: grid;
-  gap: clamp(16px, 2vw, 24px);
-  grid-template-columns: 320px 1fr;
+  gap: var(--spacing-lg);
+  grid-template-columns: 360px 1fr;
   grid-template-rows: auto 1fr;
   grid-template-areas:
     "device control"
     "data data";
   min-height: calc(100vh - 200px);
-}
-
-@media (max-width: 1200px) {
-  .workspace-grid {
-    grid-template-columns: 280px 1fr;
-  }
-}
-
-@media (max-width: 900px) {
-  .workspace-grid {
-    grid-template-columns: 1fr;
-    grid-template-areas:
-      "device"
-      "control"
-      "data";
-    min-height: auto;
-  }
 }
 
 .grid-device {
@@ -280,106 +321,232 @@ async function handleSelectTemplate() {
 }
 
 .module-card {
-  background: #ffffff;
-  border: 1px solid #d6e0ea;
-  border-radius: 12px;
-  box-shadow: 0 10px 28px rgb(15 23 42 / 7%);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-lg);
   display: flex;
   flex-direction: column;
-  gap: 20px;
-  padding: 20px;
+  gap: var(--spacing-lg);
+}
+
+.card-header {
+  margin-bottom: var(--spacing-sm);
+}
+
+.header-title {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+}
+
+.card-icon {
+  font-size: 24px;
+  color: var(--accent-primary);
 }
 
 .card-header h2 {
-  color: #0f172a;
+  color: var(--text-primary);
   margin: 0;
+  font-size: 18px;
+  font-weight: 600;
 }
 
 .card-subtitle {
-  color: #334155;
-  margin: 6px 0 0;
+  color: var(--text-secondary);
+  margin: var(--spacing-xs) 0 0;
+  font-size: 14px;
+}
+
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.status-idle {
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+}
+
+.status-running {
+  background: rgba(16, 185, 129, 0.2);
+  color: var(--status-success);
+}
+
+.status-paused {
+  background: rgba(245, 158, 11, 0.2);
+  color: var(--status-warning);
 }
 
 .actions {
   display: flex;
-  gap: 12px;
+  gap: var(--spacing-md);
 }
 
-.actions button {
-  background: linear-gradient(180deg, #1e293b 0%, #0f172a 100%);
-  border: 1px solid #0f172a;
-  border-radius: 8px;
-  color: #f8fafc;
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  padding: var(--spacing-sm) var(--spacing-md);
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  font-size: 14px;
+  font-weight: 500;
   cursor: pointer;
-  flex: 1;
-  padding: 10px 16px;
+  transition: all 0.2s ease;
+  
+  .el-icon {
+    font-size: 16px;
+  }
+  
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+}
+
+.btn-success {
+  background: var(--status-success);
+  color: white;
+  
+  &:hover:not(:disabled) {
+    background: #059669;
+  }
+}
+
+.btn-warning {
+  background: var(--status-warning);
+  color: white;
+  
+  &:hover:not(:disabled) {
+    background: #d97706;
+  }
+}
+
+.btn-primary {
+  background: var(--accent-primary);
+  color: white;
+  
+  &:hover:not(:disabled) {
+    background: #ff5773;
+  }
+}
+
+.btn-danger {
+  background: var(--status-error);
+  color: white;
+  
+  &:hover:not(:disabled) {
+    background: #dc2626;
+  }
 }
 
 .template-section {
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
-  padding: 16px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: var(--spacing-md);
 }
 
 .template-section h3 {
-  color: #0f172a;
+  color: var(--text-primary);
   font-size: 14px;
-  margin: 0 0 12px;
+  margin: 0 0 var(--spacing-md);
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  
+  .el-icon {
+    color: var(--accent-primary);
+  }
 }
 
 .inputs {
   align-items: flex-end;
   display: flex;
   flex-wrap: wrap;
-  gap: 12px;
+  gap: var(--spacing-md);
+  margin-bottom: var(--spacing-md);
 }
 
 .inputs label {
-  color: #334155;
+  color: var(--text-secondary);
   display: flex;
   flex-direction: column;
   font-size: 13px;
-  gap: 6px;
+  gap: var(--spacing-xs);
 }
 
 .inputs input,
 .inputs select {
-  border: 1px solid #cbd5e1;
-  border-radius: 8px;
-  padding: 8px 12px;
-}
-
-.inputs button {
-  background: linear-gradient(180deg, #1e293b 0%, #0f172a 100%);
-  border: 1px solid #0f172a;
-  border-radius: 8px;
-  color: #f8fafc;
-  cursor: pointer;
-  padding: 8px 16px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  padding: var(--spacing-sm) var(--spacing-md);
+  min-width: 100px;
 }
 
 .template-result {
-  color: #0f172a;
-  margin: 10px 0 0;
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  color: var(--text-secondary);
+  font-size: 14px;
+  
+  .el-icon {
+    color: var(--status-success);
+  }
+  
+  span {
+    color: var(--text-primary);
+    font-weight: 500;
+  }
 }
 
-.error {
-  color: #b91c1c;
-  margin-top: 10px;
+.error-message {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  color: var(--status-error);
+  font-size: 14px;
+  padding: var(--spacing-sm);
+  background: rgba(239, 68, 68, 0.1);
+  border-radius: var(--radius-sm);
+  
+  .el-icon {
+    font-size: 16px;
+  }
 }
 
-@media (max-width: 1380px) {
-  .desktop-shell {
-    min-height: auto;
+@media (max-width: 1200px) {
+  .workspace-grid {
+    grid-template-columns: 320px 1fr;
   }
 }
 
 @media (max-width: 900px) {
+  .module-page {
+    padding: var(--spacing-md);
+  }
+  
   .module-header {
     flex-direction: column;
   }
-
+  
+  .workspace-grid {
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      "device"
+      "control"
+      "data";
+    min-height: auto;
+  }
+  
   .actions {
     display: grid;
     grid-template-columns: repeat(2, 1fr);

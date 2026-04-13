@@ -13,9 +13,14 @@
 
       <section class="module-grid">
         <article class="module-card">
-          <p class="module-tag">
-            Device Registry
-          </p>
+          <div class="card-header">
+            <p class="module-tag">
+              Device Registry
+            </p>
+            <el-icon class="card-icon">
+              <Tools />
+            </el-icon>
+          </div>
           <h2>设备管理模块</h2>
           <p class="module-source">
             融合能力：统一设备台账（共享给全部业务模块）
@@ -29,14 +34,20 @@
             class="entry-btn"
             :to="{ name: 'module-device-management' }"
           >
+            <el-icon><ArrowRight /></el-icon>
             进入设备管理
           </RouterLink>
         </article>
 
         <article class="module-card">
-          <p class="module-tag">
-            Measurement
-          </p>
+          <div class="card-header">
+            <p class="module-tag">
+              Measurement
+            </p>
+            <el-icon class="card-icon">
+              <DataLine />
+            </el-icon>
+          </div>
           <h2>计量模块</h2>
           <p class="module-source">
             对应旧系统：1605MeassureApp
@@ -50,14 +61,20 @@
             class="entry-btn"
             :to="{ name: 'module-measurement' }"
           >
+            <el-icon><ArrowRight /></el-icon>
             进入计量模块
           </RouterLink>
         </article>
 
         <article class="module-card">
-          <p class="module-tag">
-            Calibration
-          </p>
+          <div class="card-header">
+            <p class="module-tag">
+              Calibration
+            </p>
+            <el-icon class="card-icon">
+              <SetUp />
+            </el-icon>
+          </div>
           <h2>标定模块</h2>
           <p class="module-source">
             对应旧系统：1604标定软件
@@ -71,6 +88,7 @@
             class="entry-btn"
             :to="{ name: 'module-calibration' }"
           >
+            <el-icon><ArrowRight /></el-icon>
             进入标定模块
           </RouterLink>
         </article>
@@ -81,114 +99,156 @@
 
 <script setup lang="ts">
 import { RouterLink } from 'vue-router'
+import { Tools, DataLine, SetUp, ArrowRight } from '@element-plus/icons-vue'
 </script>
 
-<style scoped>
+<style scoped lang="scss">
 .module-hub-page {
-  background:
-    radial-gradient(circle at 10% 20%, rgb(148 163 184 / 18%), transparent 38%),
-    linear-gradient(158deg, #dbe3ea 0%, #eef2f6 52%, #dbe3ea 100%);
+  padding: var(--spacing-xl);
   min-height: 100vh;
-  padding: 16px;
 }
 
 .desktop-shell {
-  background: #f8fafc;
-  border: 1px solid #b8c6d3;
-  border-radius: 16px;
-  box-shadow: 0 16px 42px rgb(15 23 42 / 14%);
+  max-width: 1400px;
   margin: 0 auto;
-  max-width: 1728px;
-  min-height: min(972px, calc(100vh - 32px));
-  padding: 24px;
-  width: min(1728px, calc(100vw - 32px));
 }
 
 .hero {
-  border-bottom: 1px solid #d6e0ea;
-  margin-bottom: 16px;
-  padding-bottom: 16px;
+  margin-bottom: var(--spacing-xl);
+  padding-bottom: var(--spacing-lg);
+  border-bottom: 1px solid var(--border-color);
 }
 
 .hero-caption {
-  color: #475569;
+  color: var(--accent-primary);
   font-size: 12px;
   letter-spacing: 0.1em;
-  margin: 0;
+  margin: 0 0 var(--spacing-sm);
   text-transform: uppercase;
+  font-weight: 600;
 }
 
 .hero h1 {
-  color: #0f172a;
-  margin: 8px 0;
+  color: var(--text-primary);
+  margin: 0 0 var(--spacing-sm);
+  font-size: 28px;
+  font-weight: 600;
 }
 
-.hero p {
-  color: #334155;
+.hero > p {
+  color: var(--text-secondary);
   margin: 0;
-  max-width: 980px;
+  max-width: 800px;
+  font-size: 16px;
+  line-height: 1.6;
 }
 
 .module-grid {
   display: grid;
-  gap: 16px;
-  grid-template-columns: repeat(3, minmax(260px, 1fr));
+  gap: var(--spacing-lg);
+  grid-template-columns: repeat(3, 1fr);
 }
 
 .module-card {
-  background: #ffffff;
-  border: 1px solid #d6e0ea;
-  border-radius: 12px;
-  box-shadow: 0 10px 28px rgb(15 23 42 / 8%);
-  padding: 16px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-xl);
+  display: flex;
+  flex-direction: column;
+  transition: all 0.3s ease;
+  
+  &:hover {
+    border-color: var(--accent-primary);
+    box-shadow: 0 4px 20px rgba(233, 69, 96, 0.15);
+  }
+}
+
+.card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--spacing-md);
 }
 
 .module-tag {
-  color: #64748b;
-  font-size: 12px;
+  color: var(--text-muted);
+  font-size: 11px;
   letter-spacing: 0.1em;
   margin: 0;
   text-transform: uppercase;
 }
 
+.card-icon {
+  font-size: 24px;
+  color: var(--accent-primary);
+}
+
 .module-card h2 {
-  color: #0f172a;
-  margin: 8px 0 6px;
+  color: var(--text-primary);
+  margin: 0 0 var(--spacing-sm);
+  font-size: 20px;
+  font-weight: 600;
 }
 
 .module-source {
-  color: #475569;
-  margin: 0;
+  color: var(--text-secondary);
+  margin: 0 0 var(--spacing-md);
+  font-size: 14px;
 }
 
 .module-card ul {
-  color: #334155;
-  margin: 12px 0;
+  color: var(--text-secondary);
+  margin: 0 0 var(--spacing-lg);
   padding-left: 18px;
+  flex: 1;
 }
 
 .module-card li {
-  margin-bottom: 6px;
+  margin-bottom: var(--spacing-xs);
+  font-size: 14px;
+  line-height: 1.5;
 }
 
 .entry-btn {
-  background: linear-gradient(180deg, #1e293b 0%, #0f172a 100%);
-  border-radius: 8px;
-  color: #f8fafc;
-  display: inline-block;
-  padding: 8px 12px;
+  background: var(--accent-primary);
+  border-radius: var(--radius-md);
+  color: var(--text-primary);
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  padding: var(--spacing-sm) var(--spacing-md);
   text-decoration: none;
-}
-
-@media (max-width: 1380px) {
-  .desktop-shell {
-    min-height: auto;
+  font-weight: 500;
+  transition: all 0.2s ease;
+  
+  &:hover {
+    background: #ff5773;
+    transform: translateY(-1px);
+  }
+  
+  .el-icon {
+    font-size: 16px;
   }
 }
 
-@media (max-width: 980px) {
+@media (max-width: 1200px) {
+  .module-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 768px) {
+  .module-hub-page {
+    padding: var(--spacing-md);
+  }
+  
   .module-grid {
     grid-template-columns: 1fr;
+  }
+  
+  .hero h1 {
+    font-size: 24px;
   }
 }
 </style>

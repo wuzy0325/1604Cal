@@ -7,62 +7,85 @@
       </div>
       <button
         type="button"
-        class="refresh-btn"
+        class="btn btn-ghost"
         @click="refreshDevices"
       >
-        刷新设备列表
+        <el-icon><Refresh /></el-icon>
+        刷新列表
       </button>
     </header>
 
     <div class="selector-grid">
       <label>
-        计量设备
-        <select v-model="selectedMeasureDeviceId">
-          <option value="">
-            请选择计量设备
-          </option>
-          <option
-            v-for="device in measureDevices"
-            :key="device.id"
-            :value="device.id"
-          >
-            {{ device.name || device.id }}（{{ statusLabel(device.status) }}）
-          </option>
-        </select>
+        <span>计量设备</span>
+        <div class="select-wrapper">
+          <select v-model="selectedMeasureDeviceId">
+            <option value="">
+              请选择计量设备
+            </option>
+            <option
+              v-for="device in measureDevices"
+              :key="device.id"
+              :value="device.id"
+            >
+              {{ device.name || device.id }}
+            </option>
+          </select>
+          <el-icon class="select-icon"><ArrowDown /></el-icon>
+        </div>
       </label>
 
       <label>
-        打压设备
-        <select v-model="selectedPressureDeviceId">
-          <option value="">
-            请选择打压设备
-          </option>
-          <option
-            v-for="device in pressureDevices"
-            :key="device.id"
-            :value="device.id"
-          >
-            {{ device.name || device.id }}（{{ statusLabel(device.status) }}）
-          </option>
-        </select>
+        <span>打压设备</span>
+        <div class="select-wrapper">
+          <select v-model="selectedPressureDeviceId">
+            <option value="">
+              请选择打压设备
+            </option>
+            <option
+              v-for="device in pressureDevices"
+              :key="device.id"
+              :value="device.id"
+            >
+              {{ device.name || device.id }}
+            </option>
+          </select>
+          <el-icon class="select-icon"><ArrowDown /></el-icon>
+        </div>
       </label>
     </div>
 
-    <p class="selection-summary">
-      当前选择：计量设备 {{ selectedMeasureDeviceName }}；打压设备 {{ selectedPressureDeviceName }}
-    </p>
+    <div class="selection-summary">
+      <div class="summary-item">
+        <el-icon><Tools /></el-icon>
+        <div>
+          <span class="summary-label">计量设备</span>
+          <span class="summary-value">{{ selectedMeasureDeviceName }}</span>
+        </div>
+      </div>
+      <div class="summary-divider" />
+      <div class="summary-item">
+        <el-icon><DArrowRight /></el-icon>
+        <div>
+          <span class="summary-label">打压设备</span>
+          <span class="summary-value">{{ selectedPressureDeviceName }}</span>
+        </div>
+      </div>
+    </div>
 
-    <p
+    <div
       v-if="errorMessage"
-      class="error"
+      class="error-message"
     >
+      <el-icon><Warning /></el-icon>
       {{ errorMessage }}
-    </p>
+    </div>
   </section>
 </template>
 
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
+import { Refresh, ArrowDown, Tools, DArrowRight, Warning } from '@element-plus/icons-vue'
 
 import { fetchDevices, type DeviceDTO } from '@/services/apiClient'
 import { useDeviceStore, type ModuleKey } from '@/stores/deviceStore'
@@ -105,19 +128,6 @@ const selectedPressureDeviceName = computed(() => {
   return selected?.name || selected?.id || '未选择'
 })
 
-function statusLabel(status: DeviceDTO['status']) {
-  switch (status) {
-    case 'connected':
-      return '已连接'
-    case 'connecting':
-      return '连接中'
-    case 'error':
-      return '异常'
-    default:
-      return '未连接'
-  }
-}
-
 async function refreshDevices() {
   errorMessage.value = ''
   try {
@@ -148,78 +158,165 @@ onMounted(() => {
 })
 </script>
 
-<style scoped>
+<style scoped lang="scss">
 .selector-panel {
-  background: #ffffff;
-  border: 1px solid #d6e0ea;
-  border-radius: 12px;
-  padding: 12px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-lg);
+  height: 100%;
+  display: flex;
+  flex-direction: column;
 }
 
 .selector-header {
   align-items: flex-start;
   display: flex;
-  gap: 12px;
+  gap: var(--spacing-md);
   justify-content: space-between;
+  margin-bottom: var(--spacing-lg);
 }
 
 .selector-header h3 {
-  color: #0f172a;
+  color: var(--text-primary);
   margin: 0;
+  font-size: 18px;
+  font-weight: 600;
 }
 
 .selector-header p {
-  color: #334155;
-  margin: 6px 0 0;
+  color: var(--text-secondary);
+  margin: var(--spacing-xs) 0 0;
+  font-size: 13px;
 }
 
-.refresh-btn {
-  background: #f8fafc;
-  border: 1px solid #cbd5e1;
-  border-radius: 8px;
-  color: #0f172a;
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  padding: var(--spacing-sm) var(--spacing-md);
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  font-size: 13px;
+  font-weight: 500;
   cursor: pointer;
-  padding: 7px 10px;
+  transition: all 0.2s ease;
+  
+  .el-icon {
+    font-size: 14px;
+  }
+}
+
+.btn-ghost {
+  background: transparent;
+  border-color: var(--border-color);
+  color: var(--text-secondary);
+  
+  &:hover {
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+  }
 }
 
 .selector-grid {
-  display: grid;
-  gap: 10px;
-  grid-template-columns: repeat(2, minmax(160px, 1fr));
-  margin-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
+  margin-bottom: var(--spacing-lg);
 }
 
 .selector-grid label {
-  color: #334155;
+  color: var(--text-secondary);
   display: flex;
   flex-direction: column;
   font-size: 13px;
-  gap: 4px;
+  gap: var(--spacing-xs);
+}
+
+.select-wrapper {
+  position: relative;
 }
 
 .selector-grid select {
-  border: 1px solid #cbd5e1;
-  border-radius: 8px;
-  padding: 7px 8px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  padding: var(--spacing-sm) var(--spacing-lg) var(--spacing-sm) var(--spacing-sm);
+  width: 100%;
+  appearance: none;
+  cursor: pointer;
+  
+  &:focus {
+    outline: none;
+    border-color: var(--accent-primary);
+  }
+}
+
+.select-icon {
+  position: absolute;
+  right: var(--spacing-sm);
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-muted);
+  font-size: 12px;
+  pointer-events: none;
 }
 
 .selection-summary {
-  color: #0f172a;
-  margin: 12px 0 0;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: var(--spacing-md);
+  margin-top: auto;
 }
 
-.error {
-  color: #b91c1c;
-  margin-top: 10px;
-}
-
-@media (max-width: 900px) {
-  .selector-header {
+.summary-item {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  
+  .el-icon {
+    font-size: 16px;
+    color: var(--accent-primary);
+  }
+  
+  > div {
+    display: flex;
     flex-direction: column;
   }
+}
 
-  .selector-grid {
-    grid-template-columns: 1fr;
+.summary-label {
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.summary-value {
+  color: var(--text-primary);
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.summary-divider {
+  height: 1px;
+  background: var(--border-color);
+  margin: var(--spacing-sm) 0;
+}
+
+.error-message {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  color: var(--status-error);
+  font-size: 13px;
+  margin-top: var(--spacing-md);
+  padding: var(--spacing-sm);
+  background: rgba(239, 68, 68, 0.1);
+  border-radius: var(--radius-sm);
+  
+  .el-icon {
+    font-size: 14px;
   }
 }
 </style>

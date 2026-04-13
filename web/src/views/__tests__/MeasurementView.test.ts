@@ -19,6 +19,6 @@ describe('MeasurementView', () => {
 
     expect(wrapper.text()).toContain('计量模块')
     expect(wrapper.text()).toContain('DeviceSelectionStub')
-    expect(wrapper.text()).toContain('进入标定模块')
+    expect(wrapper.text()).toContain('标定模块')
   })
 })

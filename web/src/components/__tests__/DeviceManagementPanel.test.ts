@@ -85,7 +85,7 @@ describe('DeviceManagementPanel', () => {
 
     expect(wrapper.text()).toContain('measure-1')
     expect(wrapper.text()).toContain('已连接')
-    expect(wrapper.text()).toContain('连接重试策略')
+    expect(wrapper.text()).toContain('连接超时 600ms')
   })
 
   it('opens create dialog and submits form', async () => {

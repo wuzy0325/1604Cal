@@ -13,6 +13,7 @@
           class="btn btn-ghost"
           @click="refreshAll"
         >
+          <el-icon><Refresh /></el-icon>
           立即刷新
         </button>
         <button
@@ -21,6 +22,7 @@
           class="btn btn-primary"
           @click="openCreateDialog"
         >
+          <el-icon><Plus /></el-icon>
           新增设备
         </button>
       </div>
@@ -28,47 +30,64 @@
 
     <section class="metric-grid">
       <article class="metric-card">
-        <p>设备总数</p>
-        <strong>{{ devices.length }}</strong>
+        <p class="metric-label">
+          设备总数
+        </p>
+        <strong class="metric-value">{{ devices.length }}</strong>
       </article>
       <article class="metric-card">
-        <p>计量设备</p>
-        <strong>{{ measureCount }}</strong>
+        <p class="metric-label">
+          计量设备
+        </p>
+        <strong class="metric-value">{{ measureCount }}</strong>
       </article>
       <article class="metric-card">
-        <p>打压设备</p>
-        <strong>{{ pressureCount }}</strong>
+        <p class="metric-label">
+          打压设备
+        </p>
+        <strong class="metric-value">{{ pressureCount }}</strong>
       </article>
       <article class="metric-card">
-        <p>在线设备</p>
-        <strong>{{ connectedCount }}</strong>
+        <p class="metric-label">
+          在线设备
+        </p>
+        <strong class="metric-value success">{{ connectedCount }}</strong>
       </article>
       <article class="metric-card">
-        <p>异常设备</p>
-        <strong class="danger-text">{{ errorCount }}</strong>
+        <p class="metric-label">
+          异常设备
+        </p>
+        <strong class="metric-value danger">{{ errorCount }}</strong>
       </article>
       <article class="metric-card">
-        <p>单位一致性</p>
-        <strong>{{ unitStatusText }}</strong>
+        <p class="metric-label">
+          单位一致性
+        </p>
+        <strong :class="['metric-value', unitConsistent ? 'success' : 'warning']">
+          {{ unitStatusText }}
+        </strong>
       </article>
     </section>
 
     <section class="policy-strip">
-      <p data-test="connect-policy">
-        连接重试策略：{{ connectPolicyText }}
-      </p>
-      <p data-test="disconnect-policy">
-        断开重试策略：{{ disconnectPolicyText }}
-      </p>
-      <p>
-        最后刷新：{{ lastRefreshText }}
-      </p>
+      <div class="policy-item">
+        <el-icon><Link /></el-icon>
+        <span data-test="connect-policy">{{ connectPolicyText }}</span>
+      </div>
+      <div class="policy-item">
+        <el-icon><Close /></el-icon>
+        <span data-test="disconnect-policy">{{ disconnectPolicyText }}</span>
+      </div>
+      <div class="policy-item">
+        <el-icon><Timer /></el-icon>
+        <span>最后刷新：{{ lastRefreshText }}</span>
+      </div>
       <label class="auto-refresh">
         <input
           v-model="autoRefresh"
           type="checkbox"
         >
-        自动刷新（3秒）
+        <span>自动刷新（3秒）</span>
       </label>
     </section>
 
@@ -107,6 +126,7 @@
         class="btn btn-ghost"
         @click="resetFilters"
       >
+        <el-icon><RefreshRight /></el-icon>
         重置筛选
       </button>
     </section>
@@ -116,6 +136,7 @@
         v-if="visibleDevices.length === 0"
         class="empty"
       >
+        <el-icon><InfoFilled /></el-icon>
         暂无符合筛选条件的设备
       </p>
 
@@ -127,34 +148,57 @@
         <div class="card-top">
           <div class="title-block">
             <strong>{{ device.name || device.id }}</strong>
-            <span class="type-badge">
+            <span :class="['type-badge', device.type]">
               {{ typeLabel(device.type) }}
             </span>
           </div>
           <span :class="['status-badge', `status-${device.status}`]">
+            <el-icon v-if="device.status === 'connected'"><CircleCheck /></el-icon>
+            <el-icon v-else-if="device.status === 'error'"><CircleClose /></el-icon>
+            <el-icon v-else-if="device.status === 'connecting'"><Loading /></el-icon>
+            <el-icon v-else><Remove /></el-icon>
             {{ statusLabel(device.status) }}
           </span>
         </div>
 
         <div class="card-grid">
-          <p>设备ID：{{ device.id }}</p>
-          <p>型号：{{ device.model || '-' }}</p>
-          <p>地址：{{ device.host }}:{{ device.port }}</p>
-          <p>单位：{{ device.unit || '-' }}</p>
+          <div class="info-item">
+            <span class="info-label">设备ID</span>
+            <span class="info-value">{{ device.id }}</span>
+          </div>
+          <div class="info-item">
+            <span class="info-label">型号</span>
+            <span class="info-value">{{ device.model || '-' }}</span>
+          </div>
+          <div class="info-item">
+            <span class="info-label">地址</span>
+            <span class="info-value">{{ device.host }}:{{ device.port }}</span>
+          </div>
+          <div class="info-item">
+            <span class="info-label">单位</span>
+            <span class="info-value">{{ device.unit || '-' }}</span>
+          </div>
         </div>
 
-        <p
-          v-if="device.lastErrorReason"
-          class="meta-error"
+        <div
+          v-if="device.lastErrorReason || device.lastErrorAt"
+          class="error-section"
         >
-          错误原因：{{ device.lastErrorReason }}
-        </p>
-        <p
-          v-if="device.lastErrorAt"
-          class="meta-error"
-        >
-          最近错误时间：{{ formatErrorTime(device.lastErrorAt) }}
-        </p>
+          <p
+            v-if="device.lastErrorReason"
+            class="meta-error"
+          >
+            <el-icon><Warning /></el-icon>
+            错误原因：{{ device.lastErrorReason }}
+          </p>
+          <p
+            v-if="device.lastErrorAt"
+            class="meta-error"
+          >
+            <el-icon><Clock /></el-icon>
+            最近错误时间：{{ formatErrorTime(device.lastErrorAt) }}
+          </p>
+        </div>
 
         <div class="card-actions">
           <button
@@ -162,13 +206,20 @@
             class="btn btn-ghost"
             @click="openEditDialog(device)"
           >
+            <el-icon><Edit /></el-icon>
             编辑
           </button>
           <button
             type="button"
-            class="btn btn-secondary"
+            :class="['btn', device.status === 'connected' ? 'btn-danger' : 'btn-success']"
             @click="toggleConnection(device)"
           >
+            <el-icon v-if="device.status === 'connected'">
+              <Close />
+            </el-icon>
+            <el-icon v-else>
+              <Link />
+            </el-icon>
             {{ device.status === 'connected' ? '断开' : '连接' }}
           </button>
         </div>
@@ -180,30 +231,40 @@
       class="dialog-mask"
     >
       <div class="dialog-card">
-        <h3>{{ dialogMode === 'create' ? '新增设备配置' : '编辑设备配置' }}</h3>
+        <header class="dialog-header">
+          <h3>{{ dialogMode === 'create' ? '新增设备配置' : '编辑设备配置' }}</h3>
+          <button
+            class="btn-close"
+            @click="closeDialog"
+          >
+            <el-icon><Close /></el-icon>
+          </button>
+        </header>
 
         <div class="form-grid">
           <label>
-            设备ID
+            <span>设备ID</span>
             <input
               v-model.trim="form.id"
               data-test="form-id"
               type="text"
               :disabled="dialogMode === 'edit'"
+              placeholder="输入唯一标识"
             >
           </label>
 
           <label>
-            名称
+            <span>名称</span>
             <input
               v-model.trim="form.name"
               data-test="form-name"
               type="text"
+              placeholder="输入设备名称"
             >
           </label>
 
           <label>
-            类型
+            <span>类型</span>
             <select
               v-model="form.type"
               data-test="form-type"
@@ -214,38 +275,42 @@
           </label>
 
           <label>
-            型号
+            <span>型号</span>
             <input
               v-model.trim="form.model"
               data-test="form-model"
               type="text"
+              placeholder="输入设备型号"
             >
           </label>
 
           <label>
-            IP
+            <span>IP地址</span>
             <input
               v-model.trim="form.host"
               data-test="form-host"
               type="text"
+              placeholder="192.168.1.xxx"
             >
           </label>
 
           <label>
-            端口
+            <span>端口</span>
             <input
               v-model.number="form.port"
               data-test="form-port"
               type="number"
+              placeholder="9000"
             >
           </label>
 
-          <label>
-            单位
+          <label class="form-full">
+            <span>单位</span>
             <input
               v-model.trim="form.unit"
               data-test="form-unit"
               type="text"
+              placeholder="kPa / MPa / bar"
             >
           </label>
         </div>
@@ -254,6 +319,7 @@
           v-if="formError"
           class="form-error"
         >
+          <el-icon><Warning /></el-icon>
           {{ formError }}
         </p>
 
@@ -271,6 +337,7 @@
             class="btn btn-primary"
             @click="submitForm"
           >
+            <el-icon><Check /></el-icon>
             保存
           </button>
         </div>
@@ -279,8 +346,9 @@
 
     <p
       v-if="errorMessage"
-      class="error"
+      class="error-banner"
     >
+      <el-icon><Warning /></el-icon>
       {{ errorMessage }}
     </p>
   </section>
@@ -288,6 +356,23 @@
 
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
+import {
+  Refresh,
+  Plus,
+  Link,
+  Close,
+  Timer,
+  RefreshRight,
+  InfoFilled,
+  CircleCheck,
+  CircleClose,
+  Loading,
+  Remove,
+  Warning,
+  Clock,
+  Edit,
+  Check
+} from '@element-plus/icons-vue'
 
 import {
   connectDevice,
@@ -324,6 +409,7 @@ const statusFilter = ref<DeviceStatusFilter>('all')
 const keyword = ref('')
 
 const unitStatusText = ref('未检查')
+const unitConsistent = ref(false)
 const autoRefresh = ref(true)
 const errorMessage = ref('')
 const formError = ref('')
@@ -382,7 +468,7 @@ const connectPolicyText = computed(() => {
   }
 
   const cfg = connectConfig.value
-  return `连接超时 ${cfg.connectAttemptTimeoutMs}ms，重试 ${cfg.connectMaxAttempts} 次，退避 ${cfg.connectInitialBackoffMs}-${cfg.connectMaxBackoffMs}ms`
+  return `连接超时 ${cfg.connectAttemptTimeoutMs}ms，重试 ${cfg.connectMaxAttempts} 次`
 })
 
 const disconnectPolicyText = computed(() => {
@@ -391,7 +477,7 @@ const disconnectPolicyText = computed(() => {
   }
 
   const cfg = connectConfig.value
-  return `断开超时 ${cfg.disconnectAttemptTimeoutMs}ms，重试 ${cfg.disconnectMaxAttempts} 次，退避 ${cfg.disconnectInitialBackoffMs}-${cfg.disconnectMaxBackoffMs}ms`
+  return `断开超时 ${cfg.disconnectAttemptTimeoutMs}ms，重试 ${cfg.disconnectMaxAttempts} 次`
 })
 
 let pollTimer: ReturnType<typeof setInterval> | null = null
@@ -411,7 +497,7 @@ function statusLabel(status: DeviceDTO['status']) {
 }
 
 function typeLabel(type: DeviceDTO['type']) {
-  return type === 'measure' ? '计量设备' : '打压设备'
+  return type === 'measure' ? '计量' : '打压'
 }
 
 function formatErrorTime(value: string) {
@@ -474,9 +560,10 @@ async function refreshAll() {
     ])
     devices.value = list
     connectConfig.value = policy
+    unitConsistent.value = consistency.consistent
     unitStatusText.value = consistency.consistent
-      ? '全部设备单位一致'
-      : `存在冲突：${consistency.conflicts.join(', ')}`
+      ? '一致'
+      : '冲突'
     lastRefreshAt.value = new Date()
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : '刷新设备状态失败'
@@ -660,310 +747,476 @@ onUnmounted(() => {
 })
 </script>
 
-<style scoped>
+<style scoped lang="scss">
 .device-panel {
-  background:
-    linear-gradient(180deg, #f9fbfd 0%, #eef3f8 100%),
-    repeating-linear-gradient(90deg, rgb(148 163 184 / 8%) 0 1px, transparent 1px 24px);
-  border: 1px solid #b8c6d3;
-  border-radius: 14px;
-  padding: 14px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-lg);
 }
 
 .panel-header {
   align-items: flex-start;
   display: flex;
-  gap: 10px;
+  gap: var(--spacing-md);
   justify-content: space-between;
+  margin-bottom: var(--spacing-lg);
 }
 
 .panel-header h2 {
-  color: #0f172a;
+  color: var(--text-primary);
   margin: 0;
+  font-size: 20px;
+  font-weight: 600;
 }
 
 .panel-header p {
-  color: #334155;
-  margin: 6px 0 0;
+  color: var(--text-secondary);
+  margin: var(--spacing-xs) 0 0;
+  font-size: 14px;
 }
 
-.header-actions,
-.card-actions,
-.dialog-actions {
+.header-actions {
   display: flex;
-  gap: 8px;
+  gap: var(--spacing-sm);
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  padding: var(--spacing-sm) var(--spacing-md);
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  
+  .el-icon {
+    font-size: 16px;
+  }
+}
+
+.btn-primary {
+  background: var(--accent-primary);
+  color: white;
+  
+  &:hover {
+    background: #ff5773;
+  }
+}
+
+.btn-success {
+  background: var(--status-success);
+  color: white;
+  
+  &:hover {
+    background: #059669;
+  }
+}
+
+.btn-danger {
+  background: var(--status-error);
+  color: white;
+  
+  &:hover {
+    background: #dc2626;
+  }
+}
+
+.btn-ghost {
+  background: transparent;
+  border-color: var(--border-color);
+  color: var(--text-secondary);
+  
+  &:hover {
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+  }
 }
 
 .metric-grid {
   display: grid;
-  gap: 8px;
-  grid-template-columns: repeat(3, minmax(120px, 1fr));
-  margin-top: 12px;
+  gap: var(--spacing-md);
+  grid-template-columns: repeat(6, 1fr);
+  margin-bottom: var(--spacing-lg);
 }
 
 .metric-card {
-  background: #ffffff;
-  border: 1px solid #d6e0ea;
-  border-radius: 10px;
-  padding: 8px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: var(--spacing-md);
+  text-align: center;
 }
 
-.metric-card p {
-  color: #475569;
+.metric-label {
+  color: var(--text-secondary);
   font-size: 12px;
-  margin: 0;
+  margin: 0 0 var(--spacing-xs);
 }
 
-.metric-card strong {
-  color: #0f172a;
+.metric-value {
+  color: var(--text-primary);
   display: block;
-  font-size: 16px;
-  margin-top: 2px;
-}
-
-.danger-text {
-  color: #b91c1c;
+  font-size: 24px;
+  font-weight: 600;
+  
+  &.success {
+    color: var(--status-success);
+  }
+  
+  &.danger {
+    color: var(--status-error);
+  }
+  
+  &.warning {
+    color: var(--status-warning);
+  }
 }
 
 .policy-strip {
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  display: flex;
   align-items: center;
-  background: #e7edf4;
-  border: 1px solid #cbd5e1;
-  border-radius: 10px;
-  display: grid;
-  gap: 8px;
-  grid-template-columns: 1fr 1fr;
-  margin-top: 10px;
-  padding: 10px;
+  gap: var(--spacing-lg);
+  margin-bottom: var(--spacing-lg);
+  padding: var(--spacing-md) var(--spacing-lg);
 }
 
-.policy-strip p {
-  color: #1e293b;
-  margin: 0;
+.policy-item {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  color: var(--text-secondary);
+  font-size: 13px;
+  
+  .el-icon {
+    color: var(--accent-primary);
+    font-size: 14px;
+  }
 }
 
 .auto-refresh {
-  align-items: center;
-  color: #1e293b;
   display: flex;
-  gap: 6px;
+  align-items: center;
+  gap: var(--spacing-xs);
+  color: var(--text-secondary);
+  font-size: 13px;
+  margin-left: auto;
+  cursor: pointer;
+  
+  input[type="checkbox"] {
+    width: 16px;
+    height: 16px;
+    accent-color: var(--accent-primary);
+  }
 }
 
 .filter-bar {
-  align-items: end;
-  background: #f8fafc;
-  border: 1px solid #d6e0ea;
-  border-radius: 10px;
-  display: grid;
-  gap: 8px;
-  grid-template-columns: repeat(4, minmax(110px, 1fr));
-  margin-top: 10px;
-  padding: 10px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  display: flex;
+  align-items: flex-end;
+  gap: var(--spacing-md);
+  margin-bottom: var(--spacing-lg);
+  padding: var(--spacing-md);
 }
 
 .filter-bar label {
-  color: #334155;
+  color: var(--text-secondary);
   display: flex;
   flex-direction: column;
-  font-size: 12px;
-  gap: 4px;
+  font-size: 13px;
+  gap: var(--spacing-xs);
+  flex: 1;
 }
 
 .keyword-field {
-  grid-column: span 2;
+  flex: 2;
 }
 
 .filter-bar select,
 .filter-bar input {
-  border: 1px solid #cbd5e1;
-  border-radius: 8px;
-  padding: 7px 8px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  padding: var(--spacing-sm);
 }
 
 .device-board {
   display: grid;
-  gap: 8px;
-  grid-template-columns: repeat(2, minmax(260px, 1fr));
-  margin-top: 10px;
+  gap: var(--spacing-md);
+  grid-template-columns: repeat(2, 1fr);
 }
 
 .empty {
-  color: #64748b;
   grid-column: 1 / -1;
-  margin: 6px 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacing-sm);
+  color: var(--text-muted);
+  padding: var(--spacing-xl);
+  
+  .el-icon {
+    font-size: 20px;
+  }
 }
 
 .device-card {
-  background: #ffffff;
-  border: 1px solid #d6e0ea;
-  border-radius: 10px;
-  padding: 10px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: var(--spacing-md);
 }
 
 .card-top {
   align-items: center;
   display: flex;
-  gap: 10px;
+  gap: var(--spacing-md);
   justify-content: space-between;
+  margin-bottom: var(--spacing-md);
 }
 
 .title-block {
   align-items: center;
   display: flex;
-  gap: 8px;
+  gap: var(--spacing-sm);
 }
 
 .title-block strong {
-  color: #0f172a;
+  color: var(--text-primary);
+  font-size: 16px;
 }
 
 .type-badge {
-  background: #dbeafe;
+  background: var(--bg-secondary);
   border-radius: 999px;
-  color: #1d4ed8;
   font-size: 11px;
   font-weight: 600;
-  padding: 2px 7px;
+  padding: 2px 8px;
+  
+  &.measure {
+    color: var(--status-info);
+  }
+  
+  &.pressure {
+    color: var(--status-warning);
+  }
 }
 
 .card-grid {
   display: grid;
-  gap: 4px;
+  gap: var(--spacing-sm);
   grid-template-columns: 1fr 1fr;
-  margin-top: 8px;
+  margin-bottom: var(--spacing-md);
 }
 
-.card-grid p {
-  color: #334155;
+.info-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.info-label {
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.info-value {
+  color: var(--text-secondary);
   font-size: 13px;
-  margin: 0;
+}
+
+.error-section {
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  border-radius: var(--radius-sm);
+  padding: var(--spacing-sm);
+  margin-bottom: var(--spacing-md);
 }
 
 .meta-error {
-  color: #991b1b;
-  margin: 8px 0 0;
+  color: var(--status-error);
+  font-size: 12px;
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  
+  & + .meta-error {
+    margin-top: var(--spacing-xs);
+  }
+  
+  .el-icon {
+    font-size: 14px;
+  }
 }
 
 .status-badge {
-  border-radius: 999px;
+  border-radius: var(--radius-sm);
   font-size: 12px;
   font-weight: 600;
-  padding: 2px 8px;
+  padding: 4px 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  
+  .el-icon {
+    font-size: 12px;
+  }
 }
 
 .status-connected {
-  background: #dcfce7;
-  color: #166534;
+  background: rgba(16, 185, 129, 0.2);
+  color: var(--status-success);
 }
 
 .status-connecting {
-  background: #fef3c7;
-  color: #92400e;
+  background: rgba(245, 158, 11, 0.2);
+  color: var(--status-warning);
 }
 
 .status-disconnected {
-  background: #e5e7eb;
-  color: #374151;
+  background: var(--bg-secondary);
+  color: var(--text-muted);
 }
 
 .status-error {
-  background: #fee2e2;
-  color: #991b1b;
+  background: rgba(239, 68, 68, 0.2);
+  color: var(--status-error);
 }
 
 .card-actions {
+  display: flex;
   justify-content: flex-end;
-  margin-top: 10px;
-}
-
-.btn {
-  border-radius: 8px;
-  border: 1px solid transparent;
-  cursor: pointer;
-  font-size: 13px;
-  padding: 6px 10px;
-}
-
-.btn-primary {
-  background: linear-gradient(180deg, #1e293b 0%, #0f172a 100%);
-  border-color: #0f172a;
-  color: #f9fafb;
-}
-
-.btn-secondary {
-  background: #1d4ed8;
-  border-color: #1d4ed8;
-  color: #f8fafc;
-}
-
-.btn-ghost {
-  background: #f8fafc;
-  border-color: #cbd5e1;
-  color: #0f172a;
+  gap: var(--spacing-sm);
 }
 
 .dialog-mask {
   align-items: center;
-  background: rgb(15 23 42 / 46%);
+  background: rgba(0, 0, 0, 0.7);
   display: flex;
   inset: 0;
   justify-content: center;
   position: fixed;
-  z-index: 10;
+  z-index: 1000;
+  padding: var(--spacing-lg);
 }
 
 .dialog-card {
-  background: #f8fafc;
-  border: 1px solid #cbd5e1;
-  border-radius: 12px;
-  min-width: min(680px, 92vw);
-  padding: 16px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  max-width: 600px;
+  width: 100%;
+  max-height: 90vh;
+  overflow-y: auto;
 }
 
-.dialog-card h3 {
-  color: #0f172a;
-  margin: 0 0 12px;
+.dialog-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--spacing-lg);
+  border-bottom: 1px solid var(--border-color);
+  
+  h3 {
+    color: var(--text-primary);
+    margin: 0;
+    font-size: 18px;
+  }
+}
+
+.btn-close {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: var(--spacing-xs);
+  
+  .el-icon {
+    font-size: 20px;
+  }
+  
+  &:hover {
+    color: var(--text-primary);
+  }
 }
 
 .form-grid {
   display: grid;
-  gap: 10px;
-  grid-template-columns: repeat(2, minmax(140px, 1fr));
+  gap: var(--spacing-md);
+  grid-template-columns: repeat(2, 1fr);
+  padding: var(--spacing-lg);
+}
+
+.form-full {
+  grid-column: 1 / -1;
 }
 
 .form-grid label {
-  color: #1f2937;
+  color: var(--text-secondary);
   display: flex;
   flex-direction: column;
   font-size: 13px;
-  gap: 4px;
+  gap: var(--spacing-xs);
 }
 
 .form-grid input,
 .form-grid select {
-  border: 1px solid #cbd5e1;
-  border-radius: 8px;
-  padding: 6px 8px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  padding: var(--spacing-sm);
 }
 
-.form-error,
-.error {
-  color: #b91c1c;
-  margin: 10px 0 0;
+.form-error {
+  color: var(--status-error);
+  margin: 0 var(--spacing-lg) var(--spacing-md);
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  font-size: 14px;
+  
+  .el-icon {
+    font-size: 16px;
+  }
 }
 
 .dialog-actions {
+  display: flex;
   justify-content: flex-end;
-  margin-top: 14px;
+  gap: var(--spacing-sm);
+  padding: 0 var(--spacing-lg) var(--spacing-lg);
 }
 
-@media (max-width: 1180px) {
-  .metric-grid {
-    grid-template-columns: repeat(2, minmax(120px, 1fr));
+.error-banner {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  color: var(--status-error);
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  border-radius: var(--radius-md);
+  padding: var(--spacing-md);
+  margin-top: var(--spacing-lg);
+  
+  .el-icon {
+    font-size: 20px;
   }
+}
 
-  .device-board {
-    grid-template-columns: 1fr;
+@media (max-width: 1200px) {
+  .metric-grid {
+    grid-template-columns: repeat(3, 1fr);
   }
 }
 
@@ -971,16 +1224,30 @@ onUnmounted(() => {
   .panel-header {
     flex-direction: column;
   }
-
-  .policy-strip,
-  .filter-bar,
-  .card-grid,
-  .form-grid {
+  
+  .metric-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  
+  .policy-strip {
+    flex-wrap: wrap;
+    gap: var(--spacing-sm);
+  }
+  
+  .filter-bar {
+    flex-wrap: wrap;
+  }
+  
+  .keyword-field {
+    flex: 1 1 100%;
+  }
+  
+  .device-board {
     grid-template-columns: 1fr;
   }
-
-  .keyword-field {
-    grid-column: auto;
+  
+  .form-grid {
+    grid-template-columns: 1fr;
   }
 }
 </style>

@@ -2,23 +2,28 @@
   <section class="realtime-data-panel">
     <header class="panel-header">
       <div class="header-title">
+        <el-icon class="panel-icon">
+          <DataLine />
+        </el-icon>
         <h2>实时数据监控</h2>
         <span
           class="connection-status"
           :class="connectionStatusClass"
         >
+          <el-icon v-if="isConnected"><CircleCheck /></el-icon>
+          <el-icon v-else><CircleClose /></el-icon>
           {{ connectionStatusText }}
         </span>
       </div>
       <div class="header-actions">
-        <span class="update-time">更新: {{ lastUpdateTime }}</span>
+        <span class="update-time">{{ lastUpdateTime }}</span>
         <button
           type="button"
           class="icon-btn"
           title="重新连接"
           @click="reconnect"
         >
-          ↻
+          <el-icon><Refresh /></el-icon>
         </button>
       </div>
     </header>
@@ -26,8 +31,9 @@
     <div class="metrics-grid">
       <!-- 主压力值显示 -->
       <div class="metric-card primary-metric">
-        <div class="metric-label">
-          当前压力
+        <div class="metric-header">
+          <span class="metric-label">当前压力</span>
+          <el-icon><Odometer /></el-icon>
         </div>
         <div class="metric-value-row">
           <span class="metric-value">
@@ -54,8 +60,14 @@
 
       <!-- 稳定状态 -->
       <div class="metric-card status-metric">
-        <div class="metric-label">
-          稳定状态
+        <div class="metric-header">
+          <span class="metric-label">稳定状态</span>
+          <el-icon v-if="isStable">
+            <CircleCheckFilled />
+          </el-icon>
+          <el-icon v-else>
+            <WarningFilled />
+          </el-icon>
         </div>
         <div class="status-display">
           <span
@@ -80,8 +92,9 @@
 
       <!-- 目标压力 -->
       <div class="metric-card secondary-metric">
-        <div class="metric-label">
-          目标压力
+        <div class="metric-header">
+          <span class="metric-label">目标压力</span>
+          <el-icon><Aim /></el-icon>
         </div>
         <div class="metric-value-row small">
           <span class="metric-value">
@@ -99,8 +112,9 @@
 
       <!-- 温度值 -->
       <div class="metric-card secondary-metric">
-        <div class="metric-label">
-          环境温度
+        <div class="metric-header">
+          <span class="metric-label">环境温度</span>
+          <el-icon><Thermometer /></el-icon>
         </div>
         <div class="metric-value-row small">
           <span class="metric-value">
@@ -117,7 +131,10 @@
     <!-- 通道数据表格 -->
     <div class="channels-section">
       <div class="section-header">
-        <h3>通道读数</h3>
+        <div class="section-title">
+          <el-icon><Grid /></el-icon>
+          <h3>通道读数</h3>
+        </div>
         <span class="channel-count">{{ activeChannels }}/{{ totalChannels }} 通道活跃</span>
       </div>
       <div class="channels-grid">
@@ -149,8 +166,11 @@
       class="progress-section"
     >
       <div class="progress-header">
-        <span>采集进度</span>
-        <span>{{ progressPercent }}%</span>
+        <div class="progress-title">
+          <el-icon><Histogram /></el-icon>
+          <span>采集进度</span>
+        </div>
+        <span class="progress-percent">{{ progressPercent }}%</span>
       </div>
       <div class="progress-bar">
         <div
@@ -168,6 +188,18 @@
 
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from 'vue'
+import {
+  DataLine,
+  CircleCheck,
+  CircleClose,
+  Refresh,
+  Odometer,
+  CircleCheckFilled,
+  WarningFilled,
+  Aim,
+  Grid,
+  Histogram
+} from '@element-plus/icons-vue'
 
 interface ChannelInfo {
   value: number | null
@@ -345,14 +377,13 @@ onUnmounted(() => {
 })
 </script>
 
-<style scoped>
+<style scoped lang="scss">
 /* 主面板容器 */
 .realtime-data-panel {
-  background: #ffffff;
-  border: 1px solid #d1d5db;
-  border-radius: 8px;
-  padding: 20px;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-lg);
 }
 
 /* 面板头部 */
@@ -360,117 +391,145 @@ onUnmounted(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 20px;
-  padding-bottom: 16px;
-  border-bottom: 1px solid #e5e7eb;
+  margin-bottom: var(--spacing-lg);
+  padding-bottom: var(--spacing-md);
+  border-bottom: 1px solid var(--border-color);
 }
 
 .header-title {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: var(--spacing-md);
+}
+
+.panel-icon {
+  font-size: 24px;
+  color: var(--accent-primary);
 }
 
 .header-title h2 {
   margin: 0;
   font-size: 18px;
   font-weight: 600;
-  color: #111827;
+  color: var(--text-primary);
 }
 
 .connection-status {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-xs);
   padding: 4px 10px;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   font-size: 12px;
-  font-weight: 500;
+  font-weight: 600;
+  
+  .el-icon {
+    font-size: 12px;
+  }
 }
 
 .status-connected {
-  background: #d1fae5;
-  color: #065f46;
+  background: rgba(16, 185, 129, 0.2);
+  color: var(--status-success);
 }
 
 .status-disconnected {
-  background: #fee2e2;
-  color: #991b1b;
+  background: rgba(239, 68, 68, 0.2);
+  color: var(--status-error);
 }
 
 .header-actions {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: var(--spacing-md);
 }
 
 .update-time {
   font-size: 13px;
-  color: #6b7280;
+  color: var(--text-muted);
   font-family: 'SF Mono', Monaco, monospace;
 }
 
 .icon-btn {
   width: 32px;
   height: 32px;
-  border: 1px solid #d1d5db;
-  border-radius: 6px;
-  background: #ffffff;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 14px;
-  transition: all 0.15s ease;
-}
-
-.icon-btn:hover {
-  background: #f3f4f6;
-  border-color: #9ca3af;
+  transition: all 0.2s ease;
+  
+  .el-icon {
+    font-size: 16px;
+  }
+  
+  &:hover {
+    background: var(--bg-secondary);
+    border-color: var(--accent-primary);
+    color: var(--accent-primary);
+  }
 }
 
 /* 指标网格 */
 .metrics-grid {
   display: grid;
   grid-template-columns: 2fr 1fr 1fr 1fr;
-  gap: 16px;
-  margin-bottom: 24px;
+  gap: var(--spacing-md);
+  margin-bottom: var(--spacing-lg);
 }
 
 .metric-card {
-  background: #f9fafb;
-  border: 1px solid #e5e7eb;
-  border-radius: 6px;
-  padding: 16px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: var(--spacing-md);
 }
 
 .primary-metric {
-  background: #f0f9ff;
-  border-color: #bae6fd;
+  border-color: var(--accent-primary);
+}
+
+.metric-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--spacing-sm);
+  
+  .el-icon {
+    font-size: 16px;
+    color: var(--accent-primary);
+  }
 }
 
 .metric-label {
   font-size: 12px;
   font-weight: 500;
-  color: #6b7280;
+  color: var(--text-secondary);
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  margin-bottom: 8px;
 }
 
 .metric-value-row {
   display: flex;
   align-items: baseline;
-  gap: 6px;
-  margin-bottom: 12px;
+  gap: var(--spacing-xs);
+  margin-bottom: var(--spacing-md);
 }
 
 .metric-value-row.small {
-  margin-bottom: 8px;
+  margin-bottom: var(--spacing-sm);
 }
 
 .metric-value {
   font-family: 'SF Mono', 'Consolas', monospace;
   font-size: 32px;
   font-weight: 600;
-  color: #111827;
+  color: var(--text-primary);
   line-height: 1;
 }
 
@@ -480,18 +539,18 @@ onUnmounted(() => {
 
 .metric-unit {
   font-size: 14px;
-  color: #6b7280;
+  color: var(--text-muted);
   font-weight: 500;
 }
 
 /* 压力进度条 */
 .pressure-bar-container {
-  margin-top: 12px;
+  margin-top: var(--spacing-md);
 }
 
 .pressure-bar-track {
   height: 8px;
-  background: #e5e7eb;
+  background: var(--bg-secondary);
   border-radius: 4px;
   overflow: hidden;
 }
@@ -503,31 +562,31 @@ onUnmounted(() => {
 }
 
 .bar-normal {
-  background: #3b82f6;
+  background: var(--status-info);
 }
 
 .bar-approaching {
-  background: #f59e0b;
+  background: var(--status-warning);
 }
 
 .bar-stable {
-  background: #10b981;
+  background: var(--status-success);
 }
 
 .pressure-scale {
   display: flex;
   justify-content: space-between;
-  margin-top: 4px;
+  margin-top: var(--spacing-xs);
   font-size: 11px;
-  color: #9ca3af;
+  color: var(--text-muted);
 }
 
 /* 稳定状态显示 */
 .status-display {
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin-bottom: 12px;
+  gap: var(--spacing-sm);
+  margin-bottom: var(--spacing-md);
 }
 
 .status-indicator {
@@ -538,36 +597,30 @@ onUnmounted(() => {
 }
 
 .indicator-stable {
-  background: #10b981;
-  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.2);
+  background: var(--status-success);
+  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.3);
 }
 
 .indicator-unstable {
-  background: #f59e0b;
-  animation: pulse 1.5s ease-in-out infinite;
-}
-
-@keyframes pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.5; }
+  background: var(--status-warning);
 }
 
 .status-text {
   font-size: 16px;
   font-weight: 600;
-  color: #111827;
+  color: var(--text-primary);
 }
 
 .stability-details {
-  border-top: 1px solid #e5e7eb;
-  padding-top: 12px;
+  border-top: 1px solid var(--border-color);
+  padding-top: var(--spacing-md);
 }
 
 .detail-row {
   display: flex;
   justify-content: space-between;
   font-size: 13px;
-  margin-bottom: 6px;
+  margin-bottom: var(--spacing-xs);
 }
 
 .detail-row:last-child {
@@ -575,11 +628,11 @@ onUnmounted(() => {
 }
 
 .detail-row span {
-  color: #6b7280;
+  color: var(--text-muted);
 }
 
 .detail-row strong {
-  color: #374151;
+  color: var(--text-secondary);
   font-weight: 600;
 }
 
@@ -588,75 +641,86 @@ onUnmounted(() => {
   font-size: 13px;
   font-weight: 500;
   padding: 4px 8px;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   display: inline-block;
 }
 
 .diff-ok {
-  background: #d1fae5;
-  color: #065f46;
+  background: rgba(16, 185, 129, 0.2);
+  color: var(--status-success);
 }
 
 .diff-warning {
-  background: #fef3c7;
-  color: #92400e;
+  background: rgba(245, 158, 11, 0.2);
+  color: var(--status-warning);
 }
 
 .diff-error {
-  background: #fee2e2;
-  color: #991b1b;
+  background: rgba(239, 68, 68, 0.2);
+  color: var(--status-error);
 }
 
 .metric-note {
   font-size: 12px;
-  color: #9ca3af;
+  color: var(--text-muted);
   font-style: italic;
 }
 
 /* 通道数据区域 */
 .channels-section {
-  margin-bottom: 24px;
+  margin-bottom: var(--spacing-lg);
 }
 
 .section-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 12px;
+  margin-bottom: var(--spacing-md);
+}
+
+.section-title {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  
+  .el-icon {
+    font-size: 18px;
+    color: var(--accent-primary);
+  }
 }
 
 .section-header h3 {
   margin: 0;
   font-size: 14px;
   font-weight: 600;
-  color: #374151;
+  color: var(--text-primary);
 }
 
 .channel-count {
   font-size: 12px;
-  color: #6b7280;
-  background: #f3f4f6;
+  color: var(--text-secondary);
+  background: var(--bg-tertiary);
   padding: 2px 8px;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
 }
 
 .channels-grid {
   display: grid;
   grid-template-columns: repeat(8, 1fr);
-  gap: 8px;
+  gap: var(--spacing-sm);
 }
 
 .channel-item {
-  background: #f9fafb;
-  border: 1px solid #e5e7eb;
-  border-radius: 4px;
-  padding: 8px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  padding: var(--spacing-sm);
   text-align: center;
 }
 
 .channel-item.channel-active {
-  background: #f0f9ff;
-  border-color: #bae6fd;
+  border-color: var(--accent-primary);
+  background: rgba(233, 69, 96, 0.1);
 }
 
 .channel-header {
@@ -669,7 +733,7 @@ onUnmounted(() => {
 .channel-name {
   font-size: 11px;
   font-weight: 600;
-  color: #6b7280;
+  color: var(--text-muted);
 }
 
 .channel-status {
@@ -680,60 +744,77 @@ onUnmounted(() => {
 }
 
 .channel-status.ok {
-  background: #d1fae5;
-  color: #065f46;
+  background: rgba(16, 185, 129, 0.2);
+  color: var(--status-success);
 }
 
 .channel-status.warning {
-  background: #fef3c7;
-  color: #92400e;
+  background: rgba(245, 158, 11, 0.2);
+  color: var(--status-warning);
 }
 
 .channel-status.error {
-  background: #fee2e2;
-  color: #991b1b;
+  background: rgba(239, 68, 68, 0.2);
+  color: var(--status-error);
 }
 
 .channel-status.idle {
-  background: #f3f4f6;
-  color: #9ca3af;
+  background: var(--bg-secondary);
+  color: var(--text-muted);
 }
 
 .channel-value {
   font-family: 'SF Mono', 'Consolas', monospace;
   font-size: 14px;
   font-weight: 600;
-  color: #111827;
+  color: var(--text-primary);
 }
 
 /* 进度区域 */
 .progress-section {
-  background: #f9fafb;
-  border: 1px solid #e5e7eb;
-  border-radius: 6px;
-  padding: 16px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: var(--spacing-md);
 }
 
 .progress-header {
   display: flex;
   justify-content: space-between;
+  align-items: center;
   font-size: 14px;
   font-weight: 500;
-  color: #374151;
-  margin-bottom: 8px;
+  color: var(--text-primary);
+  margin-bottom: var(--spacing-sm);
+}
+
+.progress-title {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  
+  .el-icon {
+    font-size: 16px;
+    color: var(--accent-primary);
+  }
+}
+
+.progress-percent {
+  color: var(--accent-primary);
+  font-weight: 600;
 }
 
 .progress-bar {
   height: 6px;
-  background: #e5e7eb;
+  background: var(--bg-secondary);
   border-radius: 3px;
   overflow: hidden;
-  margin-bottom: 8px;
+  margin-bottom: var(--spacing-sm);
 }
 
 .progress-fill {
   height: 100%;
-  background: #3b82f6;
+  background: var(--accent-primary);
   border-radius: 3px;
   transition: width 0.3s ease;
 }
@@ -742,7 +823,7 @@ onUnmounted(() => {
   display: flex;
   justify-content: space-between;
   font-size: 12px;
-  color: #6b7280;
+  color: var(--text-secondary);
 }
 
 /* 响应式适配 */
@@ -768,7 +849,7 @@ onUnmounted(() => {
   .panel-header {
     flex-direction: column;
     align-items: flex-start;
-    gap: 12px;
+    gap: var(--spacing-sm);
   }
 }
 </style>

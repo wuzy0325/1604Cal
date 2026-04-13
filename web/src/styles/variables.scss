@@ -1,26 +1,33 @@
 :root {
-  /* 背景色 */
-  --bg-primary: #1a1a2e;
-  --bg-secondary: #16213e;
-  --bg-tertiary: #0f3460;
+  /* 背景色 - 深灰翠绿配色 */
+  --bg-primary: #0f172a;
+  --bg-secondary: #1e293b;
+  --bg-tertiary: #334155;
+  --bg-quaternary: #475569;
   
-  /* 强调色 */
-  --accent-primary: #e94560;
-  --accent-secondary: #533483;
+  /* 强调色 - 翠绿主题 */
+  --accent-primary: #10b981;
+  --accent-secondary: #34d399;
+  --accent-hover: #059669;
+  
+  /* 次要强调 - 天蓝 */
+  --secondary-accent: #0ea5e9;
+  --secondary-accent-hover: #0284c7;
   
   /* 文字 */
-  --text-primary: #ffffff;
-  --text-secondary: #a0a0a0;
-  --text-muted: #666666;
+  --text-primary: #f8fafc;
+  --text-secondary: #94a3b8;
+  --text-muted: #64748b;
   
   /* 状态色 */
   --status-success: #10b981;
   --status-warning: #f59e0b;
   --status-error: #ef4444;
-  --status-info: #3b82f6;
+  --status-info: #0ea5e9;
   
-  /* 边框 */
-  --border-color: rgba(255, 255, 255, 0.1);
+  /* 边框 - 极淡 */
+  --border-color: rgba(255, 255, 255, 0.08);
+  --border-color-strong: rgba(255, 255, 255, 0.15);
   
   /* 间距 */
   --spacing-xs: 4px;
@@ -44,4 +51,5 @@
   --el-border-color: var(--border-color);
   --el-fill-color: var(--bg-tertiary);
   --el-fill-color-light: var(--bg-secondary);
+  --el-color-primary: var(--accent-primary);
 }

@@ -99,7 +99,7 @@ import { Tools, CircleCheck, SetUp } from '@element-plus/icons-vue'
       &:hover {
         border-color: var(--accent-primary);
         transform: translateY(-2px);
-        box-shadow: 0 4px 12px rgba(233, 69, 96, 0.2);
+        box-shadow: 0 4px 12px rgba(16, 185, 129, 0.2);
       }
       
       .card-icon {

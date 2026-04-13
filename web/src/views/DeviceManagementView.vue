@@ -35,7 +35,8 @@
             class="switch-btn switch-btn-ghost"
             :to="{ name: 'module-hub' }"
           >
-            返回模块入口
+            <el-icon><ArrowLeft /></el-icon>
+            返回
           </RouterLink>
         </nav>
       </header>
@@ -47,94 +48,106 @@
 
 <script setup lang="ts">
 import { RouterLink } from 'vue-router'
+import { ArrowLeft } from '@element-plus/icons-vue'
 
 import DeviceManagementPanel from '@/components/DeviceManagementPanel.vue'
 </script>
 
-<style scoped>
+<style scoped lang="scss">
 .module-page {
-  background:
-    radial-gradient(circle at 15% 10%, rgb(148 163 184 / 16%), transparent 35%),
-    linear-gradient(160deg, #dbe3ea 0%, #eef2f6 46%, #dbe3ea 100%);
+  padding: var(--spacing-xl);
   min-height: 100vh;
-  padding: 16px;
 }
 
 .desktop-shell {
-  background: #f8fafc;
-  border: 1px solid #b8c6d3;
-  border-radius: 16px;
-  box-shadow: 0 16px 42px rgb(15 23 42 / 14%);
+  max-width: 1600px;
   margin: 0 auto;
-  max-width: 1728px;
-  min-height: min(972px, calc(100vh - 32px));
-  padding: 18px;
-  width: min(1728px, calc(100vw - 32px));
 }
 
 .module-header {
   align-items: flex-start;
-  border-bottom: 1px solid #d6e0ea;
+  border-bottom: 1px solid var(--border-color);
   display: flex;
-  gap: 12px;
+  gap: var(--spacing-lg);
   justify-content: space-between;
-  margin-bottom: 14px;
-  padding-bottom: 14px;
+  margin-bottom: var(--spacing-lg);
+  padding-bottom: var(--spacing-lg);
 }
 
 .module-caption {
-  color: #475569;
+  color: var(--accent-primary);
   font-size: 12px;
   letter-spacing: 0.08em;
-  margin: 0;
+  margin: 0 0 var(--spacing-xs);
   text-transform: uppercase;
+  font-weight: 600;
 }
 
 .module-header h1 {
-  color: #0f172a;
-  margin: 6px 0;
+  color: var(--text-primary);
+  margin: 0 0 var(--spacing-sm);
+  font-size: 24px;
+  font-weight: 600;
 }
 
 .module-description {
-  color: #334155;
+  color: var(--text-secondary);
   margin: 0;
   max-width: 760px;
+  font-size: 14px;
+  line-height: 1.5;
 }
 
 .module-switch {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: var(--spacing-sm);
 }
 
 .switch-btn {
-  background: #e2e8f0;
-  border: 1px solid #cbd5e1;
-  border-radius: 8px;
-  color: #0f172a;
-  padding: 7px 11px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  color: var(--text-secondary);
+  padding: var(--spacing-sm) var(--spacing-md);
   text-decoration: none;
-}
-
-.switch-btn.active {
-  background: #0f172a;
-  border-color: #0f172a;
-  color: #f8fafc;
-}
-
-.switch-btn-ghost {
-  background: #f8fafc;
-}
-
-@media (max-width: 1380px) {
-  .desktop-shell {
-    min-height: auto;
+  font-size: 14px;
+  transition: all 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  
+  &:hover {
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+  }
+  
+  .el-icon {
+    font-size: 14px;
   }
 }
 
+.switch-btn.active {
+  background: var(--accent-primary);
+  border-color: var(--accent-primary);
+  color: var(--text-primary);
+}
+
+.switch-btn-ghost {
+  background: transparent;
+}
+
 @media (max-width: 900px) {
+  .module-page {
+    padding: var(--spacing-md);
+  }
+  
   .module-header {
     flex-direction: column;
+  }
+  
+  .module-switch {
+    width: 100%;
   }
 }
 </style>

@@ -6,7 +6,7 @@
           <p class="module-caption">
             Measurement Workbench
           </p>
-          <h1>计量模块</h1>
+          <h1>计量工作台</h1>
           <p class="module-description">
             本模块承接 1605MeassureApp 的作业入口，先做设备选择与状态检查，再进入采集准备。
           </p>
@@ -29,13 +29,14 @@
             class="switch-btn"
             :to="{ name: 'module-calibration' }"
           >
-            进入标定模块
+            标定模块
           </RouterLink>
           <RouterLink
             class="switch-btn switch-btn-ghost"
             :to="{ name: 'module-hub' }"
           >
-            返回模块入口
+            <el-icon><ArrowLeft /></el-icon>
+            返回
           </RouterLink>
         </nav>
       </header>
@@ -47,11 +48,31 @@
         />
 
         <section class="module-card grid-info">
-          <h2>计量准备看板</h2>
-          <ul>
-            <li>确认计量设备与打压设备均已连接。</li>
-            <li>确认单位一致性检查通过后再发起会话。</li>
-            <li>如需执行流程动作，请切换到标定模块。</li>
+          <div class="card-header">
+            <el-icon class="card-icon">
+              <InfoFilled />
+            </el-icon>
+            <h2>计量准备看板</h2>
+          </div>
+          <ul class="checklist">
+            <li>
+              <el-icon class="check-icon">
+                <CircleCheck />
+              </el-icon>
+              确认计量设备与打压设备均已连接。
+            </li>
+            <li>
+              <el-icon class="check-icon">
+                <CircleCheck />
+              </el-icon>
+              确认单位一致性检查通过后再发起会话。
+            </li>
+            <li>
+              <el-icon class="check-icon">
+                <CircleCheck />
+              </el-icon>
+              如需执行流程动作，请切换到标定模块。
+            </li>
           </ul>
         </section>
 
@@ -63,91 +84,100 @@
 
 <script setup lang="ts">
 import { RouterLink } from 'vue-router'
+import { ArrowLeft, InfoFilled, CircleCheck } from '@element-plus/icons-vue'
 
 import DeviceSelectionPanel from '@/components/DeviceSelectionPanel.vue'
 import RealtimeDataPanel from '@/components/RealtimeDataPanel.vue'
 </script>
 
-<style scoped>
+<style scoped lang="scss">
 .module-page {
-  background:
-    radial-gradient(circle at 15% 10%, rgb(148 163 184 / 16%), transparent 35%),
-    linear-gradient(160deg, #dbe3ea 0%, #eef2f6 46%, #dbe3ea 100%);
+  padding: var(--spacing-xl);
   min-height: 100vh;
-  padding: 16px;
 }
 
 .desktop-shell {
-  background: #f8fafc;
-  border: 1px solid #b8c6d3;
-  border-radius: 16px;
-  box-shadow: 0 16px 42px rgb(15 23 42 / 14%);
+  max-width: 1600px;
   margin: 0 auto;
-  max-width: 1728px;
-  min-height: min(972px, calc(100vh - 32px));
-  padding: 18px;
-  width: min(1728px, calc(100vw - 32px));
 }
 
 .module-header {
   align-items: flex-start;
-  border-bottom: 1px solid #d6e0ea;
+  border-bottom: 1px solid var(--border-color);
   display: flex;
-  gap: 12px;
+  gap: var(--spacing-lg);
   justify-content: space-between;
-  margin-bottom: 14px;
-  padding-bottom: 14px;
+  margin-bottom: var(--spacing-lg);
+  padding-bottom: var(--spacing-lg);
 }
 
 .module-caption {
-  color: #475569;
+  color: var(--accent-primary);
   font-size: 12px;
   letter-spacing: 0.08em;
-  margin: 0;
+  margin: 0 0 var(--spacing-xs);
   text-transform: uppercase;
+  font-weight: 600;
 }
 
 .module-header h1 {
-  color: #0f172a;
-  margin: 6px 0;
+  color: var(--text-primary);
+  margin: 0 0 var(--spacing-sm);
+  font-size: 24px;
+  font-weight: 600;
 }
 
 .module-description {
-  color: #334155;
+  color: var(--text-secondary);
   margin: 0;
   max-width: 760px;
+  font-size: 14px;
+  line-height: 1.5;
 }
 
 .module-switch {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: var(--spacing-sm);
 }
 
 .switch-btn {
-  background: #e2e8f0;
-  border: 1px solid #cbd5e1;
-  border-radius: 8px;
-  color: #0f172a;
-  padding: 7px 11px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  color: var(--text-secondary);
+  padding: var(--spacing-sm) var(--spacing-md);
   text-decoration: none;
+  font-size: 14px;
+  transition: all 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  
+  &:hover {
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+  }
+  
+  .el-icon {
+    font-size: 14px;
+  }
 }
 
 .switch-btn.active {
-  background: #0f172a;
-  border-color: #0f172a;
-  color: #f8fafc;
+  background: var(--accent-primary);
+  border-color: var(--accent-primary);
+  color: var(--text-primary);
 }
 
 .switch-btn-ghost {
-  background: #f8fafc;
+  background: transparent;
 }
 
-/* 间距系统: xs(8) sm(12) md(16) lg(24) xl(32) */
 .workspace-grid {
   display: grid;
-  gap: clamp(16px, 2vw, 24px);
-  grid-template-columns: 320px 1fr;
+  gap: var(--spacing-lg);
+  grid-template-columns: 360px 1fr;
   grid-template-rows: auto 1fr;
   grid-template-areas:
     "device info"
@@ -168,40 +198,68 @@ import RealtimeDataPanel from '@/components/RealtimeDataPanel.vue'
 }
 
 .module-card {
-  background: #ffffff;
-  border: 1px solid #d6e0ea;
-  border-radius: 12px;
-  box-shadow: 0 10px 28px rgb(15 23 42 / 7%);
-  padding: 20px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-lg);
+}
+
+.card-header {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  margin-bottom: var(--spacing-md);
+}
+
+.card-icon {
+  font-size: 20px;
+  color: var(--accent-primary);
 }
 
 .module-card h2 {
-  color: #0f172a;
-  margin: 0 0 12px;
-}
-
-.module-card ul {
-  color: #334155;
+  color: var(--text-primary);
   margin: 0;
-  padding-left: 20px;
+  font-size: 18px;
+  font-weight: 600;
 }
 
-.module-card li {
-  margin-bottom: 10px;
+.checklist {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.checklist li {
+  color: var(--text-secondary);
+  margin-bottom: var(--spacing-sm);
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  font-size: 14px;
   line-height: 1.5;
 }
 
-.module-card li:last-child {
-  margin-bottom: 0;
+.check-icon {
+  color: var(--status-success);
+  font-size: 16px;
+  flex-shrink: 0;
 }
 
 @media (max-width: 1200px) {
   .workspace-grid {
-    grid-template-columns: 280px 1fr;
+    grid-template-columns: 320px 1fr;
   }
 }
 
 @media (max-width: 900px) {
+  .module-page {
+    padding: var(--spacing-md);
+  }
+  
+  .module-header {
+    flex-direction: column;
+  }
+  
   .workspace-grid {
     grid-template-columns: 1fr;
     grid-template-areas:
@@ -209,10 +267,6 @@ import RealtimeDataPanel from '@/components/RealtimeDataPanel.vue'
       "info"
       "data";
     min-height: auto;
-  }
-
-  .module-header {
-    flex-direction: column;
   }
 }
 </style>
