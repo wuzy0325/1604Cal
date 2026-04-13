@@ -2,11 +2,16 @@
   <div class="home-view">
     <header class="page-header">
       <h1>欢迎使用1604校准系统</h1>
-      <p class="subtitle">请选择要进入的模块</p>
+      <p class="subtitle">
+        请选择要进入的模块
+      </p>
     </header>
     
     <div class="module-cards">
-      <router-link to="/measurement" class="module-card">
+      <router-link
+        to="/measurement"
+        class="module-card"
+      >
         <div class="card-icon">
           <el-icon><Tools /></el-icon>
         </div>
@@ -19,7 +24,10 @@
         </ul>
       </router-link>
       
-      <router-link to="/multi-pressure" class="module-card">
+      <router-link
+        to="/multi-pressure"
+        class="module-card"
+      >
         <div class="card-icon">
           <el-icon><CircleCheck /></el-icon>
         </div>
@@ -32,7 +40,10 @@
         </ul>
       </router-link>
       
-      <router-link to="/calibration" class="module-card">
+      <router-link
+        to="/calibration"
+        class="module-card"
+      >
         <div class="card-icon">
           <el-icon><SetUp /></el-icon>
         </div>

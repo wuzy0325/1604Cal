@@ -5,28 +5,59 @@
       <div class="actions">
         <div class="point-count">
           <label>压力点个数:</label>
-          <el-input-number v-model="localPointCount" :min="1" :max="50" size="small" />
+          <el-input-number
+            v-model="localPointCount"
+            :min="1"
+            :max="50"
+            size="small"
+          />
         </div>
-        <el-button type="primary" size="small" @click="emitGenerate">
+        <el-button
+          type="primary"
+          size="small"
+          @click="emitGenerate"
+        >
           生成压力点
         </el-button>
         <div class="progress">
           <label>完成进度:</label>
-          <el-progress :percentage="progressPercent" :stroke-width="8" style="width: 120px" />
+          <el-progress
+            :percentage="progressPercent"
+            :stroke-width="8"
+            style="width: 120px"
+          />
         </div>
       </div>
     </div>
     
-    <el-table :data="props.points" border stripe class="point-table">
-      <el-table-column type="index" label="序号" width="60" />
-      <el-table-column label="状态" width="100">
+    <el-table
+      :data="props.points"
+      border
+      stripe
+      class="point-table"
+    >
+      <el-table-column
+        type="index"
+        label="序号"
+        width="60"
+      />
+      <el-table-column
+        label="状态"
+        width="100"
+      >
         <template #default="{ row }">
-          <el-tag :type="getStatusType(row.status)" size="small">
+          <el-tag
+            :type="getStatusType(row.status)"
+            size="small"
+          >
             {{ getStatusText(row.status) }}
           </el-tag>
         </template>
       </el-table-column>
-      <el-table-column label="目标压力" width="150">
+      <el-table-column
+        label="目标压力"
+        width="150"
+      >
         <template #default="{ row }">
           <el-input-number 
             v-model="row.targetPressure" 
@@ -36,7 +67,10 @@
           />
         </template>
       </el-table-column>
-      <el-table-column label="打压/确认" width="120">
+      <el-table-column
+        label="打压/确认"
+        width="120"
+      >
         <template #default="{ row }">
           <el-button 
             v-if="row.status === 'pending_press'"
@@ -54,10 +88,16 @@
           >
             确认
           </el-button>
-          <span v-else class="done-text">--</span>
+          <span
+            v-else
+            class="done-text"
+          >--</span>
         </template>
       </el-table-column>
-      <el-table-column label="采集" width="120">
+      <el-table-column
+        label="采集"
+        width="120"
+      >
         <template #default="{ row }">
           <el-button 
             v-if="row.status === 'pending_collect'"
@@ -76,12 +116,23 @@
           >
             重新采集
           </el-button>
-          <span v-else class="wait-text">等待中</span>
+          <span
+            v-else
+            class="wait-text"
+          >等待中</span>
         </template>
       </el-table-column>
-      <el-table-column label="操作" width="80">
+      <el-table-column
+        label="操作"
+        width="80"
+      >
         <template #default="{ $index }">
-          <el-button type="danger" link size="small" @click="emitRemove($index)">
+          <el-button
+            type="danger"
+            link
+            size="small"
+            @click="emitRemove($index)"
+          >
             删除
           </el-button>
         </template>

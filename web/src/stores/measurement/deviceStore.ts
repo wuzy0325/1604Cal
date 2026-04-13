@@ -211,7 +211,7 @@ export const useMeasurementDeviceStore = defineStore('measurementDevices', () =>
   }
 
   // 更新设备状态（用于SSE更新）
-  const updateDeviceStatus = (id: string, status: PressureDevice['status'], errorReason?: string) => {
+  const updateDeviceStatus = (id: string, status: PressureDevice['status']) => {
     const pressureDevice = pressureDevices.value.find(d => d.id === id)
     const measureDevice = measureDevices.value.find(d => d.id === id)
     

@@ -67,7 +67,6 @@
 
 <script setup lang="ts">
 import { onMounted } from 'vue'
-import { storeToRefs } from 'pinia'
 import ProgressIndicator from '@/components/calibration/ProgressIndicator.vue'
 import Device1604Panel from '@/components/calibration/Device1604Panel.vue'
 import PressDevicePanel from '@/components/calibration/PressDevicePanel.vue'

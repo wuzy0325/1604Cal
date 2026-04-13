@@ -4,16 +4,32 @@
       <h4>采集数据</h4>
       <div class="actions">
         <span class="record-count">记录数: {{ points.length }}</span>
-        <el-button type="primary" @click="exportData">
+        <el-button
+          type="primary"
+          @click="exportData"
+        >
           <el-icon><Download /></el-icon>
           导出CSV
         </el-button>
       </div>
     </div>
     
-    <el-table :data="tableData" border stripe class="data-table">
-      <el-table-column prop="point" label="压力点" width="80" />
-      <el-table-column prop="targetPressure" label="目标压力" width="120" />
+    <el-table
+      :data="tableData"
+      border
+      stripe
+      class="data-table"
+    >
+      <el-table-column
+        prop="point"
+        label="压力点"
+        width="80"
+      />
+      <el-table-column
+        prop="targetPressure"
+        label="目标压力"
+        width="120"
+      />
       <el-table-column 
         v-for="ch in selectedChannels" 
         :key="ch"
@@ -24,9 +40,15 @@
           {{ row.channelData[ch - 1]?.toFixed(4) || '--' }}
         </template>
       </el-table-column>
-      <el-table-column label="状态" width="100">
+      <el-table-column
+        label="状态"
+        width="100"
+      >
         <template #default="{ row }">
-          <el-tag :type="row.status === 'completed' ? 'success' : 'info'" size="small">
+          <el-tag
+            :type="row.status === 'completed' ? 'success' : 'info'"
+            size="small"
+          >
             {{ row.status === 'completed' ? '已采集' : '待采集' }}
           </el-tag>
         </template>

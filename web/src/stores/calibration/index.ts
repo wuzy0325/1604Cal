@@ -1,14 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { ElMessage } from 'element-plus'
-import {
-  fetchDevices,
-  connectDevice,
-  disconnectDevice,
-  triggerSessionAction,
-  fetchSessionState,
-  type DeviceDTO
-} from '@/services/apiClient'
+import { triggerSessionAction } from '@/services/apiClient'
 import { useMeasurementDeviceStore } from '@/stores/measurement/deviceStore'
 
 export enum CalibrationStep {
@@ -182,7 +175,7 @@ export const useCalibrationStore = defineStore('calibration', () => {
     }
 
     try {
-      const state = await triggerSessionAction('start')
+      await triggerSessionAction('start')
       isCollecting.value = true
       setStep(CalibrationStep.DATA_COLLECTION)
       ElMessage.success('校准已开始')

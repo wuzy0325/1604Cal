@@ -5,19 +5,29 @@
     </div>
     <nav class="nav-menu">
       <router-link
-        to="/"
+        :to="{ name: 'module-hub' }"
         class="nav-item"
-        :class="{ active: $route.path === '/' }"
+        :class="{ active: $route.name === 'module-hub' }"
       >
         <el-icon>
           <HomeFilled />
         </el-icon>
-        <span>首页</span>
+        <span>模块入口</span>
       </router-link>
       <router-link
-        to="/measurement"
+        :to="{ name: 'module-device-management' }"
         class="nav-item"
-        :class="{ active: $route.path === '/measurement' }"
+        :class="{ active: $route.name === 'module-device-management' }"
+      >
+        <el-icon>
+          <Setting />
+        </el-icon>
+        <span>设备管理</span>
+      </router-link>
+      <router-link
+        :to="{ name: 'module-measurement' }"
+        class="nav-item"
+        :class="{ active: $route.name === 'module-measurement' }"
       >
         <el-icon>
           <Tools />
@@ -25,19 +35,9 @@
         <span>计量工作台</span>
       </router-link>
       <router-link
-        to="/multi-pressure"
+        :to="{ name: 'module-calibration' }"
         class="nav-item"
-        :class="{ active: $route.path === '/multi-pressure' }"
-      >
-        <el-icon>
-          <CircleCheck />
-        </el-icon>
-        <span>多设备打压</span>
-      </router-link>
-      <router-link
-        to="/calibration"
-        class="nav-item"
-        :class="{ active: $route.path === '/calibration' }"
+        :class="{ active: $route.name === 'module-calibration' }"
       >
         <el-icon>
           <SetUp />
@@ -49,7 +49,7 @@
 </template>
 
 <script setup lang="ts">
-import { HomeFilled, Tools, CircleCheck, SetUp } from '@element-plus/icons-vue'
+import { HomeFilled, Setting, SetUp, Tools } from '@element-plus/icons-vue'
 </script>
 
 <style scoped lang="scss">

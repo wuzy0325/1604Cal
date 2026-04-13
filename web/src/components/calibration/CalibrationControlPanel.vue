@@ -1,6 +1,8 @@
 <template>
   <div class="control-panel">
-    <h4 class="title">校准控制</h4>
+    <h4 class="title">
+      校准控制
+    </h4>
     
     <div class="main-action">
       <el-button 
@@ -21,8 +23,12 @@
           class="prereq-item"
           :class="{ satisfied: item.satisfied }"
         >
-          <el-icon v-if="item.satisfied"><CircleCheckFilled /></el-icon>
-          <el-icon v-else><CircleClose /></el-icon>
+          <el-icon v-if="item.satisfied">
+            <CircleCheckFilled />
+          </el-icon>
+          <el-icon v-else>
+            <CircleClose />
+          </el-icon>
           <span>{{ item.label }}</span>
         </div>
       </div>

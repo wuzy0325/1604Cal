@@ -4,8 +4,22 @@
       <h4>通道选择</h4>
       <div class="actions">
         <span class="count">已选: {{ selectedCount }}/16</span>
-        <el-button type="primary" link size="small" @click="selectAll">全选</el-button>
-        <el-button type="danger" link size="small" @click="clearAll">清空</el-button>
+        <el-button
+          type="primary"
+          link
+          size="small"
+          @click="selectAll"
+        >
+          全选
+        </el-button>
+        <el-button
+          type="danger"
+          link
+          size="small"
+          @click="clearAll"
+        >
+          清空
+        </el-button>
       </div>
     </div>
     
@@ -17,13 +31,20 @@
         :class="{ selected }"
         @click="toggleChannel(index)"
       >
-        <el-checkbox v-model="localChannels[index]" @click.stop @change="emitUpdate">
+        <el-checkbox
+          v-model="localChannels[index]"
+          @click.stop
+          @change="emitUpdate"
+        >
           CH{{ index + 1 }}
         </el-checkbox>
       </div>
     </div>
     
-    <div v-if="selectedCount === 0" class="warning">
+    <div
+      v-if="selectedCount === 0"
+      class="warning"
+    >
       <el-icon><Warning /></el-icon>
       <span>请至少选择一个通道</span>
     </div>

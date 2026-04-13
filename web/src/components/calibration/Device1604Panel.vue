@@ -2,10 +2,16 @@
   <div class="device-panel">
     <div class="panel-header">
       <div class="device-info">
-        <el-icon class="device-icon"><Cpu /></el-icon>
+        <el-icon class="device-icon">
+          <Cpu />
+        </el-icon>
         <div>
-          <div class="device-name">1604设备</div>
-          <div class="device-type">计量采集设备</div>
+          <div class="device-name">
+            1604设备
+          </div>
+          <div class="device-type">
+            计量采集设备
+          </div>
         </div>
       </div>
       <DeviceStatusBadge :status="deviceStatus" />
@@ -14,7 +20,11 @@
     <div class="connection-control">
       <div class="input-group">
         <span class="prefix">TCP://</span>
-        <el-input v-model="ip" placeholder="192.168.1.100" :disabled="isConnected" />
+        <el-input
+          v-model="ip"
+          placeholder="192.168.1.100"
+          :disabled="isConnected"
+        />
       </div>
       <el-button 
         :type="isConnected ? 'danger' : 'primary'"
@@ -25,10 +35,16 @@
       </el-button>
     </div>
     
-    <div v-if="isConnected" class="device-status">
+    <div
+      v-if="isConnected"
+      class="device-status"
+    >
       <div class="status-row">
         <span class="label">阀门状态:</span>
-        <el-tag :type="valveStatus === 'open' ? 'success' : 'info'" size="small">
+        <el-tag
+          :type="valveStatus === 'open' ? 'success' : 'info'"
+          size="small"
+        >
           {{ valveStatus === 'open' ? '开启' : '关闭' }}
         </el-tag>
       </div>
@@ -36,13 +52,19 @@
         <span class="label">单位类型:</span>
         <span class="value">kPa</span>
       </div>
-      <div v-if="needCalibration" class="warning">
+      <div
+        v-if="needCalibration"
+        class="warning"
+      >
         <el-icon><Warning /></el-icon>
         <span>设备需要校准</span>
       </div>
     </div>
     
-    <div v-if="isConnected" class="valve-control">
+    <div
+      v-if="isConnected"
+      class="valve-control"
+    >
       <el-button 
         :type="valveStatus === 'open' ? 'primary' : 'default'"
         @click="valveStatus = 'open'"

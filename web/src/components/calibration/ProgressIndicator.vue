@@ -1,6 +1,8 @@
 <template>
   <div class="progress-indicator">
-    <h4 class="title">校准流程</h4>
+    <h4 class="title">
+      校准流程
+    </h4>
     <div class="steps">
       <div
         v-for="(step, index) in steps"
@@ -13,11 +15,18 @@
         }"
       >
         <div class="step-marker">
-          <el-icon v-if="currentStep > index"><Check /></el-icon>
+          <el-icon v-if="currentStep > index">
+            <Check />
+          </el-icon>
           <span v-else>{{ index + 1 }}</span>
         </div>
-        <div class="step-label">{{ step }}</div>
-        <div v-if="index < steps.length - 1" class="step-line" />
+        <div class="step-label">
+          {{ step }}
+        </div>
+        <div
+          v-if="index < steps.length - 1"
+          class="step-line"
+        />
       </div>
     </div>
   </div>

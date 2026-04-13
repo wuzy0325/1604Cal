@@ -1,11 +1,20 @@
 <template>
   <div class="calibration-view">
     <!-- 可折叠侧边栏 -->
-    <aside class="sidebar" :class="{ collapsed: sidebarCollapsed }">
-      <div class="sidebar-toggle" @click="toggleSidebar">
+    <aside
+      class="sidebar"
+      :class="{ collapsed: sidebarCollapsed }"
+    >
+      <div
+        class="sidebar-toggle"
+        @click="toggleSidebar"
+      >
         <el-icon><ArrowLeft v-if="!sidebarCollapsed" /><ArrowRight v-else /></el-icon>
       </div>
-      <div v-show="!sidebarCollapsed" class="sidebar-content">
+      <div
+        v-show="!sidebarCollapsed"
+        class="sidebar-content"
+      >
         <DevicePanel title="打压设备">
           <PressureDeviceCard
             v-for="device in deviceStore.pressureDevices"
@@ -14,7 +23,12 @@
             @connect="deviceStore.connectPressureDevice"
             @disconnect="deviceStore.disconnectPressureDevice"
           />
-          <el-button type="primary" plain size="small" class="add-btn">
+          <el-button
+            type="primary"
+            plain
+            size="small"
+            class="add-btn"
+          >
             <el-icon><Plus /></el-icon>添加设备
           </el-button>
         </DevicePanel>
@@ -27,7 +41,12 @@
             @connect="deviceStore.connectMeasureDevice"
             @disconnect="deviceStore.disconnectMeasureDevice"
           />
-          <el-button type="primary" plain size="small" class="add-btn">
+          <el-button
+            type="primary"
+            plain
+            size="small"
+            class="add-btn"
+          >
             <el-icon><Plus /></el-icon>添加设备
           </el-button>
         </DevicePanel>
@@ -40,43 +59,90 @@
       <div class="control-bar">
         <div class="control-group">
           <label>最小值</label>
-          <el-input-number v-model="params.minValue" :precision="2" :step="0.1" />
+          <el-input-number
+            v-model="params.minValue"
+            :precision="2"
+            :step="0.1"
+          />
         </div>
         <div class="control-group">
           <label>最大值</label>
-          <el-input-number v-model="params.maxValue" :precision="2" :step="0.1" />
+          <el-input-number
+            v-model="params.maxValue"
+            :precision="2"
+            :step="0.1"
+          />
         </div>
         <div class="control-group">
           <label>点数</label>
-          <el-input-number v-model="params.points" :min="2" :max="50" />
+          <el-input-number
+            v-model="params.points"
+            :min="2"
+            :max="50"
+          />
         </div>
         <div class="control-group">
           <label>精度</label>
-          <el-input-number v-model="params.precision" :min="0" :max="4" />
+          <el-input-number
+            v-model="params.precision"
+            :min="0"
+            :max="4"
+          />
         </div>
         <div class="control-group">
           <label>平均数</label>
-          <el-input-number v-model="params.averageCount" :min="1" :max="100" />
+          <el-input-number
+            v-model="params.averageCount"
+            :min="1"
+            :max="100"
+          />
         </div>
         <div class="control-group">
           <label>稳定时间</label>
           <el-select v-model="params.stableTime">
-            <el-option label="1秒" :value="1" />
-            <el-option label="3秒" :value="3" />
-            <el-option label="5秒" :value="5" />
-            <el-option label="10秒" :value="10" />
+            <el-option
+              label="1秒"
+              :value="1"
+            />
+            <el-option
+              label="3秒"
+              :value="3"
+            />
+            <el-option
+              label="5秒"
+              :value="5"
+            />
+            <el-option
+              label="10秒"
+              :value="10"
+            />
           </el-select>
         </div>
         <div class="control-group">
           <label>精度Level</label>
           <el-select v-model="params.precisionLevel">
-            <el-option label="0.01%" value="0.01" />
-            <el-option label="0.05%" value="0.05" />
-            <el-option label="0.1%" value="0.1" />
-            <el-option label="0.2%" value="0.2" />
+            <el-option
+              label="0.01%"
+              value="0.01"
+            />
+            <el-option
+              label="0.05%"
+              value="0.05"
+            />
+            <el-option
+              label="0.1%"
+              value="0.1"
+            />
+            <el-option
+              label="0.2%"
+              value="0.2"
+            />
           </el-select>
         </div>
-        <el-button type="primary" class="generate-btn">
+        <el-button
+          type="primary"
+          class="generate-btn"
+        >
           生成压力表
         </el-button>
       </div>
@@ -87,15 +153,23 @@
           <div class="switch-group">
             <span>控制模式</span>
             <el-radio-group v-model="controlMode">
-              <el-radio-button label="auto">自动</el-radio-button>
-              <el-radio-button label="manual">手动</el-radio-button>
+              <el-radio-button label="auto">
+                自动
+              </el-radio-button>
+              <el-radio-button label="manual">
+                手动
+              </el-radio-button>
             </el-radio-group>
           </div>
           <div class="switch-group">
             <span>打压模式</span>
             <el-radio-group v-model="pressureMode">
-              <el-radio-button label="single">单程</el-radio-button>
-              <el-radio-button label="round">回程</el-radio-button>
+              <el-radio-button label="single">
+                单程
+              </el-radio-button>
+              <el-radio-button label="round">
+                回程
+              </el-radio-button>
             </el-radio-group>
           </div>
         </div>
@@ -103,33 +177,78 @@
         <div class="progress-section">
           <div class="progress-info">
             <span>进度: {{ currentPoint }}/{{ totalPoints }}</span>
-            <el-progress :percentage="progressPercent" :stroke-width="8" />
+            <el-progress
+              :percentage="progressPercent"
+              :stroke-width="8"
+            />
           </div>
           <div class="stable-status">
             <span>稳定状态: {{ isStable ? '已稳定' : '稳定中' }}</span>
-            <span v-if="!isStable" class="countdown">剩余: {{ stableCountdown }}s</span>
+            <span
+              v-if="!isStable"
+              class="countdown"
+            >剩余: {{ stableCountdown }}s</span>
           </div>
         </div>
         
         <div class="action-buttons">
-          <el-button type="success" @click="startCollection">开始采集</el-button>
-          <el-button @click="pauseCollection">暂停</el-button>
-          <el-button type="danger" @click="stopCollection">停止</el-button>
-          <el-button @click="resetCollection">重置</el-button>
-          <el-button type="primary" plain @click="exportReport">导出报告</el-button>
+          <el-button
+            type="success"
+            @click="startCollection"
+          >
+            开始采集
+          </el-button>
+          <el-button @click="pauseCollection">
+            暂停
+          </el-button>
+          <el-button
+            type="danger"
+            @click="stopCollection"
+          >
+            停止
+          </el-button>
+          <el-button @click="resetCollection">
+            重置
+          </el-button>
+          <el-button
+            type="primary"
+            plain
+            @click="exportReport"
+          >
+            导出报告
+          </el-button>
         </div>
       </div>
       
       <!-- 数据表格 -->
       <div class="data-table-wrapper">
-        <el-table :data="tableData" border stripe class="data-table">
-          <el-table-column prop="index" label="序号" width="60" />
-          <el-table-column prop="status" label="状态" width="100">
+        <el-table
+          :data="tableData"
+          border
+          stripe
+          class="data-table"
+        >
+          <el-table-column
+            prop="index"
+            label="序号"
+            width="60"
+          />
+          <el-table-column
+            prop="status"
+            label="状态"
+            width="100"
+          >
             <template #default="{ row }">
-              <el-tag :type="getStatusType(row.status)">{{ getStatusText(row.status) }}</el-tag>
+              <el-tag :type="getStatusType(row.status)">
+                {{ getStatusText(row.status) }}
+              </el-tag>
             </template>
           </el-table-column>
-          <el-table-column prop="targetValue" label="目标值" width="120" />
+          <el-table-column
+            prop="targetValue"
+            label="目标值"
+            width="120"
+          />
           <el-table-column 
             v-for="ch in 16" 
             :key="ch"
@@ -140,7 +259,11 @@
               <span :class="getChannelClass(row, ch - 1)">{{ row.channelValues[ch - 1]?.toFixed(2) || '--' }}</span>
             </template>
           </el-table-column>
-          <el-table-column prop="timestamp" label="时间" width="160" />
+          <el-table-column
+            prop="timestamp"
+            label="时间"
+            width="160"
+          />
         </el-table>
       </div>
     </main>

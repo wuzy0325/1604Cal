@@ -1,10 +1,18 @@
 <template>
   <div class="device-panel">
-    <div class="panel-header" @click="toggleCollapse">
+    <div
+      class="panel-header"
+      @click="toggleCollapse"
+    >
       <span class="title">{{ title }}</span>
-      <el-icon :class="{ 'is-collapsed': isCollapsed }"><ArrowDown /></el-icon>
+      <el-icon :class="{ 'is-collapsed': isCollapsed }">
+        <ArrowDown />
+      </el-icon>
     </div>
-    <div v-show="!isCollapsed" class="panel-content">
+    <div
+      v-show="!isCollapsed"
+      class="panel-content"
+    >
       <slot />
     </div>
   </div>

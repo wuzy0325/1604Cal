@@ -9,14 +9,24 @@
         <h2>多设备打压控制</h2>
       </div>
       <div class="center">
-        <StatCard label="设备总数" :value="devices.length" />
-        <StatCard label="在线设备" :value="onlineCount" color="#10b981" />
+        <StatCard
+          label="设备总数"
+          :value="devices.length"
+        />
+        <StatCard
+          label="在线设备"
+          :value="onlineCount"
+          color="#10b981"
+        />
       </div>
       <div class="right">
         <el-button @click="refreshStatus">
           <el-icon><Refresh /></el-icon>刷新状态
         </el-button>
-        <el-button type="primary" @click="showAddDialog = true">
+        <el-button
+          type="primary"
+          @click="showAddDialog = true"
+        >
           <el-icon><Plus /></el-icon>添加设备
         </el-button>
       </div>
@@ -32,7 +42,10 @@
       >
         <div class="card-header">
           <h4>{{ device.name }}</h4>
-          <div class="status-indicator" :class="device.status" />
+          <div
+            class="status-indicator"
+            :class="device.status"
+          />
         </div>
         
         <div class="pressure-display">
@@ -40,7 +53,9 @@
             <span class="value">{{ device.currentPressure?.toFixed(2) || '--' }}</span>
             <span class="unit">{{ device.unit }}</span>
           </div>
-          <div class="label">当前压力</div>
+          <div class="label">
+            当前压力
+          </div>
         </div>
         
         <div class="control-section">
@@ -55,11 +70,26 @@
           </div>
           <div class="input-group">
             <label>单位</label>
-            <el-select v-model="device.unit" size="small">
-              <el-option label="kPa" value="kPa" />
-              <el-option label="MPa" value="MPa" />
-              <el-option label="bar" value="bar" />
-              <el-option label="psi" value="psi" />
+            <el-select
+              v-model="device.unit"
+              size="small"
+            >
+              <el-option
+                label="kPa"
+                value="kPa"
+              />
+              <el-option
+                label="MPa"
+                value="MPa"
+              />
+              <el-option
+                label="bar"
+                value="bar"
+              />
+              <el-option
+                label="psi"
+                value="psi"
+              />
             </el-select>
           </div>
         </div>
@@ -83,21 +113,45 @@
     </div>
     
     <!-- 添加设备对话框 -->
-    <el-dialog v-model="showAddDialog" title="添加打压设备" width="400px">
-      <el-form :model="newDevice" label-width="80px">
+    <el-dialog
+      v-model="showAddDialog"
+      title="添加打压设备"
+      width="400px"
+    >
+      <el-form
+        :model="newDevice"
+        label-width="80px"
+      >
         <el-form-item label="设备名称">
-          <el-input v-model="newDevice.name" placeholder="请输入设备名称" />
+          <el-input
+            v-model="newDevice.name"
+            placeholder="请输入设备名称"
+          />
         </el-form-item>
         <el-form-item label="IP地址">
-          <el-input v-model="newDevice.ip" placeholder="192.168.1.xxx" />
+          <el-input
+            v-model="newDevice.ip"
+            placeholder="192.168.1.xxx"
+          />
         </el-form-item>
         <el-form-item label="端口">
-          <el-input-number v-model="newDevice.port" :min="1" :max="65535" />
+          <el-input-number
+            v-model="newDevice.port"
+            :min="1"
+            :max="65535"
+          />
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="showAddDialog = false">取消</el-button>
-        <el-button type="primary" @click="addDevice">确定</el-button>
+        <el-button @click="showAddDialog = false">
+          取消
+        </el-button>
+        <el-button
+          type="primary"
+          @click="addDevice"
+        >
+          确定
+        </el-button>
       </template>
     </el-dialog>
   </div>

@@ -2,18 +2,34 @@
   <div class="device-panel">
     <div class="panel-header">
       <div class="device-info">
-        <el-icon class="device-icon"><FirstAidKit /></el-icon>
+        <el-icon class="device-icon">
+          <FirstAidKit />
+        </el-icon>
         <div>
-          <div class="device-name">打压设备</div>
-          <div class="device-type">压力控制器</div>
+          <div class="device-name">
+            打压设备
+          </div>
+          <div class="device-type">
+            压力控制器
+          </div>
         </div>
       </div>
       <DeviceStatusBadge :status="deviceStatus" />
     </div>
     
     <div class="connection-control">
-      <el-input v-model="ip" placeholder="IP地址" :disabled="isConnected" />
-      <el-input-number v-model="port" :min="1" :max="65535" controls-position="right" :disabled="isConnected" />
+      <el-input
+        v-model="ip"
+        placeholder="IP地址"
+        :disabled="isConnected"
+      />
+      <el-input-number
+        v-model="port"
+        :min="1"
+        :max="65535"
+        controls-position="right"
+        :disabled="isConnected"
+      />
       <el-button 
         :type="isConnected ? 'danger' : 'primary'"
         :loading="isConnecting"
@@ -23,7 +39,10 @@
       </el-button>
     </div>
     
-    <div v-if="isConnected" class="pressure-control">
+    <div
+      v-if="isConnected"
+      class="pressure-control"
+    >
       <div class="current-pressure">
         <span class="label">当前压力:</span>
         <span class="value">{{ currentPressure?.toFixed(2) || '--' }} kPa</span>
@@ -32,12 +51,20 @@
         <el-button @click="adjustPressure(-1)">
           <el-icon><ArrowDown /></el-icon>降压
         </el-button>
-        <el-input-number v-model="targetPressure" :precision="2" :step="1" />
+        <el-input-number
+          v-model="targetPressure"
+          :precision="2"
+          :step="1"
+        />
         <el-button @click="adjustPressure(1)">
           <el-icon><ArrowUp /></el-icon>升压
         </el-button>
       </div>
-      <el-button type="primary" class="set-btn" @click="setPressure">
+      <el-button
+        type="primary"
+        class="set-btn"
+        @click="setPressure"
+      >
         设定压力
       </el-button>
     </div>
