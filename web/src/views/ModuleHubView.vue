@@ -160,7 +160,7 @@ import { Tools, DataLine, SetUp, ArrowRight } from '@element-plus/icons-vue'
   
   &:hover {
     border-color: var(--accent-primary);
-    box-shadow: 0 4px 20px rgba(233, 69, 96, 0.15);
+    box-shadow: 0 4px 20px rgba(16, 185, 129, 0.15);
   }
 }
 
@@ -223,7 +223,7 @@ import { Tools, DataLine, SetUp, ArrowRight } from '@element-plus/icons-vue'
   transition: all 0.2s ease;
   
   &:hover {
-    background: #ff5773;
+    background: var(--accent-hover);
     transform: translateY(-1px);
   }
   

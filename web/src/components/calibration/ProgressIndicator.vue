@@ -125,7 +125,7 @@ const steps = [
         .step-marker {
           background: var(--accent-primary);
           color: white;
-          box-shadow: 0 0 0 4px rgba(233, 69, 96, 0.3);
+          box-shadow: 0 0 0 4px rgba(16, 185, 129, 0.3);
         }
 
         .step-label {

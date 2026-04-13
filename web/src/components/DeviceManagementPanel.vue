@@ -803,7 +803,7 @@ onUnmounted(() => {
   color: white;
   
   &:hover {
-    background: #ff5773;
+    background: var(--accent-hover);
   }
 }
 

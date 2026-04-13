@@ -720,7 +720,7 @@ onUnmounted(() => {
 
 .channel-item.channel-active {
   border-color: var(--accent-primary);
-  background: rgba(233, 69, 96, 0.1);
+  background: rgba(16, 185, 129, 0.1);
 }
 
 .channel-header {

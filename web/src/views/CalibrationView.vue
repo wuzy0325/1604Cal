@@ -432,7 +432,7 @@ async function handleSelectTemplate() {
   color: white;
   
   &:hover:not(:disabled) {
-    background: #ff5773;
+    background: var(--accent-hover);
   }
 }
 
