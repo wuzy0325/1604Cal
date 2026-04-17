@@ -224,6 +224,13 @@ func (s *Service) getOrCreateDriver(dev domain.Device) (device.ConnectionDriver,
 	return s.factory.Create(dev)
 }
 
+// GetActiveDriver 返回指定设备的已连接驱动实例；设备未连接时返回 nil。
+func (s *Service) GetActiveDriver(id string) device.ConnectionDriver {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.activeDrivers[id]
+}
+
 func (s *Service) setActiveDriver(id string, drv device.ConnectionDriver) {
 	s.mu.Lock()
 	defer s.mu.Unlock()

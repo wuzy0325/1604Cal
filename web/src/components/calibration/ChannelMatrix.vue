@@ -29,7 +29,12 @@
         :key="index"
         class="channel-item"
         :class="{ selected }"
+        role="checkbox"
+        :aria-checked="isSelected(index)"
+        tabindex="0"
         @click="toggleChannel(index)"
+        @keydown.enter="toggleChannel(index)"
+        @keydown.space.prevent="toggleChannel(index)"
       >
         <el-checkbox
           v-model="localChannels[index]"
@@ -44,6 +49,7 @@
     <div
       v-if="selectedCount === 0"
       class="warning"
+      role="alert"
     >
       <el-icon><Warning /></el-icon>
       <span>请至少选择一个通道</span>
@@ -83,6 +89,11 @@ const selectedChannelNumbers = computed(() => {
     .filter((num): num is number => num !== null)
 })
 
+// 判断通道是否选中
+const isSelected = (index: number): boolean => {
+  return localChannels.value[index]
+}
+
 // 切换通道
 const toggleChannel = (index: number) => {
   localChannels.value[index] = !localChannels.value[index]
@@ -109,79 +120,82 @@ const emitUpdate = () => {
 
 <style scoped lang="scss">
 .channel-matrix {
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-md);
-  padding: var(--spacing-md);
-  
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+
   .matrix-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: var(--spacing-md);
-    
+
     h4 {
       color: var(--text-primary);
       margin: 0;
+      font-size: 12px;
+      font-weight: 500;
     }
-    
+
     .actions {
       display: flex;
       align-items: center;
-      gap: var(--spacing-sm);
-      
+      gap: var(--spacing-xs);
+
       .count {
-        color: var(--text-secondary);
-        font-size: 13px;
+        color: var(--text-muted);
+        font-size: 11px;
       }
     }
   }
-  
+
   .matrix-grid {
     display: grid;
-    grid-template-columns: repeat(8, 1fr);
-    gap: var(--spacing-sm);
-    
-    @media (max-width: 1200px) {
-      grid-template-columns: repeat(4, 1fr);
-    }
-    
+    grid-template-columns: repeat(4, 1fr);
+    gap: 4px;
+
     .channel-item {
       background: var(--bg-tertiary);
-      border: 2px solid transparent;
+      border: 1px solid transparent;
       border-radius: var(--radius-sm);
-      padding: var(--spacing-sm);
+      padding: 5px 6px;
       cursor: pointer;
-      transition: all 0.2s;
-      
+      transition: all 0.15s;
+
       &:hover {
         border-color: var(--accent-primary);
+        background: var(--bg-quaternary);
       }
-      
+
       &.selected {
-        background: rgba(16, 185, 129, 0.2);
+        background: var(--status-success-bg);
         border-color: var(--status-success);
       }
-      
+
       .el-checkbox {
         color: var(--text-primary);
-        
+        height: auto;
+
+        :deep(.el-checkbox__label) {
+          font-size: 11px;
+          padding-left: 4px;
+        }
+
         :deep(.el-checkbox__input.is-checked + .el-checkbox__label) {
           color: var(--status-success);
+          font-weight: 500;
         }
       }
     }
   }
-  
+
   .warning {
     display: flex;
     align-items: center;
     gap: var(--spacing-xs);
     color: var(--status-warning);
-    font-size: 12px;
-    margin-top: var(--spacing-md);
-    padding: var(--spacing-sm);
-    background: rgba(245, 158, 11, 0.1);
+    font-size: 11px;
+    padding: 6px var(--spacing-sm);
+    background: var(--status-warning-bg-subtle);
     border-radius: var(--radius-sm);
   }
 }

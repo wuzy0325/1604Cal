@@ -3,7 +3,13 @@
     <h4 class="title">
       校准流程
     </h4>
-    <div class="steps">
+    <div
+      class="steps"
+      role="progressbar"
+      :aria-valuenow="currentStep"
+      aria-valuemin="1"
+      :aria-valuemax="steps.length"
+    >
       <div
         v-for="(step, index) in steps"
         :key="index"
@@ -51,15 +57,13 @@ const steps = [
 
 <style scoped lang="scss">
 .progress-indicator {
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-md);
-  padding: var(--spacing-md);
+  padding: var(--spacing-md) 0;
 
   .title {
     color: var(--text-primary);
     margin: 0 0 var(--spacing-md) 0;
-    font-size: 16px;
+    font-size: 13px;
+    font-weight: 500;
   }
 
   .steps {
@@ -80,12 +84,12 @@ const steps = [
         display: flex;
         align-items: center;
         justify-content: center;
-        font-size: 12px;
+        font-size: 11px;
         font-weight: bold;
         z-index: 2;
 
         .el-icon {
-          font-size: 16px;
+          font-size: 14px;
         }
       }
 
@@ -109,7 +113,7 @@ const steps = [
       &.completed {
         .step-marker {
           background: var(--status-success);
-          color: white;
+          color: var(--bg-primary);
         }
 
         .step-label {
@@ -124,13 +128,13 @@ const steps = [
       &.active {
         .step-marker {
           background: var(--accent-primary);
-          color: white;
-          box-shadow: 0 0 0 4px rgba(16, 185, 129, 0.3);
+          color: var(--bg-primary);
+          box-shadow: 0 0 0 4px rgba(255, 215, 0, 0.15);
         }
 
         .step-label {
           color: var(--accent-primary);
-          font-weight: bold;
+          font-weight: 600;
         }
       }
 
@@ -138,7 +142,7 @@ const steps = [
         .step-marker {
           background: var(--bg-tertiary);
           color: var(--text-muted);
-          border: 2px solid var(--border-color);
+          border: 1px solid var(--border-color-strong);
         }
 
         .step-label {

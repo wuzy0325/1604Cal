@@ -6,16 +6,22 @@
           <DataLine />
         </el-icon>
         <h2>实时数据监控</h2>
-        <span
-          class="connection-status"
-          :class="connectionStatusClass"
-        >
-          <el-icon v-if="isConnected"><CircleCheck /></el-icon>
-          <el-icon v-else><CircleClose /></el-icon>
-          {{ connectionStatusText }}
-        </span>
       </div>
       <div class="header-actions">
+        <div class="device-status-group">
+          <span
+            class="device-status-badge"
+            :class="measureDeviceStatusClass"
+          >
+            计量: {{ measureDeviceStatusText }}
+          </span>
+          <span
+            class="device-status-badge"
+            :class="pressureDeviceStatusClass"
+          >
+            打压: {{ pressureDeviceStatusText }}
+          </span>
+        </div>
         <span class="update-time">{{ lastUpdateTime }}</span>
         <button
           type="button"
@@ -28,103 +34,53 @@
       </div>
     </header>
 
-    <div class="metrics-grid">
-      <!-- 主压力值显示 -->
-      <div class="metric-card primary-metric">
-        <div class="metric-header">
-          <span class="metric-label">当前压力</span>
-          <el-icon><Odometer /></el-icon>
-        </div>
-        <div class="metric-value-row">
-          <span class="metric-value">
-            {{ formatPressure(currentPressure) }}
-          </span>
-          <span class="metric-unit">kPa</span>
-        </div>
-        <!-- 压力可视化条 -->
-        <div class="pressure-bar-container">
-          <div class="pressure-bar-track">
-            <div
-              class="pressure-bar-fill"
-              :style="{ width: pressurePercentage + '%' }"
-              :class="pressureBarClass"
-            />
-          </div>
-          <div class="pressure-scale">
-            <span>0</span>
-            <span>{{ targetPressure / 2 }}kPa</span>
-            <span>{{ targetPressure }}kPa</span>
-          </div>
-        </div>
-      </div>
-
-      <!-- 稳定状态 -->
-      <div class="metric-card status-metric">
-        <div class="metric-header">
-          <span class="metric-label">稳定状态</span>
-          <el-icon v-if="isStable">
-            <CircleCheckFilled />
-          </el-icon>
-          <el-icon v-else>
-            <WarningFilled />
-          </el-icon>
-        </div>
-        <div class="status-display">
-          <span
-            class="status-indicator"
-            :class="stabilityClass"
-          />
-          <span class="status-text">
-            {{ stabilityText }}
-          </span>
-        </div>
-        <div class="stability-details">
-          <div class="detail-row">
-            <span>持续时间</span>
-            <strong>{{ stableDuration }}s</strong>
-          </div>
-          <div class="detail-row">
-            <span>阈值</span>
-            <strong>±{{ stabilityThreshold }}kPa</strong>
-          </div>
-        </div>
-      </div>
-
-      <!-- 目标压力 -->
-      <div class="metric-card secondary-metric">
-        <div class="metric-header">
-          <span class="metric-label">目标压力</span>
-          <el-icon><Aim /></el-icon>
-        </div>
-        <div class="metric-value-row small">
-          <span class="metric-value">
-            {{ formatPressure(targetPressure) }}
-          </span>
-          <span class="metric-unit">kPa</span>
-        </div>
+    <div class="metrics-bar">
+      <div class="metric-item pressure-current">
+        <span class="metric-label">当前压力</span>
+        <span class="metric-value">{{ formatPressure(currentPressure) }}</span>
+        <span class="metric-unit">kPa</span>
         <div
+          class="mini-bar"
+          role="progressbar"
+          :aria-valuenow="currentPressure"
+          aria-valuemin="0"
+          :aria-valuemax="targetPressure"
+        >
+          <div
+            class="mini-bar-fill"
+            :style="{ width: pressurePercentage + '%' }"
+            :class="pressureBarClass"
+          />
+        </div>
+      </div>
+
+      <div class="metric-separator" />
+
+      <div class="metric-item pressure-target">
+        <span class="metric-label">目标压力</span>
+        <span class="metric-value">{{ formatPressure(targetPressure) }}</span>
+        <span class="metric-unit">kPa</span>
+        <span
           class="target-diff"
           :class="targetDiffClass"
         >
           {{ targetDiffText }}
-        </div>
+        </span>
       </div>
 
-      <!-- 温度值 -->
-      <div class="metric-card secondary-metric">
-        <div class="metric-header">
-          <span class="metric-label">环境温度</span>
-          <el-icon><Thermometer /></el-icon>
-        </div>
-        <div class="metric-value-row small">
-          <span class="metric-value">
-            {{ formatTemperature(temperature) }}
-          </span>
-          <span class="metric-unit">°C</span>
-        </div>
-        <div class="metric-note">
-          参考值
-        </div>
+      <div class="metric-separator" />
+
+      <div class="metric-item stability">
+        <span class="metric-label">稳定状态</span>
+        <span
+          class="status-indicator"
+          :class="stabilityClass"
+        />
+        <span
+          class="status-text"
+          :class="stabilityClass"
+        >{{ stabilityText }}</span>
+        <span class="stability-meta">{{ stableDuration }}s / ±{{ stabilityThreshold }}kPa</span>
       </div>
     </div>
 
@@ -172,7 +128,13 @@
         </div>
         <span class="progress-percent">{{ progressPercent }}%</span>
       </div>
-      <div class="progress-bar">
+      <div
+        class="progress-bar"
+        role="progressbar"
+        :aria-valuenow="completedPoints"
+        aria-valuemin="0"
+        :aria-valuemax="totalPoints"
+      >
         <div
           class="progress-fill"
           :style="{ width: progressPercent + '%' }"
@@ -190,16 +152,19 @@
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import {
   DataLine,
-  CircleCheck,
-  CircleClose,
   Refresh,
-  Odometer,
-  CircleCheckFilled,
-  WarningFilled,
-  Aim,
   Grid,
   Histogram
 } from '@element-plus/icons-vue'
+import {
+  createEventStream,
+  fetchDevices,
+  readCurrentPressure,
+  readStability,
+  readMeasureData,
+  type StreamEventPayload
+} from '@/services/apiClient'
+import { useDeviceStore } from '@/stores/deviceStore'
 
 interface ChannelInfo {
   value: number | null
@@ -210,12 +175,13 @@ interface ChannelInfo {
 // 响应式数据
 const currentPressure = ref(0)
 const targetPressure = ref(1000)
-const temperature = ref(25.5)
 const isStable = ref(false)
 const stableDuration = ref(0)
 const stabilityThreshold = ref(0.5)
 const lastUpdateTime = ref('--:--:--')
 const isConnected = ref(false)
+const measureDeviceStatus = ref<'connected' | 'disconnected' | 'not_selected'>('not_selected')
+const pressureDeviceStatus = ref<'connected' | 'disconnected' | 'not_selected'>('not_selected')
 
 const channelData = ref<ChannelInfo[]>(
   Array.from({ length: 16 }, () => ({
@@ -225,20 +191,40 @@ const channelData = ref<ChannelInfo[]>(
   }))
 )
 
+const deviceStore = useDeviceStore()
 const showProgress = ref(true)
 const completedPoints = ref(3)
 const totalPoints = ref(10)
-const estimatedTime = ref('12分钟')
+const estimatedTime = ref('--')
 
 // 计算属性
-const connectionStatusClass = computed(() => ({
-  'status-connected': isConnected.value,
-  'status-disconnected': !isConnected.value
+const measureDeviceStatusText = computed(() => {
+  switch (measureDeviceStatus.value) {
+    case 'connected': return '已连接'
+    case 'disconnected': return '未连接'
+    default: return '未选择'
+  }
+})
+
+const pressureDeviceStatusText = computed(() => {
+  switch (pressureDeviceStatus.value) {
+    case 'connected': return '已连接'
+    case 'disconnected': return '未连接'
+    default: return '未选择'
+  }
+})
+
+const measureDeviceStatusClass = computed(() => ({
+  'status-connected': measureDeviceStatus.value === 'connected',
+  'status-disconnected': measureDeviceStatus.value === 'disconnected',
+  'status-not-selected': measureDeviceStatus.value === 'not_selected'
 }))
 
-const connectionStatusText = computed(() =>
-  isConnected.value ? '已连接' : '未连接'
-)
+const pressureDeviceStatusClass = computed(() => ({
+  'status-connected': pressureDeviceStatus.value === 'connected',
+  'status-disconnected': pressureDeviceStatus.value === 'disconnected',
+  'status-not-selected': pressureDeviceStatus.value === 'not_selected'
+}))
 
 const pressurePercentage = computed(() => {
   if (!targetPressure.value) return 0
@@ -296,11 +282,6 @@ function formatPressure(value: number | null): string {
   return value.toFixed(2)
 }
 
-function formatTemperature(value: number | null): string {
-  if (value === null) return '--.-'
-  return value.toFixed(1)
-}
-
 function formatChannelValue(value: number | null): string {
   if (value === null) return '---'
   return value.toFixed(3)
@@ -316,83 +297,179 @@ function channelStatusText(status: string): string {
   return map[status] || status
 }
 
-function reconnect() {
-  // TODO: 实现重连逻辑
-  console.log('重新连接设备...')
-}
+// SSE 事件订阅
+let eventSource: EventSource | null = null
+let pollInterval: ReturnType<typeof setInterval> | null = null
 
-// 模拟实时数据更新
-let updateInterval: ReturnType<typeof setInterval> | null = null
-
-function startSimulation() {
-  updateInterval = setInterval(() => {
-    // 更新时间
+function setupSSE() {
+  eventSource = createEventStream((payload: StreamEventPayload) => {
     const now = new Date()
     lastUpdateTime.value = now.toLocaleTimeString('zh-CN')
 
-    // 模拟压力值波动
-    const target = targetPressure.value
-    const variation = (Math.random() - 0.5) * 2
-    currentPressure.value = Math.max(0, target + variation)
+    if (payload.type === 'device.status.changed') {
+      // 设备状态变化时，重新同步连接状态
+      void syncConnectionFromDevices()
+    }
 
-    // 模拟稳定状态
-    isStable.value = Math.abs(variation) < stabilityThreshold.value
-    if (isStable.value) {
+    if (payload.type === 'pressure.applied') {
+      const data = payload.data as { actualPressure?: number; targetPressure?: number }
+      if (data?.actualPressure !== undefined) {
+        currentPressure.value = data.actualPressure
+      }
+      if (data?.targetPressure !== undefined) {
+        targetPressure.value = data.targetPressure
+      }
+    }
+
+    if (payload.type === 'data.collected') {
+      const data = payload.data as { data?: number[]; channels?: number[] }
+      if (data?.data && data?.channels) {
+        updateChannelData(data.data, data.channels)
+      }
+    }
+
+    if (payload.type === 'session.state.changed') {
+      const data = payload.data as { state?: string }
+      if (data?.state === 'completed') {
+        completedPoints.value = totalPoints.value
+      }
+    }
+  })
+}
+
+function updateChannelData(values: number[], channels: number[]) {
+  const newChannelData: ChannelInfo[] = Array.from({ length: 16 }, () => ({
+    value: null,
+    status: 'idle' as ChannelInfo['status'],
+    isActive: false
+  }))
+
+  channels.forEach((ch, idx) => {
+    if (ch >= 1 && ch <= 16 && idx < values.length) {
+      const chIdx = ch - 1
+      newChannelData[chIdx] = {
+        value: values[idx],
+        status: Math.abs(values[idx] - targetPressure.value) > stabilityThreshold.value * 3 ? 'warning' : 'ok',
+        isActive: true
+      }
+    }
+  })
+
+  channelData.value = newChannelData
+}
+
+// 轮询实时数据（作为SSE的补充）
+async function pollRealtimeData() {
+  try {
+    const pressure = await readCurrentPressure()
+    currentPressure.value = pressure
+    isConnected.value = true
+  } catch {
+    // 设备未连接或不可用
+  }
+
+  try {
+    const stable = await readStability()
+    isStable.value = stable
+    if (stable) {
       stableDuration.value += 1
     } else {
       stableDuration.value = 0
     }
+  } catch {
+    // 忽略
+  }
 
-    // 模拟连接状态
-    isConnected.value = true
-
-    // 模拟通道数据
-    channelData.value = channelData.value.map((ch, idx) => {
-      if (idx < 8) { // 前8个通道激活
-        return {
-          value: currentPressure.value + (Math.random() - 0.5) * 0.1,
-          status: Math.random() > 0.9 ? 'warning' : 'ok',
-          isActive: true
-        }
-      }
-      return ch
-    })
-  }, 1000)
+  try {
+    const data = await readMeasureData()
+    if (data.length > 0) {
+      const channels = Array.from({ length: Math.min(data.length, 16) }, (_, i) => i + 1)
+      updateChannelData(data, channels)
+    }
+  } catch {
+    // 忽略
+  }
 }
 
-function stopSimulation() {
-  if (updateInterval) {
-    clearInterval(updateInterval)
-    updateInterval = null
+function reconnect() {
+  if (eventSource) {
+    eventSource.close()
+  }
+  setupSSE()
+  syncConnectionFromDevices()
+}
+
+/** 从后端设备列表同步连接状态，解决进入页面时设备已连接但未触发 SSE 的问题。 */
+async function syncConnectionFromDevices() {
+  try {
+    const devices = await fetchDevices()
+    const selection = deviceStore.selectionByModule('measurement')
+    const pressureId = selection.pressureDeviceId
+    const measureId = selection.measureDeviceId
+
+    // 检查两个设备是否都已连接
+    const pressureDevice = devices.find(d => d.id === pressureId)
+    const measureDevice = devices.find(d => d.id === measureId)
+
+    // 更新各设备状态
+    measureDeviceStatus.value = measureId
+      ? (measureDevice?.status === 'connected' ? 'connected' : 'disconnected')
+      : 'not_selected'
+    pressureDeviceStatus.value = pressureId
+      ? (pressureDevice?.status === 'connected' ? 'connected' : 'disconnected')
+      : 'not_selected'
+
+    // 只有当两个设备都已选择且都已连接时，才认为已连接
+    const pressureConnected = pressureId && pressureDevice?.status === 'connected'
+    const measureConnected = measureId && measureDevice?.status === 'connected'
+
+    isConnected.value = !!(pressureConnected && measureConnected)
+  } catch {
+    // 查询失败时保持当前状态
   }
 }
 
 // 生命周期
 onMounted(() => {
-  startSimulation()
+  setupSSE()
+  syncConnectionFromDevices()
+  // 每2秒轮询一次实时数据
+  pollInterval = setInterval(pollRealtimeData, 2000)
+  // 立即执行一次
+  pollRealtimeData()
 })
 
 onUnmounted(() => {
-  stopSimulation()
+  if (eventSource) {
+    eventSource.close()
+    eventSource = null
+  }
+  if (pollInterval) {
+    clearInterval(pollInterval)
+    pollInterval = null
+  }
 })
 </script>
 
 <style scoped lang="scss">
-/* 主面板容器 */
 .realtime-data-panel {
   background: var(--bg-secondary);
   border: 1px solid var(--border-color);
-  border-radius: var(--radius-lg);
-  padding: var(--spacing-lg);
+  border-radius: 4px;
+  padding: var(--spacing-sm);
+  height: 100%;
+  min-height: 0;
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  gap: var(--spacing-sm);
 }
 
-/* 面板头部 */
 .panel-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: var(--spacing-lg);
-  padding-bottom: var(--spacing-md);
+  margin-bottom: 0;
+  padding-bottom: var(--spacing-xs);
   border-bottom: 1px solid var(--border-color);
 }
 
@@ -403,13 +480,13 @@ onUnmounted(() => {
 }
 
 .panel-icon {
-  font-size: 24px;
+  font-size: 20px;
   color: var(--accent-primary);
 }
 
 .header-title h2 {
   margin: 0;
-  font-size: 18px;
+  font-size: 14px;
   font-weight: 600;
   color: var(--text-primary);
 }
@@ -418,24 +495,43 @@ onUnmounted(() => {
   display: inline-flex;
   align-items: center;
   gap: var(--spacing-xs);
-  padding: 4px 10px;
-  border-radius: var(--radius-sm);
-  font-size: 12px;
+  padding: 3px 8px;
+  border-radius: 3px;
+  font-size: 11px;
   font-weight: 600;
-  
+
   .el-icon {
-    font-size: 12px;
+    font-size: 11px;
   }
 }
 
 .status-connected {
-  background: rgba(16, 185, 129, 0.2);
+  background: var(--status-success-bg);
   color: var(--status-success);
 }
 
 .status-disconnected {
-  background: rgba(239, 68, 68, 0.2);
+  background: var(--status-error-bg);
   color: var(--status-error);
+}
+
+.status-not-selected {
+  background: var(--bg-tertiary);
+  color: var(--text-muted);
+}
+
+.device-status-group {
+  display: flex;
+  gap: var(--spacing-xs);
+}
+
+.device-status-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 8px;
+  border-radius: 3px;
+  font-size: 11px;
+  font-weight: 600;
 }
 
 .header-actions {
@@ -445,160 +541,126 @@ onUnmounted(() => {
 }
 
 .update-time {
-  font-size: 13px;
+  font-size: 12px;
   color: var(--text-muted);
-  font-family: 'SF Mono', Monaco, monospace;
+  font-family: Consolas, monospace;
 }
 
 .icon-btn {
-  width: 32px;
-  height: 32px;
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-sm);
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--border-color-strong);
+  border-radius: 3px;
   background: var(--bg-tertiary);
   color: var(--text-secondary);
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 14px;
-  transition: all 0.2s ease;
-  
+  transition: all 0.15s ease;
+
   .el-icon {
-    font-size: 16px;
+    font-size: 14px;
   }
-  
+
   &:hover {
-    background: var(--bg-secondary);
+    background: var(--border-color);
     border-color: var(--accent-primary);
     color: var(--accent-primary);
   }
 }
 
-/* 指标网格 */
-.metrics-grid {
-  display: grid;
-  grid-template-columns: 2fr 1fr 1fr 1fr;
+/* ===== 紧凑指标栏 ===== */
+.metrics-bar {
+  display: flex;
+  align-items: center;
   gap: var(--spacing-md);
-  margin-bottom: var(--spacing-lg);
-}
-
-.metric-card {
   background: var(--bg-tertiary);
   border: 1px solid var(--border-color);
-  border-radius: var(--radius-md);
-  padding: var(--spacing-md);
+  border-radius: 3px;
+  padding: var(--spacing-xs) var(--spacing-md);
 }
 
-.primary-metric {
-  border-color: var(--accent-primary);
-}
-
-.metric-header {
+.metric-item {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  margin-bottom: var(--spacing-sm);
-  
-  .el-icon {
-    font-size: 16px;
-    color: var(--accent-primary);
-  }
+  gap: var(--spacing-xs);
+  white-space: nowrap;
 }
 
 .metric-label {
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 500;
-  color: var(--text-secondary);
+  color: var(--text-muted);
   text-transform: uppercase;
   letter-spacing: 0.05em;
 }
 
-.metric-value-row {
-  display: flex;
-  align-items: baseline;
-  gap: var(--spacing-xs);
-  margin-bottom: var(--spacing-md);
-}
-
-.metric-value-row.small {
-  margin-bottom: var(--spacing-sm);
-}
-
 .metric-value {
-  font-family: 'SF Mono', 'Consolas', monospace;
-  font-size: 32px;
+  font-family: Consolas, monospace;
+  font-size: 16px;
   font-weight: 600;
   color: var(--text-primary);
   line-height: 1;
 }
 
-.metric-value-row.small .metric-value {
-  font-size: 24px;
-}
-
 .metric-unit {
-  font-size: 14px;
+  font-size: 11px;
   color: var(--text-muted);
   font-weight: 500;
 }
 
-/* 压力进度条 */
-.pressure-bar-container {
-  margin-top: var(--spacing-md);
+.metric-separator {
+  width: 1px;
+  height: 20px;
+  background: var(--border-color-strong);
+  flex-shrink: 0;
 }
 
-.pressure-bar-track {
-  height: 8px;
-  background: var(--bg-secondary);
-  border-radius: 4px;
+/* 迷你压力条 */
+.mini-bar {
+  width: 60px;
+  height: 4px;
+  background: var(--bg-primary);
+  border-radius: 2px;
   overflow: hidden;
+  margin-left: var(--spacing-xs);
 }
 
-.pressure-bar-fill {
+.mini-bar-fill {
   height: 100%;
-  border-radius: 4px;
+  border-radius: 2px;
   transition: width 0.3s ease, background-color 0.3s ease;
 }
 
-.bar-normal {
-  background: var(--status-info);
-}
+.bar-normal { background: var(--status-info); }
+.bar-approaching { background: var(--status-warning); }
+.bar-stable { background: var(--status-success); }
 
-.bar-approaching {
-  background: var(--status-warning);
-}
-
-.bar-stable {
-  background: var(--status-success);
-}
-
-.pressure-scale {
-  display: flex;
-  justify-content: space-between;
-  margin-top: var(--spacing-xs);
+/* 目标差值 */
+.target-diff {
   font-size: 11px;
-  color: var(--text-muted);
+  font-weight: 500;
+  padding: 1px 5px;
+  border-radius: 2px;
+  font-family: Consolas, monospace;
 }
 
-/* 稳定状态显示 */
-.status-display {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-sm);
-  margin-bottom: var(--spacing-md);
-}
+.diff-ok { background: var(--status-success-bg); color: var(--status-success); }
+.diff-warning { background: var(--status-warning-bg); color: var(--status-warning); }
+.diff-error { background: var(--status-error-bg); color: var(--status-error); }
 
+/* 稳定状态 */
 .status-indicator {
-  width: 10px;
-  height: 10px;
+  width: 6px;
+  height: 6px;
   border-radius: 50%;
   transition: background-color 0.3s ease;
 }
 
 .indicator-stable {
   background: var(--status-success);
-  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.3);
+  box-shadow: 0 0 0 2px var(--status-success-bg);
 }
 
 .indicator-unstable {
@@ -606,155 +668,114 @@ onUnmounted(() => {
 }
 
 .status-text {
-  font-size: 16px;
-  font-weight: 600;
-  color: var(--text-primary);
-}
-
-.stability-details {
-  border-top: 1px solid var(--border-color);
-  padding-top: var(--spacing-md);
-}
-
-.detail-row {
-  display: flex;
-  justify-content: space-between;
-  font-size: 13px;
-  margin-bottom: var(--spacing-xs);
-}
-
-.detail-row:last-child {
-  margin-bottom: 0;
-}
-
-.detail-row span {
-  color: var(--text-muted);
-}
-
-.detail-row strong {
-  color: var(--text-secondary);
-  font-weight: 600;
-}
-
-/* 目标压力差值 */
-.target-diff {
-  font-size: 13px;
-  font-weight: 500;
-  padding: 4px 8px;
-  border-radius: var(--radius-sm);
-  display: inline-block;
-}
-
-.diff-ok {
-  background: rgba(16, 185, 129, 0.2);
-  color: var(--status-success);
-}
-
-.diff-warning {
-  background: rgba(245, 158, 11, 0.2);
-  color: var(--status-warning);
-}
-
-.diff-error {
-  background: rgba(239, 68, 68, 0.2);
-  color: var(--status-error);
-}
-
-.metric-note {
   font-size: 12px;
-  color: var(--text-muted);
-  font-style: italic;
+  font-weight: 600;
 }
 
-/* 通道数据区域 */
+.status-text.indicator-stable { color: var(--status-success); }
+.status-text.indicator-unstable { color: var(--status-warning); }
+
+.stability-meta {
+  font-size: 10px;
+  color: var(--text-muted);
+  font-family: Consolas, monospace;
+}
+
 .channels-section {
-  margin-bottom: var(--spacing-lg);
+  margin-bottom: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
 }
 
 .section-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: var(--spacing-md);
+  margin-bottom: var(--spacing-sm);
 }
 
 .section-title {
   display: flex;
   align-items: center;
   gap: var(--spacing-sm);
-  
+
   .el-icon {
-    font-size: 18px;
+    font-size: 16px;
     color: var(--accent-primary);
   }
 }
 
 .section-header h3 {
   margin: 0;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 600;
   color: var(--text-primary);
 }
 
 .channel-count {
-  font-size: 12px;
+  font-size: 11px;
   color: var(--text-secondary);
   background: var(--bg-tertiary);
-  padding: 2px 8px;
-  border-radius: var(--radius-sm);
+  padding: 2px 6px;
+  border-radius: 3px;
 }
 
 .channels-grid {
   display: grid;
   grid-template-columns: repeat(8, 1fr);
-  gap: var(--spacing-sm);
+  gap: var(--spacing-xs);
+  min-height: 0;
+  overflow: auto;
+  align-content: start;
+  padding-right: 2px;
 }
 
 .channel-item {
   background: var(--bg-tertiary);
   border: 1px solid var(--border-color);
-  border-radius: var(--radius-sm);
-  padding: var(--spacing-sm);
+  border-radius: 2px;
+  padding: 4px;
   text-align: center;
 }
 
 .channel-item.channel-active {
   border-color: var(--accent-primary);
-  background: rgba(16, 185, 129, 0.1);
+  background: rgba(255, 215, 0, 0.06);
 }
 
 .channel-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 4px;
+  margin-bottom: 2px;
 }
 
 .channel-name {
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 600;
   color: var(--text-muted);
 }
 
 .channel-status {
-  font-size: 10px;
-  padding: 1px 4px;
+  font-size: 9px;
+  padding: 1px 3px;
   border-radius: 2px;
   font-weight: 500;
 }
 
 .channel-status.ok {
-  background: rgba(16, 185, 129, 0.2);
+  background: var(--status-success-bg);
   color: var(--status-success);
 }
 
 .channel-status.warning {
-  background: rgba(245, 158, 11, 0.2);
+  background: var(--status-warning-bg);
   color: var(--status-warning);
 }
 
 .channel-status.error {
-  background: rgba(239, 68, 68, 0.2);
+  background: var(--status-error-bg);
   color: var(--status-error);
 }
 
@@ -764,25 +785,24 @@ onUnmounted(() => {
 }
 
 .channel-value {
-  font-family: 'SF Mono', 'Consolas', monospace;
-  font-size: 14px;
+  font-family: Consolas, monospace;
+  font-size: 13px;
   font-weight: 600;
   color: var(--text-primary);
 }
 
-/* 进度区域 */
 .progress-section {
   background: var(--bg-tertiary);
   border: 1px solid var(--border-color);
-  border-radius: var(--radius-md);
-  padding: var(--spacing-md);
+  border-radius: 3px;
+  padding: var(--spacing-sm) var(--spacing-md);
 }
 
 .progress-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 500;
   color: var(--text-primary);
   margin-bottom: var(--spacing-sm);
@@ -792,9 +812,9 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   gap: var(--spacing-xs);
-  
+
   .el-icon {
-    font-size: 16px;
+    font-size: 14px;
     color: var(--accent-primary);
   }
 }
@@ -805,9 +825,9 @@ onUnmounted(() => {
 }
 
 .progress-bar {
-  height: 6px;
-  background: var(--bg-secondary);
-  border-radius: 3px;
+  height: 4px;
+  background: var(--bg-primary);
+  border-radius: 2px;
   overflow: hidden;
   margin-bottom: var(--spacing-sm);
 }
@@ -815,37 +835,36 @@ onUnmounted(() => {
 .progress-fill {
   height: 100%;
   background: var(--accent-primary);
-  border-radius: 3px;
+  border-radius: 2px;
   transition: width 0.3s ease;
 }
 
 .progress-meta {
   display: flex;
   justify-content: space-between;
-  font-size: 12px;
+  font-size: 11px;
   color: var(--text-secondary);
 }
 
-/* 响应式适配 */
 @media (max-width: 1200px) {
-  .metrics-grid {
-    grid-template-columns: 1fr 1fr;
-  }
-  
   .channels-grid {
     grid-template-columns: repeat(4, 1fr);
   }
 }
 
 @media (max-width: 768px) {
-  .metrics-grid {
-    grid-template-columns: 1fr;
+  .metrics-bar {
+    flex-wrap: wrap;
   }
-  
+
+  .metric-separator {
+    display: none;
+  }
+
   .channels-grid {
     grid-template-columns: repeat(2, 1fr);
   }
-  
+
   .panel-header {
     flex-direction: column;
     align-items: flex-start;

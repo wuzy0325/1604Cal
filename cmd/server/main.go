@@ -9,19 +9,26 @@ import (
 	apihttp "cal1604/internal/api/http"
 	"cal1604/internal/application/deviceconnect"
 	"cal1604/internal/config"
+	"cal1604/internal/device/manager"
 )
 
 const configPathEnvName = "CAL1604_CONFIG"
 
 func main() {
-	addr := ":8080"
+	addr := ":18080"
 
 	connectCfg, err := resolveConnectConfig(os.Getenv)
 	if err != nil {
 		log.Fatalf("load runtime config failed: %v", err)
 	}
 
-	router := apihttp.NewRouterWithConnectConfig(nil, connectCfg)
+	// 使用持久化设备管理器，设备配置会自动保存到本地文件
+	deviceManager, err := manager.NewPersistentDeviceManager(manager.StorageConfig{})
+	if err != nil {
+		log.Fatalf("init persistent device manager failed: %v", err)
+	}
+
+	router := apihttp.NewRouterWithConnectConfig(deviceManager, connectCfg)
 
 	log.Printf("server listening on %s", addr)
 	if err = http.ListenAndServe(addr, router); err != nil {

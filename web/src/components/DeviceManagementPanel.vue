@@ -226,123 +226,115 @@
       </article>
     </section>
 
-    <section
-      v-if="dialogVisible"
-      class="dialog-mask"
+    <el-dialog
+      v-model="dialogVisible"
+      :title="dialogMode === 'create' ? '新增设备配置' : '编辑设备配置'"
+      width="520px"
+      :close-on-click-modal="false"
+      destroy-on-close
     >
-      <div class="dialog-card">
-        <header class="dialog-header">
-          <h3>{{ dialogMode === 'create' ? '新增设备配置' : '编辑设备配置' }}</h3>
-          <button
-            class="btn-close"
-            @click="closeDialog"
+      <div class="form-grid">
+        <label v-if="dialogMode === 'edit'">
+          <span>设备ID</span>
+          <input
+            :value="form.id"
+            data-test="form-id"
+            type="text"
+            disabled
           >
-            <el-icon><Close /></el-icon>
-          </button>
-        </header>
+        </label>
 
-        <div class="form-grid">
-          <label>
-            <span>设备ID</span>
-            <input
-              v-model.trim="form.id"
-              data-test="form-id"
-              type="text"
-              :disabled="dialogMode === 'edit'"
-              placeholder="输入唯一标识"
-            >
-          </label>
-
-          <label>
-            <span>名称</span>
-            <input
-              v-model.trim="form.name"
-              data-test="form-name"
-              type="text"
-              placeholder="输入设备名称"
-            >
-          </label>
-
-          <label>
-            <span>类型</span>
-            <select
-              v-model="form.type"
-              data-test="form-type"
-            >
-              <option value="measure">计量设备</option>
-              <option value="pressure">打压设备</option>
-            </select>
-          </label>
-
-          <label>
-            <span>型号</span>
-            <input
-              v-model.trim="form.model"
-              data-test="form-model"
-              type="text"
-              placeholder="输入设备型号"
-            >
-          </label>
-
-          <label>
-            <span>IP地址</span>
-            <input
-              v-model.trim="form.host"
-              data-test="form-host"
-              type="text"
-              placeholder="192.168.1.xxx"
-            >
-          </label>
-
-          <label>
-            <span>端口</span>
-            <input
-              v-model.number="form.port"
-              data-test="form-port"
-              type="number"
-              placeholder="9000"
-            >
-          </label>
-
-          <label class="form-full">
-            <span>单位</span>
-            <input
-              v-model.trim="form.unit"
-              data-test="form-unit"
-              type="text"
-              placeholder="kPa / MPa / bar"
-            >
-          </label>
-        </div>
-
-        <p
-          v-if="formError"
-          class="form-error"
-        >
-          <el-icon><Warning /></el-icon>
-          {{ formError }}
-        </p>
-
-        <div class="dialog-actions">
-          <button
-            type="button"
-            class="btn btn-ghost"
-            @click="closeDialog"
+        <label>
+          <span>名称</span>
+          <input
+            v-model.trim="form.name"
+            data-test="form-name"
+            type="text"
+            placeholder="输入设备名称"
           >
-            取消
-          </button>
-          <button
-            data-test="submit-form"
-            type="button"
-            class="btn btn-primary"
-            @click="submitForm"
+        </label>
+
+        <label>
+          <span>类型</span>
+          <select
+            v-model="form.type"
+            data-test="form-type"
           >
-            <el-icon><Check /></el-icon>
-            保存
-          </button>
-        </div>
+            <option value="measure">计量设备</option>
+            <option value="pressure">打压设备</option>
+          </select>
+        </label>
+
+        <label>
+          <span>型号</span>
+          <select
+            v-model="form.model"
+            data-test="form-model"
+          >
+            <option value="" disabled>选择型号</option>
+            <option v-for="m in modelOptions" :key="m.value" :value="m.value">
+              {{ m.label }}
+            </option>
+          </select>
+        </label>
+
+        <label>
+          <span>IP地址</span>
+          <input
+            v-model.trim="form.host"
+            data-test="form-host"
+            type="text"
+            placeholder="192.168.1.xxx"
+          >
+        </label>
+
+        <label>
+          <span>端口</span>
+          <input
+            v-model.number="form.port"
+            data-test="form-port"
+            type="number"
+            placeholder="9000"
+          >
+        </label>
+
+        <label>
+          <span>单位</span>
+          <select
+            v-model="form.unit"
+            data-test="form-unit"
+          >
+            <option value="MPa">MPa</option>
+            <option value="kPa">kPa</option>
+            <option value="bar">bar</option>
+            <option value="psi">psi</option>
+          </select>
+        </label>
+
       </div>
-    </section>
+
+      <p
+        v-if="formError"
+        class="form-error"
+      >
+        <el-icon><Warning /></el-icon>
+        {{ formError }}
+      </p>
+
+      <template #footer>
+        <el-button @click="closeDialog">
+          取消
+        </el-button>
+        <el-button
+          data-test="submit-form"
+          type="primary"
+          @click="submitForm"
+        >
+          <el-icon><Check /></el-icon>
+          保存
+        </el-button>
+      </template>
+    </el-dialog>
 
     <p
       v-if="errorMessage"
@@ -424,8 +416,28 @@ const form = reactive<DeviceFormState>({
   model: '',
   host: '',
   port: 9000,
-  unit: 'kPa',
+  unit: 'MPa',
   status: 'disconnected'
+})
+
+// 设备型号选项，与设备类型联动
+const modelOptions = computed(() => {
+  if (form.type === 'measure') {
+    return [{ value: 'WTN1604', label: 'WTN1604' }]
+  }
+  return [
+    { value: 'ConST811A', label: 'ConST811A' },
+    { value: 'ConST820', label: 'ConST820' }
+  ]
+})
+
+// 切换设备类型时自动设置型号：计量设备唯一型号自动填，打压设备清空等待选择
+watch(() => form.type, () => {
+  if (form.type === 'measure') {
+    form.model = 'WTN1604'
+  } else {
+    form.model = ''
+  }
 })
 
 const lastRefreshText = computed(() => {
@@ -578,16 +590,23 @@ function resetFilters() {
 
 function openCreateDialog() {
   dialogMode.value = 'create'
-  form.id = ''
+  form.id = generateDeviceId()
   form.name = ''
   form.type = 'measure'
   form.model = ''
   form.host = ''
   form.port = 9000
-  form.unit = 'kPa'
+  form.unit = 'MPa'
   form.status = 'disconnected'
   formError.value = ''
   dialogVisible.value = true
+}
+
+/** 生成唯一设备ID，格式 dev-{timestamp后6位}-{随机4位} */
+function generateDeviceId(): string {
+  const ts = Date.now().toString().slice(-6)
+  const rand = Math.random().toString(36).slice(2, 6)
+  return `dev-${ts}-${rand}`
 }
 
 function openEditDialog(device: DeviceDTO) {
@@ -598,7 +617,7 @@ function openEditDialog(device: DeviceDTO) {
   form.model = device.model
   form.host = device.host
   form.port = device.port
-  form.unit = device.unit
+  form.unit = device.unit || 'MPa'
   form.status = device.status
   formError.value = ''
   dialogVisible.value = true
@@ -650,12 +669,13 @@ async function toggleConnection(device: DeviceDTO) {
 }
 
 function validateForm() {
-  if (!form.id || !form.host || !form.unit) {
-    return '请填写设备ID、IP和单位。'
+  if (!form.host) {
+    return '请填写IP地址。'
   }
 
   if (dialogMode.value === 'create' && devices.value.some((item) => item.id === form.id)) {
-    return '设备ID已存在'
+    // ID冲突极少发生，但保险起见重新生成
+    form.id = generateDeviceId()
   }
 
   if (!isValidIPv4(form.host)) {
@@ -751,8 +771,12 @@ onUnmounted(() => {
 .device-panel {
   background: var(--bg-secondary);
   border: 1px solid var(--border-color);
-  border-radius: var(--radius-lg);
-  padding: var(--spacing-lg);
+  border-radius: 4px;
+  padding: var(--spacing-md);
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
 }
 
 .panel-header {
@@ -761,116 +785,120 @@ onUnmounted(() => {
   gap: var(--spacing-md);
   justify-content: space-between;
   margin-bottom: var(--spacing-lg);
+  flex-shrink: 0;
 }
 
 .panel-header h2 {
   color: var(--text-primary);
   margin: 0;
-  font-size: 20px;
+  font-size: 18px;
   font-weight: 600;
 }
 
 .panel-header p {
   color: var(--text-secondary);
   margin: var(--spacing-xs) 0 0;
-  font-size: 14px;
+  font-size: 13px;
 }
 
 .header-actions {
   display: flex;
-  gap: var(--spacing-sm);
+  gap: var(--spacing-xs);
 }
 
 .btn {
   display: inline-flex;
   align-items: center;
   gap: var(--spacing-xs);
-  padding: var(--spacing-sm) var(--spacing-md);
-  border: 1px solid transparent;
-  border-radius: var(--radius-md);
-  font-size: 14px;
+  padding: 5px 12px;
+  border: 1px solid var(--border-color-strong);
+  border-radius: 3px;
+  font-size: 12px;
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.2s ease;
-  
+  transition: all 0.15s ease;
+  background: transparent;
+
   .el-icon {
-    font-size: 16px;
+    font-size: 14px;
   }
 }
 
 .btn-primary {
   background: var(--accent-primary);
-  color: white;
-  
+  color: var(--bg-primary);
+  border-color: var(--accent-primary);
+
   &:hover {
-    background: var(--accent-hover);
+    background: var(--accent-secondary);
   }
 }
 
 .btn-success {
   background: var(--status-success);
-  color: white;
-  
+  color: var(--bg-primary);
+  border-color: var(--status-success);
+
   &:hover {
-    background: #059669;
+    background: var(--secondary-accent-hover);
   }
 }
 
 .btn-danger {
   background: var(--status-error);
-  color: white;
-  
+  color: #fff;
+  border-color: var(--status-error);
+
   &:hover {
-    background: #dc2626;
+    background: var(--status-error);
   }
 }
 
 .btn-ghost {
-  background: transparent;
-  border-color: var(--border-color);
   color: var(--text-secondary);
-  
+
   &:hover {
-    background: var(--bg-tertiary);
+    background: var(--border-color);
     color: var(--text-primary);
   }
 }
 
 .metric-grid {
   display: grid;
-  gap: var(--spacing-md);
+  gap: var(--spacing-sm);
   grid-template-columns: repeat(6, 1fr);
-  margin-bottom: var(--spacing-lg);
+  margin-bottom: var(--spacing-md);
+  flex-shrink: 0;
 }
 
 .metric-card {
   background: var(--bg-tertiary);
   border: 1px solid var(--border-color);
-  border-radius: var(--radius-md);
-  padding: var(--spacing-md);
+  border-radius: 3px;
+  padding: var(--spacing-sm) var(--spacing-md);
   text-align: center;
 }
 
 .metric-label {
   color: var(--text-secondary);
-  font-size: 12px;
-  margin: 0 0 var(--spacing-xs);
+  font-size: 11px;
+  margin: 0 0 2px;
 }
 
 .metric-value {
   color: var(--text-primary);
   display: block;
-  font-size: 24px;
+  font-size: 18px;
   font-weight: 600;
-  
+
   &.success {
     color: var(--status-success);
   }
-  
+
   &.danger {
     color: var(--status-error);
   }
-  
+
   &.warning {
     color: var(--status-warning);
   }
@@ -879,12 +907,14 @@ onUnmounted(() => {
 .policy-strip {
   background: var(--bg-tertiary);
   border: 1px solid var(--border-color);
-  border-radius: var(--radius-md);
+  border-radius: 3px;
   display: flex;
   align-items: center;
-  gap: var(--spacing-lg);
-  margin-bottom: var(--spacing-lg);
-  padding: var(--spacing-md) var(--spacing-lg);
+  gap: var(--spacing-md);
+  margin-bottom: var(--spacing-md);
+  padding: var(--spacing-sm) var(--spacing-md);
+  flex-wrap: wrap;
+  flex-shrink: 0;
 }
 
 .policy-item {
@@ -892,11 +922,11 @@ onUnmounted(() => {
   align-items: center;
   gap: var(--spacing-xs);
   color: var(--text-secondary);
-  font-size: 13px;
-  
+  font-size: 12px;
+
   .el-icon {
     color: var(--accent-primary);
-    font-size: 14px;
+    font-size: 13px;
   }
 }
 
@@ -905,13 +935,13 @@ onUnmounted(() => {
   align-items: center;
   gap: var(--spacing-xs);
   color: var(--text-secondary);
-  font-size: 13px;
+  font-size: 12px;
   margin-left: auto;
   cursor: pointer;
-  
+
   input[type="checkbox"] {
-    width: 16px;
-    height: 16px;
+    width: 14px;
+    height: 14px;
     accent-color: var(--accent-primary);
   }
 }
@@ -919,19 +949,20 @@ onUnmounted(() => {
 .filter-bar {
   background: var(--bg-tertiary);
   border: 1px solid var(--border-color);
-  border-radius: var(--radius-md);
+  border-radius: 3px;
   display: flex;
   align-items: flex-end;
   gap: var(--spacing-md);
-  margin-bottom: var(--spacing-lg);
-  padding: var(--spacing-md);
+  margin-bottom: var(--spacing-md);
+  padding: var(--spacing-sm) var(--spacing-md);
+  flex-shrink: 0;
 }
 
 .filter-bar label {
   color: var(--text-secondary);
   display: flex;
   flex-direction: column;
-  font-size: 13px;
+  font-size: 12px;
   gap: var(--spacing-xs);
   flex: 1;
 }
@@ -943,16 +974,22 @@ onUnmounted(() => {
 .filter-bar select,
 .filter-bar input {
   background: var(--bg-secondary);
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-color-strong);
+  border-radius: 3px;
   color: var(--text-primary);
   padding: var(--spacing-sm);
+  font-size: 12px;
 }
 
 .device-board {
   display: grid;
-  gap: var(--spacing-md);
+  gap: var(--spacing-sm);
   grid-template-columns: repeat(2, 1fr);
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  align-content: start;
+  padding-right: var(--spacing-xs);
 }
 
 .empty {
@@ -963,16 +1000,16 @@ onUnmounted(() => {
   gap: var(--spacing-sm);
   color: var(--text-muted);
   padding: var(--spacing-xl);
-  
+
   .el-icon {
-    font-size: 20px;
+    font-size: 18px;
   }
 }
 
 .device-card {
   background: var(--bg-tertiary);
   border: 1px solid var(--border-color);
-  border-radius: var(--radius-md);
+  border-radius: 3px;
   padding: var(--spacing-md);
 }
 
@@ -992,20 +1029,20 @@ onUnmounted(() => {
 
 .title-block strong {
   color: var(--text-primary);
-  font-size: 16px;
+  font-size: 14px;
 }
 
 .type-badge {
   background: var(--bg-secondary);
   border-radius: 999px;
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 600;
-  padding: 2px 8px;
-  
+  padding: 2px 6px;
+
   &.measure {
     color: var(--status-info);
   }
-  
+
   &.pressure {
     color: var(--status-warning);
   }
@@ -1026,60 +1063,60 @@ onUnmounted(() => {
 
 .info-label {
   color: var(--text-muted);
-  font-size: 11px;
+  font-size: 10px;
 }
 
 .info-value {
   color: var(--text-secondary);
-  font-size: 13px;
+  font-size: 12px;
 }
 
 .error-section {
-  background: rgba(239, 68, 68, 0.1);
-  border: 1px solid rgba(239, 68, 68, 0.3);
-  border-radius: var(--radius-sm);
+  background: var(--status-error-bg-subtle);
+  border: 1px solid var(--status-error-bg-strong);
+  border-radius: 3px;
   padding: var(--spacing-sm);
   margin-bottom: var(--spacing-md);
 }
 
 .meta-error {
   color: var(--status-error);
-  font-size: 12px;
+  font-size: 11px;
   margin: 0;
   display: flex;
   align-items: center;
   gap: var(--spacing-xs);
-  
+
   & + .meta-error {
     margin-top: var(--spacing-xs);
   }
-  
-  .el-icon {
-    font-size: 14px;
-  }
-}
 
-.status-badge {
-  border-radius: var(--radius-sm);
-  font-size: 12px;
-  font-weight: 600;
-  padding: 4px 8px;
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  
   .el-icon {
     font-size: 12px;
   }
 }
 
+.status-badge {
+  border-radius: 3px;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 6px;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+
+  .el-icon {
+    font-size: 10px;
+  }
+}
+
 .status-connected {
-  background: rgba(16, 185, 129, 0.2);
+  background: var(--status-success-bg);
   color: var(--status-success);
 }
 
 .status-connecting {
-  background: rgba(245, 158, 11, 0.2);
+  background: var(--status-warning-bg);
   color: var(--status-warning);
 }
 
@@ -1089,72 +1126,20 @@ onUnmounted(() => {
 }
 
 .status-error {
-  background: rgba(239, 68, 68, 0.2);
+  background: var(--status-error-bg);
   color: var(--status-error);
 }
 
 .card-actions {
   display: flex;
   justify-content: flex-end;
-  gap: var(--spacing-sm);
-}
-
-.dialog-mask {
-  align-items: center;
-  background: rgba(0, 0, 0, 0.7);
-  display: flex;
-  inset: 0;
-  justify-content: center;
-  position: fixed;
-  z-index: 1000;
-  padding: var(--spacing-lg);
-}
-
-.dialog-card {
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-lg);
-  max-width: 600px;
-  width: 100%;
-  max-height: 90vh;
-  overflow-y: auto;
-}
-
-.dialog-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: var(--spacing-lg);
-  border-bottom: 1px solid var(--border-color);
-  
-  h3 {
-    color: var(--text-primary);
-    margin: 0;
-    font-size: 18px;
-  }
-}
-
-.btn-close {
-  background: transparent;
-  border: none;
-  color: var(--text-muted);
-  cursor: pointer;
-  padding: var(--spacing-xs);
-  
-  .el-icon {
-    font-size: 20px;
-  }
-  
-  &:hover {
-    color: var(--text-primary);
-  }
+  gap: var(--spacing-xs);
 }
 
 .form-grid {
   display: grid;
   gap: var(--spacing-md);
   grid-template-columns: repeat(2, 1fr);
-  padding: var(--spacing-lg);
 }
 
 .form-full {
@@ -1165,37 +1150,31 @@ onUnmounted(() => {
   color: var(--text-secondary);
   display: flex;
   flex-direction: column;
-  font-size: 13px;
+  font-size: 12px;
   gap: var(--spacing-xs);
 }
 
 .form-grid input,
 .form-grid select {
   background: var(--bg-tertiary);
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-color-strong);
+  border-radius: 3px;
   color: var(--text-primary);
   padding: var(--spacing-sm);
+  font-size: 12px;
 }
 
 .form-error {
   color: var(--status-error);
-  margin: 0 var(--spacing-lg) var(--spacing-md);
+  margin: var(--spacing-sm) 0 0;
   display: flex;
   align-items: center;
   gap: var(--spacing-xs);
-  font-size: 14px;
-  
-  .el-icon {
-    font-size: 16px;
-  }
-}
+  font-size: 13px;
 
-.dialog-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: var(--spacing-sm);
-  padding: 0 var(--spacing-lg) var(--spacing-lg);
+  .el-icon {
+    font-size: 14px;
+  }
 }
 
 .error-banner {
@@ -1203,14 +1182,15 @@ onUnmounted(() => {
   align-items: center;
   gap: var(--spacing-sm);
   color: var(--status-error);
-  background: rgba(239, 68, 68, 0.1);
-  border: 1px solid rgba(239, 68, 68, 0.3);
-  border-radius: var(--radius-md);
+  background: var(--status-error-bg-subtle);
+  border: 1px solid var(--status-error-bg-strong);
+  border-radius: 3px;
   padding: var(--spacing-md);
   margin-top: var(--spacing-lg);
-  
+  flex-shrink: 0;
+
   .el-icon {
-    font-size: 20px;
+    font-size: 18px;
   }
 }
 
@@ -1224,28 +1204,28 @@ onUnmounted(() => {
   .panel-header {
     flex-direction: column;
   }
-  
+
   .metric-grid {
     grid-template-columns: repeat(2, 1fr);
   }
-  
+
   .policy-strip {
     flex-wrap: wrap;
     gap: var(--spacing-sm);
   }
-  
+
   .filter-bar {
     flex-wrap: wrap;
   }
-  
+
   .keyword-field {
     flex: 1 1 100%;
   }
-  
+
   .device-board {
     grid-template-columns: 1fr;
   }
-  
+
   .form-grid {
     grid-template-columns: 1fr;
   }

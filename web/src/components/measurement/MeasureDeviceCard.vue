@@ -52,42 +52,43 @@ const toggleConnection = () => {
 .device-card {
   background: var(--bg-tertiary);
   border: 1px solid var(--border-color);
-  border-radius: var(--radius-md);
-  padding: var(--spacing-md);
-  margin-bottom: var(--spacing-sm);
-  
+  border-radius: 3px;
+  padding: var(--spacing-sm) var(--spacing-md);
+  margin-bottom: var(--spacing-xs);
+
   .device-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
     margin-bottom: var(--spacing-sm);
-    
+
     .device-name {
       color: var(--text-primary);
       font-weight: 500;
+      font-size: 13px;
     }
   }
-  
+
   .device-info {
     margin-bottom: var(--spacing-sm);
-    
+
     .info-row {
       display: flex;
       justify-content: space-between;
-      margin-bottom: var(--spacing-xs);
-      
+      margin-bottom: 2px;
+
       .label {
         color: var(--text-secondary);
-        font-size: 12px;
+        font-size: 11px;
       }
-      
+
       .value {
         color: var(--text-primary);
-        font-size: 12px;
+        font-size: 11px;
       }
     }
   }
-  
+
   .device-actions {
     display: flex;
     justify-content: flex-end;

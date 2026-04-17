@@ -1,7 +1,7 @@
-import { createRouter, createWebHistory } from 'vue-router'
+import { createRouter, createWebHashHistory } from 'vue-router'
 
 const router = createRouter({
-  history: createWebHistory(import.meta.env.BASE_URL),
+  history: createWebHashHistory(),
   routes: [
     {
       path: '/',
@@ -25,8 +25,8 @@ const router = createRouter({
     },
     {
       path: '/multi-pressure',
-      name: 'multi-pressure',
-      component: () => import('../views/measurement/PressureWorkbenchView.vue')
+      name: 'module-multi-pressure',
+      component: () => import('../views/multipress/MultiPressView.vue')
     }
   ]
 })

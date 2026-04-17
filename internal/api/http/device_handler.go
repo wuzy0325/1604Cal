@@ -8,18 +8,32 @@ import (
 	"net/http"
 	"strings"
 
+	"cal1604/internal/application/calibration"
 	"cal1604/internal/application/deviceconnect"
-	"cal1604/internal/device/manager"
+	"cal1604/internal/application/multipress"
 	"cal1604/internal/domain"
 	apperrors "cal1604/internal/errors"
 	"cal1604/internal/workflow"
 )
 
+// deviceManager 定义 apiServer 对设备管理器的依赖接口。
+// 同时兼容内存版 DeviceManager 和持久化版 PersistentDeviceManager。
+type deviceManager interface {
+	Upsert(dev domain.Device)
+	UpdateStatus(id string, status domain.DeviceStatus) bool
+	Delete(id string)
+	Get(id string) (domain.Device, bool)
+	List() []domain.Device
+	CheckUnitConsistency() (bool, []string)
+}
+
 type apiServer struct {
-	deviceManager   *manager.DeviceManager
-	sessionMachine  *workflow.SessionMachine
-	deviceConnector deviceConnector
-	connectConfig   deviceconnect.Config
+	deviceManager      deviceManager
+	sessionMachine     *workflow.SessionMachine
+	deviceConnector    deviceConnector
+	connectConfig      deviceconnect.Config
+	calibrationService *calibration.Service
+	multipressService  *multipress.Service
 }
 
 type deviceConnector interface {
@@ -52,6 +66,9 @@ func (s *apiServer) devicesHandler(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
 		devices := s.deviceManager.List()
+		if devices == nil {
+			devices = make([]domain.Device, 0)
+		}
 		writeSuccess(w, http.StatusOK, devices)
 	case http.MethodPost:
 		s.handleUpsertDevice(w, r)

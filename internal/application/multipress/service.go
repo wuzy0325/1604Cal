@@ -1,0 +1,492 @@
+package multipress
+
+import (
+	"context"
+	"fmt"
+	"sync"
+	"time"
+
+	"cal1604/internal/device"
+	"cal1604/internal/infrastructure/driver"
+)
+
+// DevicePressureState 单台打压设备的运行状态。
+type DevicePressureState struct {
+	DeviceID        string  `json:"deviceId"`
+	CurrentPressure float64 `json:"currentPressure"`
+	TargetPressure  float64 `json:"targetPressure"`
+	Unit            string  `json:"unit"`
+	Stable          bool    `json:"stable"`
+	Status          string  `json:"status"` // idle, pressurizing, exhausting, error
+	ErrorMessage    string  `json:"errorMessage,omitempty"`
+}
+
+// StatusPublisher 广播事件到 SSE 通道。
+type StatusPublisher func(eventType string, data any)
+
+// deviceEntry 已注册设备的驱动实例与运行状态。
+type deviceEntry struct {
+	driver device.PressureDriver
+	state  DevicePressureState
+	mu     sync.Mutex // 串行化单台设备的命令，多设备可并行
+}
+
+// Service 多设备打压控制服务。
+// 每台设备独立运行，无需会话状态机。
+type Service struct {
+	mu            sync.Mutex
+	entries       map[string]*deviceEntry // deviceID -> entry
+	factory       *driver.Factory
+	deviceManager device.DeviceStore
+	publish       StatusPublisher
+
+	pollCancel context.CancelFunc
+	pollDone   chan struct{}
+}
+
+// NewService 创建多设备打压控制服务。
+func NewService(
+	factory *driver.Factory,
+	deviceManager device.DeviceStore,
+	publisher StatusPublisher,
+) *Service {
+	if publisher == nil {
+		publisher = func(string, any) {}
+	}
+	s := &Service{
+		entries:       make(map[string]*deviceEntry),
+		factory:       factory,
+		deviceManager: deviceManager,
+		publish:       publisher,
+	}
+	return s
+}
+
+// StartPolling 启动后台轮询，定期读取所有打压中设备的压力和稳定状态。
+// 调用方应在服务就绪后调用一次，StopPolling 在服务关闭时调用。
+func (s *Service) StartPolling() {
+	s.mu.Lock()
+	if s.pollCancel != nil {
+		s.mu.Unlock()
+		return
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	s.pollCancel = cancel
+	s.pollDone = make(chan struct{})
+	s.mu.Unlock()
+
+	go s.pollLoop(ctx)
+}
+
+// StopPolling 停止后台轮询。
+func (s *Service) StopPolling() {
+	s.mu.Lock()
+	cancel := s.pollCancel
+	done := s.pollDone
+	s.pollCancel = nil
+	s.pollDone = nil
+	s.mu.Unlock()
+
+	if cancel != nil {
+		cancel()
+		if done != nil {
+			<-done
+		}
+	}
+}
+
+// RegisterDevice 注册打压设备：查设备配置 -> 创建驱动 -> 连接 -> 存入活跃列表。
+func (s *Service) RegisterDevice(ctx context.Context, deviceID string) error {
+	dev, ok := s.deviceManager.Get(deviceID)
+	if !ok {
+		return fmt.Errorf("device %s not found", deviceID)
+	}
+
+	pDrv, err := s.factory.CreatePressureDriver(dev)
+	if err != nil {
+		return fmt.Errorf("create pressure driver: %w", err)
+	}
+
+	if err := pDrv.Connect(ctx); err != nil {
+		return fmt.Errorf("connect device %s: %w", deviceID, err)
+	}
+
+	// 读取当前单位
+	unit := dev.Unit
+	if u, err := pDrv.ReadUnit(ctx); err == nil && u != "" {
+		unit = u
+	}
+
+	entry := &deviceEntry{
+		driver: pDrv,
+		state: DevicePressureState{
+			DeviceID: deviceID,
+			Unit:     unit,
+			Status:   "idle",
+		},
+	}
+
+	s.mu.Lock()
+	s.entries[deviceID] = entry
+	s.mu.Unlock()
+
+	s.publish("multipress.device.registered", map[string]any{
+		"deviceId": deviceID,
+		"name":     dev.Name,
+		"model":    dev.Model,
+	})
+
+	return nil
+}
+
+// UnregisterDevice 注销打压设备：停止 -> 断开 -> 从活跃列表移除。
+func (s *Service) UnregisterDevice(ctx context.Context, deviceID string) error {
+	s.mu.Lock()
+	entry, ok := s.entries[deviceID]
+	s.mu.Unlock()
+
+	if !ok {
+		return fmt.Errorf("device %s not registered", deviceID)
+	}
+
+	entry.mu.Lock()
+	defer entry.mu.Unlock()
+
+	_ = entry.driver.Stop(ctx)
+	_ = entry.driver.Disconnect(ctx)
+
+	s.mu.Lock()
+	delete(s.entries, deviceID)
+	s.mu.Unlock()
+
+	s.publish("multipress.device.unregistered", map[string]any{
+		"deviceId": deviceID,
+	})
+
+	return nil
+}
+
+// SetTargetPressure 设置指定设备的目标压力并启动压力控制。
+func (s *Service) SetTargetPressure(ctx context.Context, deviceID string, target float64) error {
+	entry, err := s.getEntry(deviceID)
+	if err != nil {
+		return err
+	}
+
+	entry.mu.Lock()
+	defer entry.mu.Unlock()
+
+	if err := entry.driver.SetTargetPressure(ctx, target); err != nil {
+		entry.state.Status = "error"
+		entry.state.ErrorMessage = err.Error()
+		s.publish("multipress.device.status", map[string]any{
+			"deviceId":     deviceID,
+			"status":       "error",
+			"errorMessage": err.Error(),
+		})
+		return fmt.Errorf("set target pressure: %w", err)
+	}
+
+	// 启动压力控制（ConST 系列支持 StartControl）
+	if ctrl, ok := entry.driver.(interface{ StartControl(context.Context) error }); ok {
+		if err := ctrl.StartControl(ctx); err != nil {
+			entry.state.Status = "error"
+			entry.state.ErrorMessage = err.Error()
+			return fmt.Errorf("start pressure control: %w", err)
+		}
+	}
+
+	entry.state.TargetPressure = target
+	entry.state.Status = "pressurizing"
+	entry.state.ErrorMessage = ""
+
+	s.publish("multipress.pressure.changed", map[string]any{
+		"deviceId":        deviceID,
+		"targetPressure":  target,
+	})
+
+	return nil
+}
+
+// Stop 停止指定设备的压力控制。
+func (s *Service) Stop(ctx context.Context, deviceID string) error {
+	entry, err := s.getEntry(deviceID)
+	if err != nil {
+		return err
+	}
+
+	entry.mu.Lock()
+	defer entry.mu.Unlock()
+
+	if err := entry.driver.Stop(ctx); err != nil {
+		return fmt.Errorf("stop device %s: %w", deviceID, err)
+	}
+
+	entry.state.Status = "idle"
+	entry.state.ErrorMessage = ""
+
+	s.publish("multipress.device.status", map[string]any{
+		"deviceId": deviceID,
+		"status":   "idle",
+	})
+
+	return nil
+}
+
+// Exhaust 排空指定设备的压力。
+func (s *Service) Exhaust(ctx context.Context, deviceID string) error {
+	entry, err := s.getEntry(deviceID)
+	if err != nil {
+		return err
+	}
+
+	entry.mu.Lock()
+	defer entry.mu.Unlock()
+
+	if err := entry.driver.Exhaust(ctx); err != nil {
+		return fmt.Errorf("exhaust device %s: %w", deviceID, err)
+	}
+
+	entry.state.Status = "exhausting"
+	entry.state.ErrorMessage = ""
+
+	s.publish("multipress.device.status", map[string]any{
+		"deviceId": deviceID,
+		"status":   "exhausting",
+	})
+
+	return nil
+}
+
+// ReadCurrentPressure 读取指定设备的当前压力。
+func (s *Service) ReadCurrentPressure(ctx context.Context, deviceID string) (float64, error) {
+	entry, err := s.getEntry(deviceID)
+	if err != nil {
+		return 0, err
+	}
+
+	entry.mu.Lock()
+	defer entry.mu.Unlock()
+
+	pressure, err := entry.driver.ReadCurrentPressure(ctx)
+	if err != nil {
+		return 0, fmt.Errorf("read pressure from %s: %w", deviceID, err)
+	}
+
+	entry.state.CurrentPressure = pressure
+	return pressure, nil
+}
+
+// ReadStability 读取指定设备的稳定状态。
+func (s *Service) ReadStability(ctx context.Context, deviceID string) (bool, error) {
+	entry, err := s.getEntry(deviceID)
+	if err != nil {
+		return false, err
+	}
+
+	entry.mu.Lock()
+	defer entry.mu.Unlock()
+
+	stable, err := entry.driver.ReadStability(ctx)
+	if err != nil {
+		return false, fmt.Errorf("read stability from %s: %w", deviceID, err)
+	}
+
+	entry.state.Stable = stable
+	return stable, nil
+}
+
+// ReadUnit 读取指定设备的压力单位。
+func (s *Service) ReadUnit(ctx context.Context, deviceID string) (string, error) {
+	entry, err := s.getEntry(deviceID)
+	if err != nil {
+		return "", err
+	}
+
+	entry.mu.Lock()
+	defer entry.mu.Unlock()
+
+	unit, err := entry.driver.ReadUnit(ctx)
+	if err != nil {
+		return "", fmt.Errorf("read unit from %s: %w", deviceID, err)
+	}
+
+	entry.state.Unit = unit
+	return unit, nil
+}
+
+// SetUnit 设置指定设备的压力单位。
+func (s *Service) SetUnit(ctx context.Context, deviceID string, unit string) error {
+	entry, err := s.getEntry(deviceID)
+	if err != nil {
+		return err
+	}
+
+	entry.mu.Lock()
+	defer entry.mu.Unlock()
+
+	if err := entry.driver.SetUnit(ctx, unit); err != nil {
+		return fmt.Errorf("set unit on %s: %w", deviceID, err)
+	}
+
+	entry.state.Unit = unit
+	return nil
+}
+
+// ListDeviceStates 返回所有已注册设备的状态快照。
+func (s *Service) ListDeviceStates() []DevicePressureState {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	result := make([]DevicePressureState, 0, len(s.entries))
+	for _, entry := range s.entries {
+		entry.mu.Lock()
+		snapshot := entry.state
+		entry.mu.Unlock()
+		result = append(result, snapshot)
+	}
+	return result
+}
+
+// StopAll 紧急停止所有已注册设备。
+func (s *Service) StopAll(ctx context.Context) error {
+	s.mu.Lock()
+	entries := make([]*deviceEntry, 0, len(s.entries))
+	for _, entry := range s.entries {
+		entries = append(entries, entry)
+	}
+	s.mu.Unlock()
+
+	var firstErr error
+	for _, entry := range entries {
+		entry.mu.Lock()
+		if err := entry.driver.Stop(ctx); err != nil && firstErr == nil {
+			firstErr = err
+		}
+		entry.state.Status = "idle"
+		entry.mu.Unlock()
+	}
+
+	s.publish("multipress.device.status", map[string]any{
+		"status": "all_stopped",
+	})
+
+	return firstErr
+}
+
+// getEntry 获取已注册设备的 entry（不加设备级锁）。
+func (s *Service) getEntry(deviceID string) (*deviceEntry, error) {
+	s.mu.Lock()
+	entry, ok := s.entries[deviceID]
+	s.mu.Unlock()
+
+	if !ok {
+		return nil, fmt.Errorf("device %s not registered", deviceID)
+	}
+	return entry, nil
+}
+
+// pollLoop 后台轮询所有打压中设备的压力和稳定状态。
+func (s *Service) pollLoop(ctx context.Context) {
+	defer func() {
+		s.mu.Lock()
+		if s.pollDone != nil {
+			close(s.pollDone)
+		}
+		s.mu.Unlock()
+	}()
+
+	ticker := time.NewTicker(2 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			s.pollAllDevices(ctx)
+		}
+	}
+}
+
+// pollAllDevices 并发读取所有打压中/排空中设备的状态。
+func (s *Service) pollAllDevices(ctx context.Context) {
+	s.mu.Lock()
+	var targets []*deviceEntry
+	for _, entry := range s.entries {
+		entry.mu.Lock()
+		status := entry.state.Status
+		entry.mu.Unlock()
+		if status == "pressurizing" || status == "exhausting" {
+			targets = append(targets, entry)
+		}
+	}
+	s.mu.Unlock()
+
+	if len(targets) == 0 {
+		return
+	}
+
+	type pollResult struct {
+		deviceID string
+		pressure float64
+		stable   bool
+		err      error
+	}
+
+	var wg sync.WaitGroup
+	results := make([]pollResult, len(targets))
+
+	for i, entry := range targets {
+		wg.Add(1)
+		go func(idx int, e *deviceEntry) {
+			defer wg.Done()
+			pollCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
+			defer cancel()
+
+			e.mu.Lock()
+			pressure, pErr := e.driver.ReadCurrentPressure(pollCtx)
+			stable, sErr := e.driver.ReadStability(pollCtx)
+			e.mu.Unlock()
+
+			result := pollResult{deviceID: e.state.DeviceID}
+			if pErr != nil {
+				result.err = pErr
+			} else {
+				result.pressure = pressure
+			}
+			if sErr == nil {
+				result.stable = stable
+			}
+			results[idx] = result
+		}(i, entry)
+	}
+	wg.Wait()
+
+	// 更新状态并发布 SSE
+	for _, r := range results {
+		s.mu.Lock()
+		entry, ok := s.entries[r.deviceID]
+		s.mu.Unlock()
+		if !ok {
+			continue
+		}
+
+		entry.mu.Lock()
+		if r.err != nil {
+			entry.state.Status = "error"
+			entry.state.ErrorMessage = r.err.Error()
+		} else {
+			entry.state.CurrentPressure = r.pressure
+			entry.state.Stable = r.stable
+		}
+		entry.mu.Unlock()
+
+		s.publish("multipress.pressure.update", map[string]any{
+			"deviceId":        r.deviceID,
+			"currentPressure": r.pressure,
+			"stable":          r.stable,
+			"status":          entry.state.Status,
+		})
+	}
+}

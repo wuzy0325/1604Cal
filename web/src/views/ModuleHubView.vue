@@ -92,6 +92,33 @@
             进入标定模块
           </RouterLink>
         </article>
+
+        <article class="module-card">
+          <div class="card-header">
+            <p class="module-tag">
+              Multi-Pressure
+            </p>
+            <el-icon class="card-icon">
+              <Odometer />
+            </el-icon>
+          </div>
+          <h2>多设备打压模块</h2>
+          <p class="module-source">
+            独立模块：并发打压控制
+          </p>
+          <ul>
+            <li>同时控制多台打压设备</li>
+            <li>实时压力监控与稳定检测</li>
+            <li>独立设备注册/注销管理</li>
+          </ul>
+          <RouterLink
+            class="entry-btn"
+            :to="{ name: 'module-multi-pressure' }"
+          >
+            <el-icon><ArrowRight /></el-icon>
+            进入打压模块
+          </RouterLink>
+        </article>
       </section>
     </div>
   </section>
@@ -99,29 +126,36 @@
 
 <script setup lang="ts">
 import { RouterLink } from 'vue-router'
-import { Tools, DataLine, SetUp, ArrowRight } from '@element-plus/icons-vue'
+import { Tools, DataLine, SetUp, ArrowRight, Odometer } from '@element-plus/icons-vue'
 </script>
 
 <style scoped lang="scss">
 .module-hub-page {
-  padding: var(--spacing-xl);
-  min-height: 100vh;
+  padding: var(--spacing-lg);
+  box-sizing: border-box;
+  height: 100%;
+  overflow: hidden;
+  background: var(--bg-primary);
 }
 
 .desktop-shell {
-  max-width: 1400px;
+  max-width: 1200px;
+  height: 100%;
   margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
 }
 
 .hero {
-  margin-bottom: var(--spacing-xl);
-  padding-bottom: var(--spacing-lg);
+  margin-bottom: 0;
+  padding-bottom: var(--spacing-xl);
   border-bottom: 1px solid var(--border-color);
 }
 
 .hero-caption {
   color: var(--accent-primary);
-  font-size: 12px;
+  font-size: 11px;
   letter-spacing: 0.1em;
   margin: 0 0 var(--spacing-sm);
   text-transform: uppercase;
@@ -131,7 +165,7 @@ import { Tools, DataLine, SetUp, ArrowRight } from '@element-plus/icons-vue'
 .hero h1 {
   color: var(--text-primary);
   margin: 0 0 var(--spacing-sm);
-  font-size: 28px;
+  font-size: 22px;
   font-weight: 600;
 }
 
@@ -139,28 +173,34 @@ import { Tools, DataLine, SetUp, ArrowRight } from '@element-plus/icons-vue'
   color: var(--text-secondary);
   margin: 0;
   max-width: 800px;
-  font-size: 16px;
+  font-size: 14px;
   line-height: 1.6;
 }
 
 .module-grid {
   display: grid;
-  gap: var(--spacing-lg);
-  grid-template-columns: repeat(3, 1fr);
+  gap: var(--spacing-md);
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
 }
 
 .module-card {
   background: var(--bg-secondary);
   border: 1px solid var(--border-color);
-  border-radius: var(--radius-lg);
-  padding: var(--spacing-xl);
+  border-radius: 4px;
+  padding: var(--spacing-lg);
   display: flex;
   flex-direction: column;
-  transition: all 0.3s ease;
-  
+  transition: all 0.15s ease;
+
   &:hover {
     border-color: var(--accent-primary);
-    box-shadow: 0 4px 20px rgba(16, 185, 129, 0.15);
+  }
+
+  &:first-child {
+    border-top: 2px solid var(--accent-primary);
   }
 }
 
@@ -173,62 +213,62 @@ import { Tools, DataLine, SetUp, ArrowRight } from '@element-plus/icons-vue'
 
 .module-tag {
   color: var(--text-muted);
-  font-size: 11px;
+  font-size: 10px;
   letter-spacing: 0.1em;
   margin: 0;
   text-transform: uppercase;
 }
 
 .card-icon {
-  font-size: 24px;
+  font-size: 20px;
   color: var(--accent-primary);
 }
 
 .module-card h2 {
   color: var(--text-primary);
-  margin: 0 0 var(--spacing-sm);
-  font-size: 20px;
+  margin: 0 0 var(--spacing-xs);
+  font-size: 18px;
   font-weight: 600;
 }
 
 .module-source {
   color: var(--text-secondary);
   margin: 0 0 var(--spacing-md);
-  font-size: 14px;
+  font-size: 13px;
 }
 
 .module-card ul {
   color: var(--text-secondary);
-  margin: 0 0 var(--spacing-lg);
-  padding-left: 18px;
+  margin: 0 0 var(--spacing-md);
+  padding-left: 16px;
   flex: 1;
 }
 
 .module-card li {
-  margin-bottom: var(--spacing-xs);
-  font-size: 14px;
-  line-height: 1.5;
+  margin-bottom: 2px;
+  font-size: 13px;
+  line-height: 1.6;
 }
 
 .entry-btn {
   background: var(--accent-primary);
-  border-radius: var(--radius-md);
-  color: var(--text-primary);
+  border-radius: 3px;
+  color: var(--bg-primary);
   display: inline-flex;
   align-items: center;
   gap: var(--spacing-xs);
-  padding: var(--spacing-sm) var(--spacing-md);
+  padding: 6px 14px;
   text-decoration: none;
-  font-weight: 500;
-  transition: all 0.2s ease;
-  
+  font-weight: 600;
+  font-size: 13px;
+  transition: all 0.15s ease;
+
   &:hover {
-    background: var(--accent-hover);
-    transform: translateY(-1px);
+    background: var(--accent-secondary);
   }
-  
+
   .el-icon {
-    font-size: 16px;
+    font-size: 14px;
   }
 }
 
@@ -238,17 +278,24 @@ import { Tools, DataLine, SetUp, ArrowRight } from '@element-plus/icons-vue'
   }
 }
 
-@media (max-width: 768px) {
+@media (max-width: 900px) {
   .module-hub-page {
     padding: var(--spacing-md);
   }
-  
+
+  .desktop-shell {
+    max-width: 100%;
+    height: auto;
+    gap: var(--spacing-md);
+  }
+
   .module-grid {
     grid-template-columns: 1fr;
+    min-height: auto;
   }
-  
+
   .hero h1 {
-    font-size: 24px;
+    font-size: 20px;
   }
 }
 </style>

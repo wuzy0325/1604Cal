@@ -7,9 +7,6 @@
             Unified Device Registry
           </p>
           <h1>设备管理模块</h1>
-          <p class="module-description">
-            统一维护计量与打压设备台账，所有业务模块共享同一套设备状态与连接信息。
-          </p>
         </div>
 
         <nav class="module-switch">
@@ -32,6 +29,12 @@
             标定模块
           </RouterLink>
           <RouterLink
+            class="switch-btn"
+            :to="{ name: 'module-multi-pressure' }"
+          >
+            多设备打压
+          </RouterLink>
+          <RouterLink
             class="switch-btn switch-btn-ghost"
             :to="{ name: 'module-hub' }"
           >
@@ -41,7 +44,7 @@
         </nav>
       </header>
 
-      <DeviceManagementPanel />
+      <DeviceManagementPanel class="module-panel" />
     </div>
   </section>
 </template>
@@ -55,28 +58,43 @@ import DeviceManagementPanel from '@/components/DeviceManagementPanel.vue'
 
 <style scoped lang="scss">
 .module-page {
-  padding: var(--spacing-xl);
-  min-height: 100vh;
+  padding: var(--spacing-lg);
+  box-sizing: border-box;
+  height: 100%;
+  overflow: hidden;
+  background: var(--bg-primary);
 }
 
 .desktop-shell {
-  max-width: 1600px;
+  max-width: 100%;
+  height: 100%;
   margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
 }
 
 .module-header {
-  align-items: flex-start;
+  align-items: flex-end;
   border-bottom: 1px solid var(--border-color);
   display: flex;
   gap: var(--spacing-lg);
   justify-content: space-between;
-  margin-bottom: var(--spacing-lg);
   padding-bottom: var(--spacing-lg);
+  flex-shrink: 0;
+  min-height: 52px;
+}
+
+ .module-panel {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 
 .module-caption {
   color: var(--accent-primary);
-  font-size: 12px;
+  font-size: 11px;
   letter-spacing: 0.08em;
   margin: 0 0 var(--spacing-xs);
   text-transform: uppercase;
@@ -85,52 +103,45 @@ import DeviceManagementPanel from '@/components/DeviceManagementPanel.vue'
 
 .module-header h1 {
   color: var(--text-primary);
-  margin: 0 0 var(--spacing-sm);
-  font-size: 24px;
-  font-weight: 600;
-}
-
-.module-description {
-  color: var(--text-secondary);
   margin: 0;
-  max-width: 760px;
-  font-size: 14px;
-  line-height: 1.5;
+  font-size: 20px;
+  font-weight: 600;
 }
 
 .module-switch {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--spacing-sm);
+  gap: var(--spacing-xs);
 }
 
 .switch-btn {
-  background: var(--bg-secondary);
+  background: var(--bg-tertiary);
   border: 1px solid var(--border-color);
-  border-radius: var(--radius-md);
+  border-radius: 3px;
   color: var(--text-secondary);
-  padding: var(--spacing-sm) var(--spacing-md);
+  padding: 5px 12px;
   text-decoration: none;
-  font-size: 14px;
-  transition: all 0.2s ease;
+  font-size: 13px;
+  transition: all 0.15s ease;
   display: inline-flex;
   align-items: center;
   gap: var(--spacing-xs);
-  
+
   &:hover {
-    background: var(--bg-tertiary);
+    background: var(--bg-quaternary);
     color: var(--text-primary);
   }
-  
+
   .el-icon {
-    font-size: 14px;
+    font-size: 12px;
   }
 }
 
 .switch-btn.active {
   background: var(--accent-primary);
   border-color: var(--accent-primary);
-  color: var(--text-primary);
+  color: var(--bg-primary);
+  font-weight: 600;
 }
 
 .switch-btn-ghost {
@@ -140,12 +151,19 @@ import DeviceManagementPanel from '@/components/DeviceManagementPanel.vue'
 @media (max-width: 900px) {
   .module-page {
     padding: var(--spacing-md);
+    overflow: auto;
   }
-  
+
+  .desktop-shell {
+    max-width: 100%;
+    height: auto;
+    gap: var(--spacing-md);
+  }
+
   .module-header {
     flex-direction: column;
   }
-  
+
   .module-switch {
     width: 100%;
   }

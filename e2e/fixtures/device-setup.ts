@@ -17,6 +17,7 @@ async function setupDevice(): Promise<void> {
       model: '811A',
       host: '192.168.3.131',
       port: 8000,
+      unit: 'kPa',
     }),
   });
 

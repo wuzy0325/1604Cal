@@ -1,15 +1,26 @@
 # 启动脚本 - 同时启动后端和前端
 # 使用方式: .\start-dev.ps1
 
+# 设置控制台编码为 UTF-8，解决中文乱码问题
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+$OutputEncoding = [System.Text.Encoding]::UTF8
+chcp 65001 > $null 2>&1
+
 Write-Host "正在启动 1604 统一校准系统..." -ForegroundColor Green
 Write-Host ""
 
 # 获取脚本所在目录
-$scriptPath = Split-Path -Parent $MyInvocation.MyCommand.Path
+$scriptPath = $PSScriptRoot
+if (-not $scriptPath) {
+    $scriptPath = Split-Path -Parent $MyInvocation.MyCommand.Path
+}
+if (-not $scriptPath) {
+    $scriptPath = Get-Location
+}
 Set-Location $scriptPath
 
 # 启动后端
-Write-Host "[1/2] 启动 Go API 服务 (端口 8080)..." -ForegroundColor Cyan
+Write-Host "[1/2] 启动 Go API 服务 (端口 18080)..." -ForegroundColor Cyan
 $backendJob = Start-Job -ScriptBlock {
     param($path)
     Set-Location $path
@@ -40,7 +51,7 @@ Write-Host ""
 Write-Host "==========================================" -ForegroundColor Green
 Write-Host "系统已启动！" -ForegroundColor Green
 Write-Host ""
-Write-Host "后端 API: http://localhost:8080" -ForegroundColor Yellow
+Write-Host "后端 API: http://localhost:18080" -ForegroundColor Yellow
 Write-Host "前端页面: http://localhost:5173" -ForegroundColor Yellow
 Write-Host ""
 Write-Host "关闭此窗口即可停止所有服务" -ForegroundColor Cyan

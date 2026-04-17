@@ -32,12 +32,14 @@ func (s *apiServer) sessionStartHandler(w http.ResponseWriter, r *http.Request) 
 			writeError(w, apperrors.ErrInvalidStateTransition)
 			return
 		}
+		s.publishSessionState()
 	}
 
 	if err := s.sessionMachine.Transition(domain.SessionStatePressurizing); err != nil {
 		writeError(w, apperrors.ErrInvalidStateTransition)
 		return
 	}
+	s.publishSessionState()
 
 	writeSuccess(w, http.StatusOK, sessionStatePayload{State: string(s.sessionMachine.State())})
 }
@@ -52,6 +54,7 @@ func (s *apiServer) sessionPauseHandler(w http.ResponseWriter, r *http.Request) 
 		writeError(w, apperrors.ErrInvalidStateTransition)
 		return
 	}
+	s.publishSessionState()
 
 	writeSuccess(w, http.StatusOK, sessionStatePayload{State: string(s.sessionMachine.State())})
 }
@@ -66,6 +69,7 @@ func (s *apiServer) sessionResumeHandler(w http.ResponseWriter, r *http.Request)
 		writeError(w, apperrors.ErrInvalidStateTransition)
 		return
 	}
+	s.publishSessionState()
 
 	writeSuccess(w, http.StatusOK, sessionStatePayload{State: string(s.sessionMachine.State())})
 }
@@ -82,16 +86,26 @@ func (s *apiServer) sessionStopHandler(w http.ResponseWriter, r *http.Request) {
 				writeError(w, apperrors.ErrInvalidStateTransition)
 				return
 			}
+			s.publishSessionState()
 
 			if stopErr := s.sessionMachine.Transition(domain.SessionStateStopped); stopErr != nil {
 				writeError(w, apperrors.ErrInvalidStateTransition)
 				return
 			}
+			s.publishSessionState()
 		} else {
 			writeError(w, apperrors.ErrInvalidStateTransition)
 			return
 		}
+	} else {
+		s.publishSessionState()
 	}
 
 	writeSuccess(w, http.StatusOK, sessionStatePayload{State: string(s.sessionMachine.State())})
+}
+
+func (s *apiServer) publishSessionState() {
+	publishEvent("session.state.changed", map[string]any{
+		"state": string(s.sessionMachine.State()),
+	})
 }

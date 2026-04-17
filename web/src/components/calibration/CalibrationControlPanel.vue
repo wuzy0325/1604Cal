@@ -97,59 +97,60 @@ const endCalibration = () => emit('end')
 .control-panel {
   background: var(--bg-secondary);
   border: 1px solid var(--border-color);
-  border-radius: var(--radius-md);
+  border-radius: 3px;
   padding: var(--spacing-md);
-  
+
   .title {
     color: var(--text-primary);
     margin: 0 0 var(--spacing-md) 0;
+    font-size: 14px;
   }
-  
+
   .main-action {
     text-align: center;
-    
+
     .start-btn {
       width: 100%;
-      height: 50px;
-      font-size: 16px;
+      height: 44px;
+      font-size: 14px;
       margin-bottom: var(--spacing-md);
-      
+
       .el-icon {
         margin-right: var(--spacing-xs);
       }
     }
-    
+
     .prerequisites {
       text-align: left;
-      
+
       .prereq-item {
         display: flex;
         align-items: center;
         gap: var(--spacing-xs);
-        padding: var(--spacing-xs) 0;
+        padding: 3px 0;
         color: var(--text-muted);
-        font-size: 13px;
-        
+        font-size: 12px;
+
         .el-icon {
-          font-size: 14px;
+          font-size: 13px;
         }
-        
+
         &.satisfied {
           color: var(--status-success);
         }
       }
     }
   }
-  
+
   :deep(.el-divider) {
     margin: var(--spacing-md) 0;
     border-color: var(--border-color);
   }
-  
+
   .secondary-actions {
     display: flex;
-    gap: var(--spacing-sm);
-    
+    gap: var(--spacing-xs);
+
     .el-button {
       flex: 1;
     }

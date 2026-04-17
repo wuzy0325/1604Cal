@@ -5,4 +5,6 @@ npm-cache/
 web/node_modules/
 web/dist/
 
+build/bin/
+
 *.log

@@ -24,19 +24,19 @@ defineProps<{
 .stat-card {
   background: var(--bg-secondary);
   border: 1px solid var(--border-color);
-  border-radius: var(--radius-md);
-  padding: var(--spacing-md);
+  border-radius: 3px;
+  padding: var(--spacing-sm) var(--spacing-md);
   text-align: center;
-  
+
   .label {
     color: var(--text-secondary);
-    font-size: 12px;
-    margin-bottom: var(--spacing-xs);
+    font-size: 11px;
+    margin-bottom: 2px;
   }
-  
+
   .value {
     color: var(--text-primary);
-    font-size: 24px;
+    font-size: 20px;
     font-weight: bold;
   }
 }

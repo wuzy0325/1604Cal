@@ -108,38 +108,39 @@ const exportData = () => {
 .data-table-panel {
   background: var(--bg-secondary);
   border: 1px solid var(--border-color);
-  border-radius: var(--radius-md);
+  border-radius: 3px;
   padding: var(--spacing-md);
-  
+
   .panel-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: var(--spacing-md);
-    
+    margin-bottom: var(--spacing-sm);
+
     h4 {
       color: var(--text-primary);
       margin: 0;
+      font-size: 13px;
     }
-    
+
     .actions {
       display: flex;
       align-items: center;
       gap: var(--spacing-md);
-      
+
       .record-count {
         color: var(--text-secondary);
-        font-size: 13px;
+        font-size: 12px;
       }
     }
   }
-  
+
   .data-table {
     :deep(th) {
-      background: var(--bg-tertiary);
-      color: var(--text-secondary);
+      background: var(--bg-quaternary) !important;
+      color: var(--text-secondary) !important;
     }
-    
+
     :deep(td) {
       color: var(--text-primary);
     }

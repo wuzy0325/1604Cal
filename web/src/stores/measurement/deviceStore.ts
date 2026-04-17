@@ -5,6 +5,8 @@ import {
   connectDevice,
   disconnectDevice,
   upsertDevice,
+  setCalibrationDevices,
+  readCurrentPressure,
   type DeviceDTO
 } from '@/services/apiClient'
 import { ElMessage } from 'element-plus'
@@ -13,6 +15,7 @@ import { ElMessage } from 'element-plus'
 export interface PressureDevice {
   id: string
   name: string
+  model: string
   ip: string
   port: number
   status: 'connected' | 'disconnected' | 'connecting' | 'error'
@@ -25,6 +28,8 @@ export interface MeasureDevice {
   name: string
   model: string
   channels: number
+  ip?: string
+  port?: number
   status: 'connected' | 'disconnected' | 'connecting' | 'error'
 }
 
@@ -33,9 +38,10 @@ function dtoToPressureDevice(dto: DeviceDTO): PressureDevice {
   return {
     id: dto.id,
     name: dto.name,
+    model: dto.model,
     ip: dto.host,
     port: dto.port,
-    status: dto.status === 'connected' ? 'connected' : 
+    status: dto.status === 'connected' ? 'connected' :
             dto.status === 'connecting' ? 'connecting' :
             dto.status === 'error' ? 'error' : 'disconnected',
     currentPressure: dto.status === 'connected' ? 0 : undefined,
@@ -60,11 +66,13 @@ function pressureDeviceToDto(device: PressureDevice): DeviceDTO {
     id: device.id,
     name: device.name,
     type: 'pressure',
-    model: device.name,
+    model: device.model,
     host: device.ip,
     port: device.port,
     unit: device.unit,
-    status: device.status === 'connected' ? 'connected' : 'disconnected'
+    status: device.status === 'connected' ? 'connected' :
+            device.status === 'connecting' ? 'connecting' :
+            device.status === 'error' ? 'error' : 'disconnected'
   }
 }
 
@@ -74,10 +82,12 @@ function measureDeviceToDto(device: MeasureDevice): DeviceDTO {
     name: device.name,
     type: 'measure',
     model: device.model,
-    host: '', // 计量设备可能没有host
-    port: 0,
+    host: device.ip || '192.168.1.100',
+    port: device.port || 9000,
     unit: 'kPa',
-    status: device.status === 'connected' ? 'connected' : 'disconnected'
+    status: device.status === 'connected' ? 'connected' :
+            device.status === 'connecting' ? 'connecting' :
+            device.status === 'error' ? 'error' : 'disconnected'
   }
 }
 
@@ -88,7 +98,7 @@ export const useMeasurementDeviceStore = defineStore('measurementDevices', () =>
   const loading = ref(false)
 
   // 从后端加载设备列表
-  const loadDevices = async () => {
+  const loadDevices = async (silent = false) => {
     try {
       loading.value = true
       const devices = await fetchDevices()
@@ -100,27 +110,77 @@ export const useMeasurementDeviceStore = defineStore('measurementDevices', () =>
         .map(dtoToMeasureDevice)
     } catch (error) {
       console.error('加载设备列表失败:', error)
-      ElMessage.error('加载设备列表失败')
+      if (!silent) {
+        ElMessage.error('加载设备列表失败')
+      }
     } finally {
       loading.value = false
     }
   }
 
   // Actions
-  const connectPressureDevice = async (id: string) => {
+  const connectPressureDevice = async (id: string): Promise<boolean> => {
     const device = pressureDevices.value.find(d => d.id === id)
-    if (!device) return
+    if (!device) return false
 
     try {
       device.status = 'connecting'
       const updatedDto = await connectDevice(id)
       const updated = dtoToPressureDevice(updatedDto)
       Object.assign(device, updated)
+
+      if (updated.status !== 'connected') {
+        const reason = updatedDto.lastErrorReason || '未知原因'
+        ElMessage.error(`连接设备 ${device.name} 失败：${reason}`)
+        return false
+      }
+
       ElMessage.success(`设备 ${device.name} 连接成功`)
+
+      // 连接成功后立即绑定到校准服务并读取初始压力
+      await refreshPressureForDevice(id)
+      return true
     } catch (error) {
       device.status = 'error'
       console.error('连接设备失败:', error)
       ElMessage.error(`连接设备 ${device.name} 失败`)
+      return false
+    }
+  }
+
+  // 刷新打压设备的实时压力值
+  const refreshPressureForDevice = async (pressureId: string) => {
+    try {
+      // 找到任意一个计量设备ID（校准服务需要同时设置两个设备）
+      const anyMeasure = measureDevices.value[0]
+      const measureId = anyMeasure?.id || '__none__'
+      if (measureId === '__none__') return
+
+      await setCalibrationDevices({ measureDeviceId: measureId, pressureDeviceId: pressureId })
+      const pressure = await readCurrentPressure()
+      const device = pressureDevices.value.find(d => d.id === pressureId)
+      if (device) {
+        device.currentPressure = pressure
+      }
+    } catch (err) {
+      console.warn('读取初始压力失败:', err)
+    }
+  }
+
+  // 刷新所有已连接打压设备的压力值
+  const refreshAllConnectedPressures = async () => {
+    for (const device of pressureDevices.value) {
+      if (device.status === 'connected') {
+        try {
+          const anyMeasure = measureDevices.value[0]
+          if (!anyMeasure) continue
+          await setCalibrationDevices({ measureDeviceId: anyMeasure.id, pressureDeviceId: device.id })
+          const pressure = await readCurrentPressure()
+          device.currentPressure = pressure
+        } catch {
+          // 静默失败，不影响其他设备
+        }
+      }
     }
   }
 
@@ -139,20 +199,29 @@ export const useMeasurementDeviceStore = defineStore('measurementDevices', () =>
     }
   }
 
-  const connectMeasureDevice = async (id: string) => {
+  const connectMeasureDevice = async (id: string): Promise<boolean> => {
     const device = measureDevices.value.find(d => d.id === id)
-    if (!device) return
+    if (!device) return false
 
     try {
       device.status = 'connecting'
       const updatedDto = await connectDevice(id)
       const updated = dtoToMeasureDevice(updatedDto)
       Object.assign(device, updated)
+
+      if (updated.status !== 'connected') {
+        const reason = updatedDto.lastErrorReason || '未知原因'
+        ElMessage.error(`连接设备 ${device.name} 失败：${reason}`)
+        return false
+      }
+
       ElMessage.success(`设备 ${device.name} 连接成功`)
+      return true
     } catch (error) {
       device.status = 'error'
       console.error('连接设备失败:', error)
       ElMessage.error(`连接设备 ${device.name} 失败`)
+      return false
     }
   }
 
@@ -241,6 +310,8 @@ export const useMeasurementDeviceStore = defineStore('measurementDevices', () =>
     addPressureDevice,
     addMeasureDevice,
     updateDevicePressure,
-    updateDeviceStatus
+    updateDeviceStatus,
+    refreshPressureForDevice,
+    refreshAllConnectedPressures
   }
 })

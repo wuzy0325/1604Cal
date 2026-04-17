@@ -2,6 +2,7 @@
   <span
     class="status-badge"
     :class="status"
+    role="status"
   >
     {{ statusText }}
   </span>
@@ -29,28 +30,39 @@ const statusText = computed(() => {
 .status-badge {
   display: inline-block;
   padding: 2px 8px;
-  border-radius: var(--radius-sm);
-  font-size: 12px;
-  font-weight: 500;
-  
+  border-radius: 3px;
+  font-size: 11px;
+  font-weight: 600;
+
   &.connected {
-    background: rgba(16, 185, 129, 0.2);
+    background: var(--status-success-bg);
     color: var(--status-success);
   }
-  
+
   &.disconnected {
-    background: rgba(160, 160, 160, 0.2);
+    background: var(--status-muted-bg);
     color: var(--text-secondary);
   }
-  
+
   &.connecting {
-    background: rgba(59, 130, 246, 0.2);
+    background: var(--status-info-bg);
     color: var(--status-info);
-    animation: pulse 1.5s infinite;
   }
-  
+
+  @media (prefers-reduced-motion: no-preference) {
+    &.connecting {
+      animation: pulse 1.5s infinite;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    &.connecting {
+      opacity: 0.7;
+    }
+  }
+
   &.error {
-    background: rgba(239, 68, 68, 0.2);
+    background: var(--status-error-bg);
     color: var(--status-error);
   }
 }
