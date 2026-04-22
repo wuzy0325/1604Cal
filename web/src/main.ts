@@ -6,7 +6,7 @@ import 'element-plus/dist/index.css'
 
 import App from './App.vue'
 import router from './router'
-import { initDesktopApiBase } from './services/apiClient'
+import { initDesktopApiBase } from './api/client'
 import './styles/variables.scss'
 import './styles/button-override.css'
 

@@ -30,34 +30,45 @@ func NewSessionMachine() *SessionMachine {
 				domain.SessionStateStabilizing: {},
 				domain.SessionStatePaused:      {},
 				domain.SessionStateError:       {},
+				domain.SessionStateStopped:     {},
 			},
 			domain.SessionStateStabilizing: {
 				domain.SessionStateCollecting:         {},
 				domain.SessionStateAwaitManualCollect: {},
 				domain.SessionStatePaused:             {},
 				domain.SessionStateError:              {},
+				domain.SessionStateStopped:            {},
 			},
 			domain.SessionStateAwaitManualCollect: {
 				domain.SessionStateCollecting: {},
 				domain.SessionStatePaused:     {},
+				domain.SessionStateStopped:    {},
 			},
 			domain.SessionStateCollecting: {
 				domain.SessionStatePointDone:            {},
 				domain.SessionStateAwaitAlarmResolution: {},
 				domain.SessionStatePaused:               {},
 				domain.SessionStateError:                {},
+				domain.SessionStateStopped:              {},
 			},
 			domain.SessionStateAwaitAlarmResolution: {
 				domain.SessionStateCollecting: {},
 				domain.SessionStatePointDone:  {},
+				domain.SessionStateStopped:    {},
 			},
 			domain.SessionStatePointDone: {
 				domain.SessionStatePressurizing: {},
 				domain.SessionStateFitting:      {},
+				domain.SessionStateStopped:      {},
 			},
 			domain.SessionStateFitting: {
 				domain.SessionStateCompleted: {},
 				domain.SessionStateError:     {},
+				domain.SessionStateStopped:   {},
+			},
+			domain.SessionStateCompleted: {
+				domain.SessionStateReady:   {},
+				domain.SessionStateStopped: {},
 			},
 			domain.SessionStatePaused: {
 				domain.SessionStatePressurizing: {},
@@ -66,6 +77,14 @@ func NewSessionMachine() *SessionMachine {
 			domain.SessionStateRecovering: {
 				domain.SessionStatePressurizing: {},
 				domain.SessionStateError:        {},
+				domain.SessionStateStopped:      {},
+			},
+			domain.SessionStateError: {
+				domain.SessionStateRecovering: {},
+				domain.SessionStateStopped:    {},
+			},
+			domain.SessionStateStopped: {
+				domain.SessionStateReady: {},
 			},
 		},
 	}

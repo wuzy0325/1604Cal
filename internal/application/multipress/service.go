@@ -201,8 +201,8 @@ func (s *Service) SetTargetPressure(ctx context.Context, deviceID string, target
 	entry.state.ErrorMessage = ""
 
 	s.publish("multipress.pressure.changed", map[string]any{
-		"deviceId":        deviceID,
-		"targetPressure":  target,
+		"deviceId":       deviceID,
+		"targetPressure": target,
 	})
 
 	return nil
@@ -384,6 +384,18 @@ func (s *Service) getEntry(deviceID string) (*deviceEntry, error) {
 		return nil, fmt.Errorf("device %s not registered", deviceID)
 	}
 	return entry, nil
+}
+
+// GetActiveDriver 返回指定设备的已连接驱动实例，供校准服务复用。
+// 设备未注册时返回 nil。
+func (s *Service) GetActiveDriver(id string) device.ConnectionDriver {
+	s.mu.Lock()
+	entry, ok := s.entries[id]
+	s.mu.Unlock()
+	if !ok || entry == nil {
+		return nil
+	}
+	return entry.driver
 }
 
 // pollLoop 后台轮询所有打压中设备的压力和稳定状态。

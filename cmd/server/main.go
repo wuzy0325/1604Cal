@@ -17,9 +17,13 @@ const configPathEnvName = "CAL1604_CONFIG"
 func main() {
 	addr := ":18080"
 
-	connectCfg, err := resolveConnectConfig(os.Getenv)
+	runtimeCfg, err := resolveRuntimeConfig(os.Getenv)
 	if err != nil {
 		log.Fatalf("load runtime config failed: %v", err)
+	}
+	connectCfg := runtimeCfg.ToDeviceConnectConfig()
+	calibrationCfg := apihttp.CalibrationRuntimeConfig{
+		EnforceValveCalibrationGate: runtimeCfg.Calibration.EnforceValveCalibrationGate,
 	}
 
 	// 使用持久化设备管理器，设备配置会自动保存到本地文件
@@ -28,7 +32,7 @@ func main() {
 		log.Fatalf("init persistent device manager failed: %v", err)
 	}
 
-	router := apihttp.NewRouterWithConnectConfig(deviceManager, connectCfg)
+	router := apihttp.NewRouterWithRuntimeConfig(deviceManager, connectCfg, calibrationCfg, runtimeCfg)
 
 	log.Printf("server listening on %s", addr)
 	if err = http.ListenAndServe(addr, router); err != nil {
@@ -36,18 +40,24 @@ func main() {
 	}
 }
 
-// resolveConnectConfig 根据环境变量解析连接可靠性配置。
+// resolveRuntimeConfig 根据环境变量解析运行时配置。
 // 当未配置文件路径时，返回内置默认值。
-func resolveConnectConfig(getenv func(string) string) (deviceconnect.Config, error) {
+func resolveRuntimeConfig(getenv func(string) string) (config.AppConfig, error) {
 	path := strings.TrimSpace(getenv(configPathEnvName))
 	if path == "" {
-		return config.Default().ToDeviceConnectConfig(), nil
+		return config.Default(), nil
 	}
 
-	runtimeConfig, err := config.LoadFromFile(path)
+	return config.LoadFromFile(path)
+}
+
+// resolveConnectConfig 根据环境变量解析连接可靠性配置。
+// 当未配置文件路径时，返回内置默认值。
+// 兼容已有单元测试与调用方。
+func resolveConnectConfig(getenv func(string) string) (deviceconnect.Config, error) {
+	runtimeCfg, err := resolveRuntimeConfig(getenv)
 	if err != nil {
 		return deviceconnect.Config{}, err
 	}
-
-	return runtimeConfig.ToDeviceConnectConfig(), nil
+	return runtimeCfg.ToDeviceConnectConfig(), nil
 }

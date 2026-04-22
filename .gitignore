@@ -8,3 +8,7 @@ web/dist/
 build/bin/
 
 *.log
+*.exe
+e2e/node_modules/
+e2e/npm-cache/
+nul

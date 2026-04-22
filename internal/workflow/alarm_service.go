@@ -3,6 +3,8 @@ package workflow
 import (
 	"fmt"
 	"math"
+
+	"cal1604/internal/domain"
 )
 
 const (
@@ -16,6 +18,14 @@ type AlarmResult struct {
 	Deviation        float64
 	DeviationPercent float64
 	Allowance        float64
+}
+
+// MultiChannelAlarmResult 多通道报警判定结果。
+type MultiChannelAlarmResult struct {
+	Triggered         bool            `json:"triggered"`
+	OverLimitChannels []int           `json:"overLimitChannels"`
+	MaxDeviation      float64         `json:"maxDeviation"`
+	ChannelDetails    map[int]float64 `json:"channelDetails"` // channelIndex -> deviation
 }
 
 // AlarmService 负责计算精度超限并校验处置动作。
@@ -42,6 +52,44 @@ func (s *AlarmService) Evaluate(target, actual, levelPercent float64) AlarmResul
 		DeviationPercent: deviationPercent,
 		Allowance:        allowance,
 	}
+}
+
+// EvaluateMultiChannel 多通道报警判定。
+// channelData: channelIndex -> measured value
+// 返回超过限值的通道列表、最大偏差和是否触发报警。
+func (s *AlarmService) EvaluateMultiChannel(alarmConfig domain.AlarmConfig, target float64, maxPressure float64, channelData map[int]float64) MultiChannelAlarmResult {
+	if !alarmConfig.Enabled {
+		return MultiChannelAlarmResult{}
+	}
+
+	// 满量程阈值：|maxPressure| × precisionThreshold / 100
+	allowance := math.Abs(maxPressure) * alarmConfig.PrecisionThreshold / 100
+	if allowance < 1e-10 {
+		allowance = math.Abs(target) * alarmConfig.PrecisionThreshold / 100
+	}
+
+	result := MultiChannelAlarmResult{
+		ChannelDetails: make(map[int]float64),
+	}
+
+	for _, ch := range alarmConfig.EnabledChannels {
+		val, ok := channelData[ch]
+		if !ok {
+			continue
+		}
+		deviation := math.Abs(val - target)
+		result.ChannelDetails[ch] = deviation
+
+		if deviation > allowance {
+			result.OverLimitChannels = append(result.OverLimitChannels, ch)
+			if deviation > result.MaxDeviation {
+				result.MaxDeviation = deviation
+			}
+		}
+	}
+
+	result.Triggered = len(result.OverLimitChannels) > 0
+	return result
 }
 
 // ValidateDecision 校验报警后的用户决策动作是否合法。

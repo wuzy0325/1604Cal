@@ -73,7 +73,7 @@
 
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
-import type { MultiPressDeviceState } from '@/services/apiClient'
+import type { MultiPressDeviceState } from '@/types/multipress'
 import type { DeviceMeta } from '@/stores/multipress'
 
 const props = defineProps<{

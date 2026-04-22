@@ -2,10 +2,10 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import DeviceSelectionPanel from '../DeviceSelectionPanel.vue'
-import * as apiClient from '@/services/apiClient'
+import DeviceSelectionPanel from '../device/DeviceSelectionPanel.vue'
+import * as apiClient from '@/api/device'
 
-vi.mock('@/services/apiClient', () => ({
+vi.mock('@/api/device', () => ({
   fetchDevices: vi.fn()
 }))
 

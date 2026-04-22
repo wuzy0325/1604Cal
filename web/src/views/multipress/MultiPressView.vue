@@ -111,7 +111,8 @@
 import { onMounted, onUnmounted } from 'vue'
 import { RouterLink } from 'vue-router'
 import { ArrowLeft } from '@element-plus/icons-vue'
-import { createEventStream, type StreamEventPayload } from '@/services/apiClient'
+import { createEventStream } from "@/api/client"
+import type { StreamEventPayload } from "@/types/api"
 import { useMultiPressStore } from '@/stores/multipress'
 import StatCard from '@/components/common/StatCard.vue'
 import PressureControlCard from './PressureControlCard.vue'

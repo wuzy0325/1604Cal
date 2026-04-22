@@ -22,3 +22,9 @@ func TestSelectTemplateRejectsInvalidPointCount(t *testing.T) {
 		t.Fatal("expected point count validation error")
 	}
 }
+
+func TestSelectTemplateRejectsPointCountAboveSix(t *testing.T) {
+	if _, err := report.SelectTemplate(7, "single"); err == nil {
+		t.Fatal("expected point count above six to be rejected")
+	}
+}

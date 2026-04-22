@@ -1,10 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
+import { fetchDevices } from "@/api/device"
 import {
-  fetchDevices,
-  type DeviceDTO,
-  type MultiPressDeviceState,
-  type StreamEventPayload,
   multipressRegister,
   multipressUnregister,
   multipressSetPressure,
@@ -13,7 +10,10 @@ import {
   multipressSetUnit,
   multipressListDevices,
   multipressStopAll
-} from '@/services/apiClient'
+} from "@/api/multipress"
+import type { DeviceDTO } from "@/types/device"
+import type { MultiPressDeviceState } from "@/types/multipress"
+import type { StreamEventPayload } from "@/types/api"
 
 /** 设备元信息（来自设备管理模块） */
 export interface DeviceMeta {

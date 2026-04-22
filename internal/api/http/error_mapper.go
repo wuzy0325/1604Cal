@@ -30,6 +30,15 @@ func writeError(w http.ResponseWriter, err error) {
 		status = http.StatusConflict
 		code = "INVALID_STATE_TRANSITION"
 		message = "invalid session state transition"
+	} else if errors.Is(err, apperrors.ErrPrerequisiteNotMet) {
+		status = http.StatusConflict
+		code = "PREREQUISITE_NOT_MET"
+		message = "calibration prerequisite not met"
+	}
+
+	// 将原始错误信息附加到 message，便于前端诊断具体原因
+	if err != nil && err.Error() != message {
+		message = message + ": " + err.Error()
 	}
 
 	w.Header().Set("Content-Type", "application/json")

@@ -4,7 +4,7 @@ import "fmt"
 
 // SelectTemplate 根据测点数量与模式返回兼容旧系统的模板文件名。
 func SelectTemplate(points int, mode string) (string, error) {
-	if points < 2 || points > 11 {
+	if points < 2 || points > 6 {
 		return "", fmt.Errorf("invalid point count: %d", points)
 	}
 

@@ -84,3 +84,34 @@ func TestToDeviceConnectConfigFallsBackToDefaultsOnInvalidValues(t *testing.T) {
 		t.Fatalf("expected fallback to default config, got %+v", got)
 	}
 }
+
+func TestDefaultCalibrationConfigDisablesValveGate(t *testing.T) {
+	appCfg := config.Default()
+	if appCfg.Calibration.EnforceValveCalibrationGate {
+		t.Fatalf("expected valve gate disabled by default")
+	}
+}
+
+func TestLoadFromFileOverridesCalibrationValveGate(t *testing.T) {
+	tempDir := t.TempDir()
+	configPath := filepath.Join(tempDir, "app.json")
+
+	content := `{
+		"calibration": {
+			"enforceValveCalibrationGate": true
+		}
+	}`
+
+	if err := os.WriteFile(configPath, []byte(content), 0o600); err != nil {
+		t.Fatalf("write test config: %v", err)
+	}
+
+	appCfg, err := config.LoadFromFile(configPath)
+	if err != nil {
+		t.Fatalf("load config: %v", err)
+	}
+
+	if !appCfg.Calibration.EnforceValveCalibrationGate {
+		t.Fatalf("expected valve gate enabled from config file")
+	}
+}

@@ -8,11 +8,16 @@ import (
 	"time"
 
 	"cal1604/internal/application/deviceconnect"
+	"cal1604/internal/domain"
 )
 
 // AppConfig 定义应用运行时配置。
 type AppConfig struct {
-	DeviceConnect DeviceConnectFileConfig `json:"deviceConnect"`
+	DeviceConnect     DeviceConnectFileConfig `json:"deviceConnect"`
+	Calibration       CalibrationFileConfig   `json:"calibration"`
+	CalibrationParams CalibrationParamsConfig `json:"calibrationParams"`
+	Alarm             domain.AlarmConfig      `json:"alarm"`
+	LastDevices       LastDevicesConfig       `json:"lastDevices"`
 }
 
 // DeviceConnectFileConfig 定义设备连接可靠性参数（单位：毫秒）。
@@ -25,6 +30,31 @@ type DeviceConnectFileConfig struct {
 	DisconnectMaxAttempts      int `json:"disconnectMaxAttempts"`
 	DisconnectInitialBackoffMs int `json:"disconnectInitialBackoffMs"`
 	DisconnectMaxBackoffMs     int `json:"disconnectMaxBackoffMs"`
+}
+
+// CalibrationFileConfig 定义标定流程运行开关。
+type CalibrationFileConfig struct {
+	// EnforceValveCalibrationGate 为 true 时，开始标定前必须校验阀门=calibration。
+	EnforceValveCalibrationGate bool `json:"enforceValveCalibrationGate"`
+}
+
+// CalibrationParamsConfig 校准参数持久化配置。
+type CalibrationParamsConfig struct {
+	MinPressure      float64 `json:"minPressure"`
+	MaxPressure      float64 `json:"maxPressure"`
+	PointCount       int     `json:"pointCount"`
+	Precision        int     `json:"precision"`
+	AverageCount     int     `json:"averageCount"`
+	StableDurationMs int     `json:"stableDurationMs"`
+	PrecisionLevel   float64 `json:"precisionLevel"`
+	PressureMode     string  `json:"pressureMode"`
+	ControlMode      string  `json:"controlMode"`
+}
+
+// LastDevicesConfig 记录上次使用的设备 ID，用于页面加载时自动绑定。
+type LastDevicesConfig struct {
+	PressureDeviceID string   `json:"pressureDeviceId"`
+	MeasureDeviceIDs []string `json:"measureDeviceIds"`
 }
 
 // Default 返回默认配置。
@@ -40,6 +70,31 @@ func Default() AppConfig {
 			DisconnectMaxAttempts:      defaults.DisconnectMaxAttempts,
 			DisconnectInitialBackoffMs: int(defaults.DisconnectInitialBackoff / time.Millisecond),
 			DisconnectMaxBackoffMs:     int(defaults.DisconnectMaxBackoff / time.Millisecond),
+		},
+		Calibration: CalibrationFileConfig{
+			EnforceValveCalibrationGate: false,
+		},
+		CalibrationParams: CalibrationParamsConfig{
+			MinPressure:      0,
+			MaxPressure:      100,
+			PointCount:       5,
+			Precision:        2,
+			AverageCount:     1,
+			StableDurationMs: 5000,
+			PrecisionLevel:   0.0005,
+			PressureMode:     "single",
+			ControlMode:      "auto",
+		},
+		Alarm: domain.AlarmConfig{
+			Enabled:            true,
+			PrecisionThreshold: 5.0,
+			SoundEnabled:       true,
+			ConfirmOnAlarm:     true,
+			EnabledChannels:    []int{},
+		},
+		LastDevices: LastDevicesConfig{
+			PressureDeviceID: "",
+			MeasureDeviceIDs: []string{},
 		},
 	}
 }
@@ -59,6 +114,18 @@ func LoadFromFile(path string) (AppConfig, error) {
 	}
 
 	return config, nil
+}
+
+// SaveToFile 将当前配置写入 JSON 文件。
+func (c AppConfig) SaveToFile(path string) error {
+	data, err := json.MarshalIndent(c, "", "  ")
+	if err != nil {
+		return fmt.Errorf("marshal config: %w", err)
+	}
+	if err := os.WriteFile(path, data, 0644); err != nil {
+		return fmt.Errorf("write config file %s: %w", path, err)
+	}
+	return nil
 }
 
 // ToDeviceConnectConfig 将文件配置转换为连接服务运行配置。

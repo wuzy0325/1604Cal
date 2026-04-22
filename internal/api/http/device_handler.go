@@ -10,9 +10,13 @@ import (
 
 	"cal1604/internal/application/calibration"
 	"cal1604/internal/application/deviceconnect"
+	"cal1604/internal/config"
+	"cal1604/internal/application/measurement"
 	"cal1604/internal/application/multipress"
+	"cal1604/internal/application/session"
 	"cal1604/internal/domain"
 	apperrors "cal1604/internal/errors"
+	"cal1604/internal/report"
 	"cal1604/internal/workflow"
 )
 
@@ -34,6 +38,11 @@ type apiServer struct {
 	connectConfig      deviceconnect.Config
 	calibrationService *calibration.Service
 	multipressService  *multipress.Service
+	sessionService     *session.Service
+	measurementService *measurement.Service
+	reportService     *report.Service
+	configPath         string
+	appConfig          *config.AppConfig
 }
 
 type deviceConnector interface {

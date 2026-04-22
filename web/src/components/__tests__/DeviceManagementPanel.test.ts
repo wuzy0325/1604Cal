@@ -1,11 +1,12 @@
 import { flushPromises, mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import DeviceManagementPanel from '../DeviceManagementPanel.vue'
-import * as apiClient from '@/services/apiClient'
+import DeviceManagementPanel from '../device/DeviceManagementPanel.vue'
+import * as apiDevice from '@/api/device'
+import * as apiClient from '@/api/client'
+import type { StreamEventPayload } from '@/types/api'
 
-vi.mock('@/services/apiClient', () => ({
-  createEventStream: vi.fn(),
+vi.mock('@/api/device', () => ({
   fetchDevices: vi.fn(),
   fetchDeviceConnectConfig: vi.fn(),
   fetchUnitConsistency: vi.fn(),
@@ -13,6 +14,9 @@ vi.mock('@/services/apiClient', () => ({
   setDeviceStatus: vi.fn(),
   connectDevice: vi.fn(),
   disconnectDevice: vi.fn()
+}))
+vi.mock('@/api/client', () => ({
+  createEventStream: vi.fn()
 }))
 
 const mockDevice = {
@@ -28,7 +32,7 @@ const mockDevice = {
 
 describe('DeviceManagementPanel', () => {
   const closeSpy = vi.fn()
-  let streamCallback: ((payload: apiClient.StreamEventPayload) => void) | null = null
+  let streamCallback: ((payload: StreamEventPayload) => void) | null = null
 
   beforeEach(() => {
     vi.clearAllMocks()
@@ -42,8 +46,8 @@ describe('DeviceManagementPanel', () => {
       } as unknown as EventSource
     })
 
-    vi.mocked(apiClient.fetchDevices).mockResolvedValue([mockDevice])
-    vi.mocked(apiClient.fetchDeviceConnectConfig).mockResolvedValue({
+    vi.mocked(apiDevice.fetchDevices).mockResolvedValue([mockDevice])
+    vi.mocked(apiDevice.fetchDeviceConnectConfig).mockResolvedValue({
       connectAttemptTimeoutMs: 600,
       connectMaxAttempts: 3,
       connectInitialBackoffMs: 80,
@@ -53,17 +57,17 @@ describe('DeviceManagementPanel', () => {
       disconnectInitialBackoffMs: 40,
       disconnectMaxBackoffMs: 120
     })
-    vi.mocked(apiClient.fetchUnitConsistency).mockResolvedValue({
+    vi.mocked(apiDevice.fetchUnitConsistency).mockResolvedValue({
       consistent: true,
       conflicts: []
     })
-    vi.mocked(apiClient.upsertDevice).mockResolvedValue(mockDevice)
-    vi.mocked(apiClient.setDeviceStatus).mockResolvedValue({
+    vi.mocked(apiDevice.upsertDevice).mockResolvedValue(mockDevice)
+    vi.mocked(apiDevice.setDeviceStatus).mockResolvedValue({
       id: mockDevice.id,
       status: 'disconnected'
     })
-    vi.mocked(apiClient.connectDevice).mockResolvedValue(mockDevice)
-    vi.mocked(apiClient.disconnectDevice).mockResolvedValue({
+    vi.mocked(apiDevice.connectDevice).mockResolvedValue(mockDevice)
+    vi.mocked(apiDevice.disconnectDevice).mockResolvedValue({
       ...mockDevice,
       status: 'disconnected'
     })
@@ -106,11 +110,11 @@ describe('DeviceManagementPanel', () => {
     await wrapper.get('[data-test="submit-form"]').trigger('click')
     await flushPromises()
 
-    expect(apiClient.upsertDevice).toHaveBeenCalled()
+    expect(apiDevice.upsertDevice).toHaveBeenCalled()
   })
 
   it('calls connect endpoint when clicking connect button', async () => {
-    vi.mocked(apiClient.fetchDevices).mockResolvedValueOnce([
+    vi.mocked(apiDevice.fetchDevices).mockResolvedValueOnce([
       {
         ...mockDevice,
         status: 'disconnected'
@@ -123,7 +127,7 @@ describe('DeviceManagementPanel', () => {
     await wrapper.findAll('button').find((btn) => btn.text() === '连接')?.trigger('click')
     await flushPromises()
 
-    expect(apiClient.connectDevice).toHaveBeenCalledWith('m1')
+    expect(apiDevice.connectDevice).toHaveBeenCalledWith('m1')
   })
 
   it('shows duplicate id validation error in create mode', async () => {
@@ -138,7 +142,7 @@ describe('DeviceManagementPanel', () => {
     await wrapper.get('[data-test="submit-form"]').trigger('click')
 
     expect(wrapper.text()).toContain('设备ID已存在')
-    expect(apiClient.upsertDevice).not.toHaveBeenCalled()
+    expect(apiDevice.upsertDevice).not.toHaveBeenCalled()
   })
 
   it('shows ip and port validation errors', async () => {
@@ -159,11 +163,11 @@ describe('DeviceManagementPanel', () => {
     await wrapper.get('[data-test="submit-form"]').trigger('click')
 
     expect(wrapper.text()).toContain('端口必须在1-65535之间')
-    expect(apiClient.upsertDevice).not.toHaveBeenCalled()
+    expect(apiDevice.upsertDevice).not.toHaveBeenCalled()
   })
 
   it('renders error reason and last error time from api data', async () => {
-    vi.mocked(apiClient.fetchDevices).mockResolvedValueOnce([
+    vi.mocked(apiDevice.fetchDevices).mockResolvedValueOnce([
       {
         ...mockDevice,
         status: 'error',

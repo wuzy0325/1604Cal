@@ -5,16 +5,46 @@ import (
 
 	"cal1604/internal/application/calibration"
 	"cal1604/internal/application/deviceconnect"
+	"cal1604/internal/application/measurement"
 	"cal1604/internal/application/multipress"
+	"cal1604/internal/application/session"
+	"cal1604/internal/config"
 	"cal1604/internal/device"
 	"cal1604/internal/device/manager"
 	"cal1604/internal/infrastructure/driver"
+	"cal1604/internal/report"
 	"cal1604/internal/workflow"
 )
 
+// CalibrationRuntimeConfig 定义标定启动门禁的运行时配置。
+type CalibrationRuntimeConfig struct {
+	EnforceValveCalibrationGate bool
+}
+
+func defaultCalibrationRuntimeConfig() CalibrationRuntimeConfig {
+	return CalibrationRuntimeConfig{EnforceValveCalibrationGate: false}
+}
+
+// chainActiveDriverProvider 顺序查询多个驱动提供者，返回第一个命中的活跃驱动。
+type chainActiveDriverProvider struct {
+	providers []device.ActiveDriverProvider
+}
+
+func (p chainActiveDriverProvider) GetActiveDriver(id string) device.ConnectionDriver {
+	for _, provider := range p.providers {
+		if provider == nil {
+			continue
+		}
+		if drv := provider.GetActiveDriver(id); drv != nil {
+			return drv
+		}
+	}
+	return nil
+}
+
 // NewRouterWithDeviceManager 基于指定设备管理器创建路由。
 func NewRouterWithDeviceManager(deviceManager deviceManager) http.Handler {
-	return newRouter(deviceManager, nil, deviceconnect.DefaultConfig())
+	return newRouter(deviceManager, nil, deviceconnect.DefaultConfig(), defaultCalibrationRuntimeConfig(), nil)
 }
 
 // NewRouterWithDependencies 基于指定依赖创建路由。
@@ -25,15 +55,30 @@ func (s *apiServer) publishEventAdapter(eventType string, data any) {
 // NewRouterWithDependencies 基于指定依赖创建路由。
 // 该方法用于生产注入与集成测试注入同一套 HTTP 处理逻辑。
 func NewRouterWithDependencies(deviceManager deviceManager, connector deviceConnector) http.Handler {
-	return newRouter(deviceManager, connector, deviceconnect.DefaultConfig())
+	return newRouter(deviceManager, connector, deviceconnect.DefaultConfig(), defaultCalibrationRuntimeConfig(), nil)
 }
 
 // NewRouterWithConnectConfig 基于指定连接配置创建路由。
 func NewRouterWithConnectConfig(deviceManager deviceManager, connectConfig deviceconnect.Config) http.Handler {
-	return newRouter(deviceManager, nil, connectConfig)
+	return newRouter(deviceManager, nil, connectConfig, defaultCalibrationRuntimeConfig(), nil)
 }
 
-func newRouter(deviceManager deviceManager, connector deviceConnector, connectConfig deviceconnect.Config) http.Handler {
+// NewRouterWithRuntimeConfig 基于连接配置、标定门禁配置和应用配置创建路由。
+func NewRouterWithRuntimeConfig(deviceManager deviceManager, connectConfig deviceconnect.Config, calibrationConfig CalibrationRuntimeConfig, appCfg ...config.AppConfig) http.Handler {
+	var cfg *config.AppConfig
+	if len(appCfg) > 0 {
+		cfg = &appCfg[0]
+	}
+	return newRouter(deviceManager, nil, connectConfig, calibrationConfig, cfg)
+}
+
+func newRouter(
+	deviceManager deviceManager,
+	connector deviceConnector,
+	connectConfig deviceconnect.Config,
+	calibrationConfig CalibrationRuntimeConfig,
+	appCfg *config.AppConfig,
+) http.Handler {
 	if deviceManager == nil {
 		deviceManager = manager.NewDeviceManager()
 	}
@@ -45,8 +90,12 @@ func newRouter(deviceManager deviceManager, connector deviceConnector, connectCo
 		deviceManager:      deviceManager,
 		sessionMachine:     sessionMachine,
 		connectConfig:      connectConfig,
-		calibrationService: calibration.NewService(sessionMachine, factory, deviceManager, nil, nil),
+		calibrationService: calibration.NewService(sessionMachine, factory, deviceManager, nil, nil, nil),
+		appConfig:          appCfg,
 	}
+
+	// 报告服务（模板目录为空则使用无模板模式）
+	server.reportService = report.NewService("")
 
 	if connector == nil {
 		server.deviceConnector = deviceconnect.NewService(
@@ -59,21 +108,6 @@ func newRouter(deviceManager deviceManager, connector deviceConnector, connectCo
 		server.deviceConnector = connector
 	}
 
-	// 从 connector 解析驱动提供者（复用已连接驱动）
-	var driverProvider device.ActiveDriverProvider
-	if dp, ok := server.deviceConnector.(device.ActiveDriverProvider); ok {
-		driverProvider = dp
-	}
-
-	// 注入事件发布与驱动提供者到校准服务
-	server.calibrationService = calibration.NewService(
-		sessionMachine,
-		factory,
-		deviceManager,
-		server.publishEventAdapter,
-		driverProvider,
-	)
-
 	// 多设备打压控制服务
 	server.multipressService = multipress.NewService(
 		factory,
@@ -81,6 +115,45 @@ func newRouter(deviceManager deviceManager, connector deviceConnector, connectCo
 		server.publishEventAdapter,
 	)
 	server.multipressService.StartPolling()
+
+	// 聚合驱动提供者：优先复用设备连接服务中的驱动，其次复用 multipress 已注册驱动。
+	providers := make([]device.ActiveDriverProvider, 0, 2)
+	if dp, ok := server.deviceConnector.(device.ActiveDriverProvider); ok {
+		providers = append(providers, dp)
+	}
+	providers = append(providers, server.multipressService)
+
+	var driverProvider device.ActiveDriverProvider
+	if len(providers) > 0 {
+		driverProvider = chainActiveDriverProvider{providers: providers}
+	}
+
+	// 创建共享设备会话服务
+	server.sessionService = session.NewService(
+		deviceManager,
+		factory,
+		server.publishEventAdapter,
+		driverProvider,
+	)
+
+	// 创建计量服务
+	server.measurementService = measurement.NewService(
+		server.sessionService,
+		server.publishEventAdapter,
+	)
+
+	// 注入事件发布、驱动提供者和 session 服务到校准服务
+	server.calibrationService = calibration.NewService(
+		sessionMachine,
+		factory,
+		deviceManager,
+		server.publishEventAdapter,
+		driverProvider,
+		server.sessionService,
+	)
+	server.calibrationService.SetStartPrerequisiteConfig(calibration.StartPrerequisiteConfig{
+		EnforceValveCalibration: calibrationConfig.EnforceValveCalibrationGate,
+	})
 
 	mux := http.NewServeMux()
 
@@ -90,6 +163,8 @@ func newRouter(deviceManager deviceManager, connector deviceConnector, connectCo
 
 	// 配置
 	mux.HandleFunc("/api/v1/config/device-connect", server.deviceConnectConfigHandler)
+	mux.HandleFunc("/api/v1/config/calibration", server.calibrationConfigHandler)
+	mux.HandleFunc("/api/v1/config/alarm", server.alarmConfigHandler)
 
 	// 设备管理
 	mux.HandleFunc("/api/v1/devices", server.devicesHandler)
@@ -105,9 +180,27 @@ func newRouter(deviceManager deviceManager, connector deviceConnector, connectCo
 	mux.HandleFunc("/api/v1/sessions/resume", server.sessionResumeHandler)
 	mux.HandleFunc("/api/v1/sessions/stop", server.sessionStopHandler)
 
+	// 设备会话（共享：设备绑定、读压、读稳定性、读计量数据、阀门、单位）
+	mux.HandleFunc("/api/v1/session/devices", server.sessionSetDevicesHandler)
+	mux.HandleFunc("/api/v1/session/measure-device", server.sessionSetMeasureDeviceHandler)
+	mux.HandleFunc("/api/v1/session/pressure", server.sessionReadPressureHandler)
+	mux.HandleFunc("/api/v1/session/stability", server.sessionReadStabilityHandler)
+	mux.HandleFunc("/api/v1/session/measure-data", server.sessionReadMeasureDataHandler)
+	mux.HandleFunc("/api/v1/session/valve", server.sessionValveHandler)
+	mux.HandleFunc("/api/v1/session/measure-unit", server.sessionMeasureUnitHandler)
+	mux.HandleFunc("/api/v1/session/device-info", server.sessionReadDeviceInfoHandler)
+	mux.HandleFunc("/api/v1/session/reset", server.sessionResetDeviceHandler)
+
+	// 计量模块
+	mux.HandleFunc("/api/v1/measurement/state", server.measurementStateHandler)
+	mux.HandleFunc("/api/v1/measurement/start", server.measurementStartHandler)
+	mux.HandleFunc("/api/v1/measurement/pause", server.measurementPauseHandler)
+	mux.HandleFunc("/api/v1/measurement/stop", server.measurementStopHandler)
+	mux.HandleFunc("/api/v1/measurement/data", server.measurementDataHandler)
+	mux.HandleFunc("/api/v1/measurement/export", server.measurementExportHandler)
+
 	// 校准流程
 	mux.HandleFunc("/api/v1/calibration/devices", server.calibrationSetDevicesHandler)
-	mux.HandleFunc("/api/v1/calibration/measure-device", server.calibrationSetMeasureDeviceHandler)
 	mux.HandleFunc("/api/v1/calibration/config", server.calibrationSetConfigHandler)
 	mux.HandleFunc("/api/v1/calibration/channels", server.calibrationSetChannelsHandler)
 	mux.HandleFunc("/api/v1/calibration/channels/list", server.calibrationGetChannelsHandler)
@@ -116,13 +209,13 @@ func newRouter(deviceManager deviceManager, connector deviceConnector, connectCo
 	mux.HandleFunc("/api/v1/calibration/pressurize", server.calibrationPressurizeHandler)
 	mux.HandleFunc("/api/v1/calibration/collect", server.calibrationCollectHandler)
 	mux.HandleFunc("/api/v1/calibration/fit", server.calibrationFitHandler)
-	mux.HandleFunc("/api/v1/calibration/pressure", server.calibrationReadPressureHandler)
-	mux.HandleFunc("/api/v1/calibration/stability", server.calibrationReadStabilityHandler)
-	mux.HandleFunc("/api/v1/calibration/measure-data", server.calibrationReadMeasureDataHandler)
-	mux.HandleFunc("/api/v1/calibration/valve", server.calibrationValveHandler)
-	mux.HandleFunc("/api/v1/calibration/measure-unit", server.calibrationReadMeasureUnitHandler)
-	mux.HandleFunc("/api/v1/calibration/device-info", server.calibrationReadDeviceInfoHandler)
-	mux.HandleFunc("/api/v1/calibration/reset", server.calibrationResetDeviceHandler)
+	mux.HandleFunc("/api/v1/calibration/resolve-alarm", server.calibrationResolveAlarmHandler)
+	mux.HandleFunc("/api/v1/calibration/retry-point", server.calibrationRetryPointHandler)
+	mux.HandleFunc("/api/v1/calibration/alarm-config", server.calibrationGetAlarmConfigHandler)
+	mux.HandleFunc("/api/v1/calibration/alarm-config/set", server.calibrationSetAlarmConfigHandler)
+	mux.HandleFunc("/api/v1/calibration/session", server.calibrationGetSessionHandler)
+	mux.HandleFunc("/api/v1/calibration/manual-pressurize", server.calibrationManualPressurizeHandler)
+	mux.HandleFunc("/api/v1/calibration/manual-collect", server.calibrationManualCollectHandler)
 
 	// 多设备打压控制
 	mux.HandleFunc("/api/v1/multipress/register", server.multipressRegisterHandler)
@@ -138,6 +231,8 @@ func newRouter(deviceManager deviceManager, connector deviceConnector, connectCo
 
 	// 报告
 	mux.HandleFunc("/api/v1/reports/templates/select", server.reportTemplateSelectHandler)
+	mux.HandleFunc("/api/v1/reports/export", server.exportReportHandler)
+	mux.HandleFunc("/api/v1/reports/templates", server.listTemplatesHandler)
 
 	return corsMiddleware(mux)
 }

@@ -53,7 +53,7 @@
 import { RouterLink } from 'vue-router'
 import { ArrowLeft } from '@element-plus/icons-vue'
 
-import DeviceManagementPanel from '@/components/DeviceManagementPanel.vue'
+import DeviceManagementPanel from '@/components/device/DeviceManagementPanel.vue'
 </script>
 
 <style scoped lang="scss">

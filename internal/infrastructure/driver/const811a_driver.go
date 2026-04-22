@@ -1,0 +1,95 @@
+package driver
+
+import (
+	"context"
+	"fmt"
+	"time"
+)
+
+// ---------------------------------------------------------------------------
+// ConST 811A 打压设备驱动 (标准SCPI)
+// ---------------------------------------------------------------------------
+
+type ConST811ADriver struct {
+	constBaseDriver
+}
+
+func newConST811ADriver(host string, port int) *ConST811ADriver {
+	return &ConST811ADriver{
+		constBaseDriver: constBaseDriver{base: newTCPConnectionDriver("ConST 811A", host, port)},
+	}
+}
+
+func (d *ConST811ADriver) Connect(ctx context.Context) error {
+	return d.constConnect(ctx, "PRESsure:MODule1:STABle?")
+}
+
+func (d *ConST811ADriver) Disconnect(ctx context.Context) error {
+	return d.constDisconnect(ctx)
+}
+
+func (d *ConST811ADriver) SetTargetPressure(ctx context.Context, target float64) error {
+	cmd := fmt.Sprintf("PRESsure:TARGet %.4f", target)
+	_, err := d.base.sendSCPICommand(ctx, cmd, 3*time.Second)
+	if err != nil {
+		return fmt.Errorf("set target pressure: %w", err)
+	}
+	return nil
+}
+
+func (d *ConST811ADriver) Stop(ctx context.Context) error {
+	_, err := d.base.sendSCPICommand(ctx, "PRESsure:MODE VENT", 3*time.Second)
+	if err != nil {
+		return fmt.Errorf("stop pressure: %w", err)
+	}
+	return nil
+}
+
+func (d *ConST811ADriver) Exhaust(ctx context.Context) error {
+	_, err := d.base.sendSCPICommand(ctx, "PRESsure:MODE VENT", 3*time.Second)
+	if err != nil {
+		return fmt.Errorf("exhaust: %w", err)
+	}
+	return nil
+}
+
+func (d *ConST811ADriver) ReadCurrentPressure(ctx context.Context) (float64, error) {
+	resp, err := d.base.sendSCPICommand(ctx, "PRESsure0?", 3*time.Second)
+	if err != nil {
+		return 0, fmt.Errorf("read current pressure: %w", err)
+	}
+	return parseSCPIPressure(resp)
+}
+
+func (d *ConST811ADriver) ReadUnit(ctx context.Context) (string, error) {
+	return d.constReadUnit(ctx, "PRESsure0?")
+}
+
+func (d *ConST811ADriver) SetUnit(ctx context.Context, unit string) error {
+	unitCode, ok := pressureUnitToCode(unit)
+	if !ok {
+		return fmt.Errorf("unsupported pressure unit: %s", unit)
+	}
+	cmd := fmt.Sprintf("PRESsure:MODule1:UNIT %s", unitCode)
+	_, err := d.base.sendSCPICommand(ctx, cmd, 3*time.Second)
+	if err != nil {
+		return fmt.Errorf("set unit: %w", err)
+	}
+	return nil
+}
+
+func (d *ConST811ADriver) ReadStability(ctx context.Context) (bool, error) {
+	return d.constReadStability(ctx, "PRESsure:MODule1:STABle?")
+}
+
+func (d *ConST811ADriver) StartControl(ctx context.Context) error {
+	_, err := d.base.sendSCPICommand(ctx, "PRESsure:MODE CONTROL", 3*time.Second)
+	if err != nil {
+		return fmt.Errorf("start pressure control: %w", err)
+	}
+	return nil
+}
+
+func (d *ConST811ADriver) ReadTargetRange(ctx context.Context) (min, max float64, err error) {
+	return d.constReadTargetRange(ctx)
+}

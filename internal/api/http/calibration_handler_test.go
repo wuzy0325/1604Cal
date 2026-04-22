@@ -27,7 +27,6 @@ func TestCalibrationConfigAcceptsControlAndPressureMode(t *testing.T) {
 		"maxPressure":    100,
 		"stableWaitMs":   3000,
 		"controlMode":    "auto",
-		"pressureMode":   "return",
 	}
 
 	body, err := json.Marshal(payload)
@@ -72,5 +71,41 @@ func TestCalibrationConfigAcceptsControlAndPressureMode(t *testing.T) {
 
 	if len(generateResp.Data) != 5 {
 		t.Fatalf("expected 5 generated points, got %d", len(generateResp.Data))
+	}
+}
+
+func TestCalibrationRoutesDoNotExposeMeasurementSessionEndpoints(t *testing.T) {
+	router := NewRouter()
+	testCases := []struct {
+		name   string
+		method string
+		path   string
+		body   []byte
+	}{
+		{name: "measure device bind", method: http.MethodPost, path: "/api/v1/calibration/measure-device", body: []byte(`{"measureDeviceId":"m1"}`)},
+		{name: "read pressure", method: http.MethodGet, path: "/api/v1/calibration/pressure"},
+		{name: "read stability", method: http.MethodGet, path: "/api/v1/calibration/stability"},
+		{name: "read measure data", method: http.MethodGet, path: "/api/v1/calibration/measure-data"},
+		{name: "read valve", method: http.MethodGet, path: "/api/v1/calibration/valve"},
+		{name: "set valve", method: http.MethodPost, path: "/api/v1/calibration/valve", body: []byte(`{"status":"calibration"}`)},
+		{name: "read measure unit", method: http.MethodGet, path: "/api/v1/calibration/measure-unit"},
+		{name: "set measure unit", method: http.MethodPost, path: "/api/v1/calibration/measure-unit", body: []byte(`{"unit":"kPa"}`)},
+		{name: "read device info", method: http.MethodGet, path: "/api/v1/calibration/device-info"},
+		{name: "reset device", method: http.MethodPost, path: "/api/v1/calibration/reset"},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			req := httptest.NewRequest(tc.method, tc.path, bytes.NewReader(tc.body))
+			if len(tc.body) > 0 {
+				req.Header.Set("Content-Type", "application/json")
+			}
+			rec := httptest.NewRecorder()
+			router.ServeHTTP(rec, req)
+
+			if rec.Code != http.StatusNotFound {
+				t.Fatalf("expected status 404 for deprecated calibration endpoint %s %s, got %d", tc.method, tc.path, rec.Code)
+			}
+		})
 	}
 }

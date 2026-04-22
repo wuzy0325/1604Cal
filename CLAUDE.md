@@ -53,9 +53,13 @@ internal/
     router.go                   → All routes registered here, prefix /api/v1/
     response.go                 → Generic Response[T] DTO
     events_handler.go           → SSE endpoint for real-time push
+    device_session_handler.go   → /api/v1/session/* handlers (shared device binding & reads)
+    measurement_handler.go      → /api/v1/measurement/* handlers (measurement workflow)
   application/
     deviceconnect/service.go    → Connect/disconnect with retry + exponential backoff
-    calibration/service.go      → Full calibration workflow orchestration
+    session/service.go          → Shared device session: binding, pressure/stability/data reads
+    measurement/service.go      → Measurement workflow: 3-state machine (idle→collecting→paused)
+    calibration/service.go      → Calibration workflow orchestration (delegates device ops to session)
   domain/
     device.go                   → Device entity, DeviceType/DeviceStatus enums
     session_state.go            → 14-state session state machine enum
@@ -80,15 +84,20 @@ Key patterns: interface-driven device abstraction, state machine for session lif
 web/src/
   router/index.ts               → 5 routes: hub, device-mgmt, measurement, calibration, multi-pressure
   services/apiClient.ts         → Centralized API client
+  api/
+    session.ts                  → /api/v1/session/* endpoint calls (shared device binding & reads)
+    measurement.ts              → /api/v1/measurement/* endpoint calls (measurement workflow)
+    calibration.ts              → /api/v1/calibration/* endpoint calls (calibration workflow)
   stores/
     deviceStore.ts              → Device Pinia store
     calibration/index.ts        → Calibration Pinia store
-    measurement/deviceStore.ts  → Measurement Pinia store
+    measurement/index.ts        → Measurement Pinia store (independent from calibration)
+    measurement/deviceStore.ts  → Measurement device selection store
   views/                        → Page-level components by business domain
   components/
     calibration/                → Calibration workflow components
     measurement/                → Measurement components
-    common/                     → Shared: Sidebar, StatCard, DeviceStatusBadge
+    common/                     → Shared: Sidebar, StatCard, DeviceStatusBadge, Device1604Panel, PressDevicePanel, ChannelMatrix
   styles/
     variables.scss              → CSS custom properties (dark theme)
     button-override.css         → Element Plus button style overrides
@@ -112,12 +121,15 @@ Layout: 240px fixed sidebar + main content area. Dark industrial theme with gold
 
 ### API Structure
 
-22 endpoints under `/api/v1/`:
+~40 endpoints under `/api/v1/`:
 - **Health/Events**: `GET /health`, `GET /events/stream` (SSE)
 - **Config**: `GET /config/device-connect`
 - **Devices**: CRUD + connect/disconnect + unit-consistency check
-- **Sessions**: state/start/pause/resume/stop
-- **Calibration**: set devices/config/channels, generate points, pressurize, collect, fit, read pressure/stability/measure-data
+- **Sessions** (lifecycle): state/start/pause/resume/stop
+- **Session** (shared device ops): bind devices, read pressure/stability/measure-data, valve control, unit, device-info, reset
+- **Measurement**: state/start/pause/stop/data/export
+- **Calibration**: set devices/config/channels, generate points, pressurize, collect, fit, read pressure/stability/measure-data (delegates to session)
+- **Multi-press**: register/unregister/set-pressure/stop/exhaust/pressure/stability/unit/devices/stop-all
 - **Reports**: template selection
 
 ## Coding Conventions

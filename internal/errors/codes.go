@@ -11,4 +11,6 @@ var (
 	ErrNotFound = errors.New("not found")
 	// ErrInvalidStateTransition 表示状态机迁移非法。
 	ErrInvalidStateTransition = errors.New("invalid state transition")
+	// ErrPrerequisiteNotMet 表示标定启动前置条件不满足（阀门状态、设备连接等）。
+	ErrPrerequisiteNotMet = errors.New("prerequisite not met")
 )

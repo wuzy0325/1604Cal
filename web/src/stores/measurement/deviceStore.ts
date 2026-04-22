@@ -4,11 +4,13 @@ import {
   fetchDevices,
   connectDevice,
   disconnectDevice,
-  upsertDevice,
-  setCalibrationDevices,
-  readCurrentPressure,
-  type DeviceDTO
-} from '@/services/apiClient'
+  upsertDevice
+} from "@/api/device"
+import {
+  bindDevices as bindSessionDevices,
+  readPressure as readSessionPressure
+} from "@/api/session"
+import type { DeviceDTO } from "@/types/device"
 import { ElMessage } from 'element-plus'
 
 // 前端设备模型
@@ -156,8 +158,8 @@ export const useMeasurementDeviceStore = defineStore('measurementDevices', () =>
       const measureId = anyMeasure?.id || '__none__'
       if (measureId === '__none__') return
 
-      await setCalibrationDevices({ measureDeviceId: measureId, pressureDeviceId: pressureId })
-      const pressure = await readCurrentPressure()
+      await bindSessionDevices(measureId, pressureId)
+      const pressure = await readSessionPressure()
       const device = pressureDevices.value.find(d => d.id === pressureId)
       if (device) {
         device.currentPressure = pressure
@@ -174,8 +176,8 @@ export const useMeasurementDeviceStore = defineStore('measurementDevices', () =>
         try {
           const anyMeasure = measureDevices.value[0]
           if (!anyMeasure) continue
-          await setCalibrationDevices({ measureDeviceId: anyMeasure.id, pressureDeviceId: device.id })
-          const pressure = await readCurrentPressure()
+          await bindSessionDevices(anyMeasure.id, device.id)
+          const pressure = await readSessionPressure()
           device.currentPressure = pressure
         } catch {
           // 静默失败，不影响其他设备

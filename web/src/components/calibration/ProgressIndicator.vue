@@ -1,7 +1,7 @@
 <template>
   <div class="progress-indicator">
     <h4 class="title">
-      校准流程
+      标定流程
     </h4>
     <div
       class="steps"
@@ -48,7 +48,7 @@ defineProps<{
 const steps = [
   '设备连接',
   '通道选择',
-  '开始校准',
+  '开始标定',
   '数据采集',
   '数据拟合',
   '完成'
@@ -57,12 +57,12 @@ const steps = [
 
 <style scoped lang="scss">
 .progress-indicator {
-  padding: var(--spacing-md) 0;
+  padding: 0;
 
   .title {
     color: var(--text-primary);
-    margin: 0 0 var(--spacing-md) 0;
-    font-size: 13px;
+    margin: 0 0 var(--spacing-xs) 0;
+    font-size: 12px;
     font-weight: 500;
   }
 
@@ -78,13 +78,13 @@ const steps = [
       position: relative;
 
       .step-marker {
-        width: 28px;
-        height: 28px;
+        width: 24px;
+        height: 24px;
         border-radius: 50%;
         display: flex;
         align-items: center;
         justify-content: center;
-        font-size: 11px;
+        font-size: 10px;
         font-weight: bold;
         z-index: 2;
 
@@ -94,15 +94,15 @@ const steps = [
       }
 
       .step-label {
-        margin-top: var(--spacing-xs);
-        font-size: 11px;
+        margin-top: 2px;
+        font-size: 10px;
         text-align: center;
         white-space: nowrap;
       }
 
       .step-line {
         position: absolute;
-        top: 14px;
+        top: 12px;
         left: 50%;
         width: 100%;
         height: 2px;

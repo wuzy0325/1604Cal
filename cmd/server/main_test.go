@@ -61,3 +61,32 @@ func TestResolveConnectConfigLoadsFileWhenEnvPresent(t *testing.T) {
 		t.Fatalf("expected disconnect max attempts 4, got %d", cfg.DisconnectMaxAttempts)
 	}
 }
+
+func TestResolveRuntimeConfigLoadsCalibrationValveGate(t *testing.T) {
+	tempDir := t.TempDir()
+	configPath := filepath.Join(tempDir, "runtime.json")
+
+	content := `{
+		"calibration": {
+			"enforceValveCalibrationGate": true
+		}
+	}`
+
+	if err := os.WriteFile(configPath, []byte(content), 0o600); err != nil {
+		t.Fatalf("write runtime config: %v", err)
+	}
+
+	runtimeCfg, err := resolveRuntimeConfig(func(key string) string {
+		if key == configPathEnvName {
+			return configPath
+		}
+		return ""
+	})
+	if err != nil {
+		t.Fatalf("resolve runtime config returned unexpected error: %v", err)
+	}
+
+	if !runtimeCfg.Calibration.EnforceValveCalibrationGate {
+		t.Fatalf("expected runtime calibration valve gate enabled")
+	}
+}
