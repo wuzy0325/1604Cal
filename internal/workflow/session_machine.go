@@ -54,12 +54,15 @@ func NewSessionMachine() *SessionMachine {
 			domain.SessionStateAwaitAlarmResolution: {
 				domain.SessionStateCollecting: {},
 				domain.SessionStatePointDone:  {},
+				domain.SessionStatePaused:     {},
 				domain.SessionStateStopped:    {},
 			},
 			domain.SessionStatePointDone: {
-				domain.SessionStatePressurizing: {},
-				domain.SessionStateFitting:      {},
-				domain.SessionStateStopped:      {},
+				domain.SessionStatePressurizing:         {},
+				domain.SessionStateAwaitAlarmResolution: {},
+				domain.SessionStateFitting:              {},
+				domain.SessionStatePaused:               {},
+				domain.SessionStateStopped:              {},
 			},
 			domain.SessionStateFitting: {
 				domain.SessionStateCompleted: {},

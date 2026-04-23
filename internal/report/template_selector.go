@@ -20,7 +20,7 @@ func modeSuffix(mode string) (string, error) {
 	switch mode {
 	case "single", "s":
 		return "s", nil
-	case "return", "m":
+	case "roundTrip", "return", "m":
 		return "m", nil
 	default:
 		return "", fmt.Errorf("invalid pressure mode: %s", mode)

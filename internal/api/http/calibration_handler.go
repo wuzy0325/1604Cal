@@ -118,7 +118,7 @@ func (s *apiServer) calibrationSetChannelsHandler(w http.ResponseWriter, r *http
 	}
 
 	s.calibrationService.SetChannels(req.Channels)
-	writeSuccess(w, http.StatusOK, channelsResponse{Channels: req.Channels})
+	writeSuccess(w, http.StatusOK, channelsResponse(req))
 }
 
 func (s *apiServer) calibrationGetChannelsHandler(w http.ResponseWriter, r *http.Request) {

@@ -196,9 +196,10 @@ func (s *Service) Pressurize(ctx context.Context, pointIndex int) error {
 		s.mu.Unlock()
 		return fmt.Errorf("invalid point index: %d", pointIndex)
 	}
-	point := &s.pressurePoints[pointIndex-1]
-	point.Status = "pressurizing"
+	targetPressure := s.pressurePoints[pointIndex-1].TargetPressure
 	s.mu.Unlock()
+
+	s.updatePointStatus(pointIndex, "pressurizing")
 
 	// 状态迁移: -> pressurizing
 	if err := s.sessionMachine.Transition(domain.SessionStatePressurizing); err != nil {
@@ -207,7 +208,7 @@ func (s *Service) Pressurize(ctx context.Context, pointIndex int) error {
 	s.publishSessionState()
 
 	// 设置目标压力
-	if err := s.pressureDriver.SetTargetPressure(ctx, point.TargetPressure); err != nil {
+	if err := s.pressureDriver.SetTargetPressure(ctx, targetPressure); err != nil {
 		s.markPointError(pointIndex, err.Error())
 		return fmt.Errorf("set target pressure: %w", err)
 	}
@@ -220,9 +221,7 @@ func (s *Service) Pressurize(ctx context.Context, pointIndex int) error {
 		}
 	}
 
-	s.mu.Lock()
-	point.Status = "stabilizing"
-	s.mu.Unlock()
+	s.updatePointStatus(pointIndex, "stabilizing")
 
 	// 状态迁移: pressurizing -> stabilizing
 	if err := s.sessionMachine.Transition(domain.SessionStateStabilizing); err != nil {
@@ -243,13 +242,13 @@ func (s *Service) Pressurize(ctx context.Context, pointIndex int) error {
 	actual, err := s.pressureDriver.ReadCurrentPressure(ctx)
 	if err == nil {
 		s.mu.Lock()
-		point.ActualPressure = actual
+		s.pressurePoints[pointIndex-1].ActualPressure = actual
 		s.mu.Unlock()
 	}
 
 	s.publish("pressure.applied", map[string]any{
 		"pointIndex":     pointIndex,
-		"targetPressure": point.TargetPressure,
+		"targetPressure": targetPressure,
 		"actualPressure": actual,
 	})
 

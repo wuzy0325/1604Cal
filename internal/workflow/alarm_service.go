@@ -8,8 +8,14 @@ import (
 )
 
 const (
-	alarmDecisionContinue = "continue"
-	alarmDecisionRetry    = "retry"
+	// AlarmDecisionContinue 继续采集后续流程。
+	AlarmDecisionContinue = "continue"
+	// AlarmDecisionSkip 跳过当前压力点。
+	AlarmDecisionSkip = "skip"
+	// AlarmDecisionRecollect 重新采集当前压力点。
+	AlarmDecisionRecollect = "recollect"
+	// AlarmDecisionStop 停止自动采集流程。
+	AlarmDecisionStop = "stop"
 )
 
 // AlarmResult 表示一次报警判定结果。
@@ -94,9 +100,10 @@ func (s *AlarmService) EvaluateMultiChannel(alarmConfig domain.AlarmConfig, targ
 
 // ValidateDecision 校验报警后的用户决策动作是否合法。
 func (s *AlarmService) ValidateDecision(decision string) error {
-	if decision == alarmDecisionContinue || decision == alarmDecisionRetry {
+	switch decision {
+	case AlarmDecisionContinue, AlarmDecisionSkip, AlarmDecisionRecollect, AlarmDecisionStop:
 		return nil
+	default:
+		return fmt.Errorf("invalid alarm decision: %s", decision)
 	}
-
-	return fmt.Errorf("invalid alarm decision: %s", decision)
 }

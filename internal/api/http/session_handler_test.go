@@ -87,15 +87,24 @@ func TestSessionStartWithoutDeviceRejected(t *testing.T) {
 }
 
 func newSessionRouterWithMeasureDriver(t *testing.T) http.Handler {
+	router, _ := newSessionRouterWithMeasureDriverAndFakeDriver(t)
+	return router
+}
+
+func newSessionRouterWithMeasureDriverAndFakeDriver(t *testing.T) (http.Handler, *sessionFakeMeasureDriver) {
 	t.Helper()
+
+	fakeDriver := &sessionFakeMeasureDriver{
+		valveStatus:              "measurement",
+		unit:                     "kPa",
+		calibrateZeroResult:      []float64{0.11},
+		calibrateFullScaleResult: []float64{9.99},
+	}
 
 	store := manager.NewDeviceManager()
 	connector := &sessionTestConnector{
 		activeDrivers: map[string]device.ConnectionDriver{
-			"m1": &sessionFakeMeasureDriver{
-				valveStatus: "measurement",
-				unit:        "kPa",
-			},
+			"m1": fakeDriver,
 		},
 	}
 	router := NewRouterWithDependencies(store, connector)
@@ -127,7 +136,7 @@ func newSessionRouterWithMeasureDriver(t *testing.T) http.Handler {
 		t.Fatalf("set calibration config failed, status=%d", configRec.Code)
 	}
 
-	return router
+	return router, fakeDriver
 }
 
 func newSessionRouterWithMeasureDriverAndRuntimeConfig(t *testing.T, runtimeCfg CalibrationRuntimeConfig) http.Handler {
@@ -201,6 +210,88 @@ func TestSessionStartAllowsWhenValveGateDisabled(t *testing.T) {
 	}
 }
 
+func TestSessionValvePutRejectsInvalidStatus(t *testing.T) {
+	router := newSessionRouterWithMeasureDriver(t)
+	body := bytes.NewReader([]byte(`{"status":"invalid"}`))
+	req := httptest.NewRequest(http.MethodPut, "/api/v1/session/valve", body)
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected status 400 for invalid valve status, got %d", rec.Code)
+	}
+}
+
+func TestSessionValvePutUpdatesStatus(t *testing.T) {
+	router, _ := newSessionRouterWithMeasureDriverAndFakeDriver(t)
+	body := bytes.NewReader([]byte(`{"status":"calibration"}`))
+	req := httptest.NewRequest(http.MethodPut, "/api/v1/session/valve", body)
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status 200 for set valve via PUT, got %d", rec.Code)
+	}
+
+	getReq := httptest.NewRequest(http.MethodGet, "/api/v1/session/valve", nil)
+	getRec := httptest.NewRecorder()
+	router.ServeHTTP(getRec, getReq)
+	if getRec.Code != http.StatusOK {
+		t.Fatalf("expected status 200 for valve get, got %d", getRec.Code)
+	}
+
+	var resp dto.Response[map[string]string]
+	if err := json.NewDecoder(getRec.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if resp.Data["status"] != "calibration" {
+		t.Fatalf("expected valve status calibration, got %s", resp.Data["status"])
+	}
+}
+
+func TestSessionCalibrateZeroEndpoint(t *testing.T) {
+	router, fakeDriver := newSessionRouterWithMeasureDriverAndFakeDriver(t)
+	body := bytes.NewReader([]byte(`{"channels":[1,2]}`))
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/session/calibrate-zero", body)
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status 200 for calibrate zero, got %d", rec.Code)
+	}
+
+	if len(fakeDriver.calibrateZeroChannels) != 2 || fakeDriver.calibrateZeroChannels[0] != 1 || fakeDriver.calibrateZeroChannels[1] != 2 {
+		t.Fatalf("expected calibrate zero channels [1 2], got %v", fakeDriver.calibrateZeroChannels)
+	}
+}
+
+func TestSessionCalibrateFullScaleEndpoint(t *testing.T) {
+	router, fakeDriver := newSessionRouterWithMeasureDriverAndFakeDriver(t)
+	body := bytes.NewReader([]byte(`{"channels":[3],"fullScaleValue":100}`))
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/session/calibrate-full-scale", body)
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status 200 for calibrate full scale, got %d", rec.Code)
+	}
+
+	if len(fakeDriver.calibrateFullScaleChannels) != 1 || fakeDriver.calibrateFullScaleChannels[0] != 3 {
+		t.Fatalf("expected calibrate full scale channels [3], got %v", fakeDriver.calibrateFullScaleChannels)
+	}
+	if fakeDriver.calibrateFullScaleValue != 100 {
+		t.Fatalf("expected full scale value 100, got %v", fakeDriver.calibrateFullScaleValue)
+	}
+}
+
 // sessionTestConnector 提供测试用的活动驱动，用于模拟已连接设备。
 type sessionTestConnector struct {
 	activeDrivers map[string]device.ConnectionDriver
@@ -223,8 +314,13 @@ func (c *sessionTestConnector) GetActiveDriver(id string) device.ConnectionDrive
 
 // sessionFakeMeasureDriver 仅实现会话启动/停止测试所需的计量驱动能力。
 type sessionFakeMeasureDriver struct {
-	valveStatus string
-	unit        string
+	valveStatus                string
+	unit                       string
+	calibrateZeroChannels      []int
+	calibrateFullScaleChannels []int
+	calibrateFullScaleValue    float64
+	calibrateZeroResult        []float64
+	calibrateFullScaleResult   []float64
 }
 
 func (d *sessionFakeMeasureDriver) Connect(_ context.Context) error {
@@ -275,4 +371,15 @@ func (d *sessionFakeMeasureDriver) ReadDeviceInfo(_ context.Context) (map[string
 
 func (d *sessionFakeMeasureDriver) Reset(_ context.Context) error {
 	return nil
+}
+
+func (d *sessionFakeMeasureDriver) CalibrateZero(_ context.Context, channels []int) ([]float64, error) {
+	d.calibrateZeroChannels = append([]int(nil), channels...)
+	return append([]float64(nil), d.calibrateZeroResult...), nil
+}
+
+func (d *sessionFakeMeasureDriver) CalibrateFullScale(_ context.Context, channels []int, fullScaleValue float64) ([]float64, error) {
+	d.calibrateFullScaleChannels = append([]int(nil), channels...)
+	d.calibrateFullScaleValue = fullScaleValue
+	return append([]float64(nil), d.calibrateFullScaleResult...), nil
 }

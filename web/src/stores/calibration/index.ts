@@ -214,10 +214,18 @@ export const useCalibrationStore = defineStore('calibration', () => {
     } catch (error) { console.error('停止校准失败:', error) }
   }
 
-  const resolveAlarm = async (decision: 'continue' | 'retry') => {
+  const resolveAlarm = async (decision: 'continue' | 'skip' | 'recollect' | 'stop') => {
     try {
       await apiResolveAlarm(decision)
-      ElMessage.success(decision === 'continue' ? '报警已确认，继续流程' : '将重新采集当前点')
+
+      const decisionTextMap: Record<typeof decision, string> = {
+        continue: '报警已确认，继续流程',
+        skip: '已跳过当前测点',
+        recollect: '将重新采集当前点',
+        stop: '已停止自动采集流程'
+      }
+
+      ElMessage.success(decisionTextMap[decision])
     } catch (error) {
       console.error('报警处理失败:', error)
       ElMessage.error('报警处理失败')

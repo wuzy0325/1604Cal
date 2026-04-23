@@ -16,7 +16,7 @@
     </div>
 
     <template #footer>
-      <el-button @click="handleDecision('retry')">重新采集</el-button>
+      <el-button @click="handleDecision('recollect')">重新采集</el-button>
       <el-button type="primary" @click="handleDecision('continue')">确认继续</el-button>
     </template>
   </el-dialog>
@@ -25,7 +25,7 @@
 <script setup lang="ts">
 const visible = defineModel<boolean>('visible', { default: false })
 
-const props = defineProps<{
+defineProps<{
   pointIndex?: number
   targetPressure?: number
   maxDeviation?: number
@@ -34,10 +34,10 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits<{
-  'decision': [action: 'continue' | 'retry']
+  'decision': [action: 'continue' | 'recollect']
 }>()
 
-function handleDecision(action: 'continue' | 'retry') {
+function handleDecision(action: 'continue' | 'recollect') {
   emit('decision', action)
   visible.value = false
 }

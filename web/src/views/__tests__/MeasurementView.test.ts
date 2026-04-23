@@ -40,8 +40,8 @@ describe('MeasurementView', () => {
           RouterLink: {
             template: '<a><slot /></a>'
           },
-          Device1604Panel: {
-            template: '<div>Device1604Stub</div>'
+          MeasurementDevicePanel: {
+            template: '<div>MeasurementDeviceStub</div>'
           },
           PressDevicePanel: {
             template: '<div>PressDeviceStub</div>'
@@ -56,7 +56,7 @@ describe('MeasurementView', () => {
     })
 
     expect(wrapper.text()).toContain('计量工作台')
-    expect(wrapper.text()).toContain('Device1604Stub')
+    expect(wrapper.text()).toContain('MeasurementDeviceStub')
     expect(wrapper.text()).toContain('PressDeviceStub')
     expect(wrapper.text()).toContain('启动条件')
     expect(wrapper.text()).toContain('ChannelMatrixStub')

@@ -128,6 +128,40 @@ func (d *WTN1604Driver) CollectData(ctx context.Context, channels []int) ([]floa
 	return values, nil
 }
 
+// CalibrateZero 执行调零校准并返回各通道结果。
+func (d *WTN1604Driver) CalibrateZero(ctx context.Context, channels []int) ([]float64, error) {
+	bitmap := channelsToBitmap(channels)
+	cmd := fmt.Sprintf("C 04 %s", bitmap)
+	resp, err := d.base.sendWTN1604Command(ctx, cmd, 10*time.Second)
+	if err != nil {
+		return nil, fmt.Errorf("calibrate zero: %w", err)
+	}
+
+	values, err := parseCalibrationValues(resp)
+	if err != nil {
+		return nil, fmt.Errorf("calibrate zero: %w", err)
+	}
+
+	return values, nil
+}
+
+// CalibrateFullScale 执行满量程校准并返回各通道结果。
+func (d *WTN1604Driver) CalibrateFullScale(ctx context.Context, channels []int, fullScaleValue float64) ([]float64, error) {
+	bitmap := channelsToBitmap(channels)
+	cmd := fmt.Sprintf("C 05 %s %.6f", bitmap, fullScaleValue)
+	resp, err := d.base.sendWTN1604Command(ctx, cmd, 10*time.Second)
+	if err != nil {
+		return nil, fmt.Errorf("calibrate full scale: %w", err)
+	}
+
+	values, err := parseCalibrationValues(resp)
+	if err != nil {
+		return nil, fmt.Errorf("calibrate full scale: %w", err)
+	}
+
+	return values, nil
+}
+
 func (d *WTN1604Driver) ReadDeviceInfo(ctx context.Context) (map[string]string, error) {
 	info := make(map[string]string)
 	resp, err := d.base.sendWTN1604Command(ctx, "A", 3*time.Second)
@@ -230,4 +264,34 @@ func (d *WTN1604Driver) SaveCoefficients(ctx context.Context) error {
 		return fmt.Errorf("save gain coefficient failed: response %q", resp)
 	}
 	return nil
+}
+
+func parseCalibrationValues(resp string) ([]float64, error) {
+	trimmed := strings.TrimSpace(resp)
+	if trimmed == "A" {
+		return []float64{}, nil
+	}
+	if strings.HasPrefix(trimmed, "N") {
+		return nil, fmt.Errorf("device error: %s", trimmed)
+	}
+
+	parts := strings.Fields(trimmed)
+	if len(parts) == 0 {
+		return nil, fmt.Errorf("unexpected calibration response: %q", resp)
+	}
+
+	values := make([]float64, 0, len(parts))
+	for _, part := range parts {
+		value, err := strconv.ParseFloat(part, 64)
+		if err != nil {
+			return nil, fmt.Errorf("invalid calibration value %q: %w", part, err)
+		}
+		values = append(values, value)
+	}
+
+	for i, j := 0, len(values)-1; i < j; i, j = i+1, j-1 {
+		values[i], values[j] = values[j], values[i]
+	}
+
+	return values, nil
 }

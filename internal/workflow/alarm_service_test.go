@@ -6,18 +6,26 @@ import (
 	"cal1604/internal/workflow"
 )
 
-func TestAlarmDecisionAllowsContinueOrRetryOnly(t *testing.T) {
+func TestAlarmDecisionAllowsSupportedActions(t *testing.T) {
 	svc := workflow.NewAlarmService()
 
 	if err := svc.ValidateDecision("continue"); err != nil {
 		t.Fatalf("continue should be valid, got %v", err)
 	}
 
-	if err := svc.ValidateDecision("retry"); err != nil {
-		t.Fatalf("retry should be valid, got %v", err)
+	if err := svc.ValidateDecision("skip"); err != nil {
+		t.Fatalf("skip should be valid, got %v", err)
 	}
 
-	if err := svc.ValidateDecision("skip"); err == nil {
+	if err := svc.ValidateDecision("recollect"); err != nil {
+		t.Fatalf("recollect should be valid, got %v", err)
+	}
+
+	if err := svc.ValidateDecision("stop"); err != nil {
+		t.Fatalf("stop should be valid, got %v", err)
+	}
+
+	if err := svc.ValidateDecision("retry"); err == nil {
 		t.Fatal("expected invalid decision to fail")
 	}
 }

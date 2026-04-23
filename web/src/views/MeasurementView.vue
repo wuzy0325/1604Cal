@@ -113,7 +113,7 @@ let deviceRefreshTimer: ReturnType<typeof setInterval> | null = null
 const startPolling = () => {
   if (pollTimer) return
   pollTimer = setInterval(async () => {
-    if (measurementStore.isCollecting) {
+    if (measurementStore.isRunning) {
       await Promise.all([
         measurementStore.refreshPressure(),
         measurementStore.refreshStability()
@@ -139,13 +139,26 @@ const stopPolling = () => {
 onMounted(async () => {
   await deviceStore.loadDevices()
   await measurementStore.fetchCurrentState()
-  sidebarRef.value?.checkUnitConsistency()
 
-  // 自动绑定已连接的计量设备
+  // 自动绑定已连接设备，保证进入页面即可读取会话数据。
   const connectedMeasureDev = deviceStore.measureDevices.find(d => d.status === 'connected')
-  if (connectedMeasureDev) {
+  const connectedPressureDev = deviceStore.pressureDevices.find(d => d.status === 'connected')
+
+  if (connectedMeasureDev && connectedPressureDev) {
+    await measurementStore.bindDevices(connectedMeasureDev.id, connectedPressureDev.id)
+  } else if (connectedMeasureDev) {
     await measurementStore.bindMeasureDevice(connectedMeasureDev.id)
   }
+
+  if (connectedMeasureDev) {
+    await Promise.all([
+      measurementStore.refreshDeviceInfo(),
+      measurementStore.refreshValveStatus(),
+      measurementStore.refreshMeasureUnit()
+    ])
+  }
+
+  sidebarRef.value?.checkUnitConsistency()
 
   measurementStore.setupSSE()
   startPolling()

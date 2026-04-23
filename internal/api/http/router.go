@@ -187,6 +187,8 @@ func newRouter(
 	mux.HandleFunc("/api/v1/session/stability", server.sessionReadStabilityHandler)
 	mux.HandleFunc("/api/v1/session/measure-data", server.sessionReadMeasureDataHandler)
 	mux.HandleFunc("/api/v1/session/valve", server.sessionValveHandler)
+	mux.HandleFunc("/api/v1/session/calibrate-zero", server.sessionCalibrateZeroHandler)
+	mux.HandleFunc("/api/v1/session/calibrate-full-scale", server.sessionCalibrateFullScaleHandler)
 	mux.HandleFunc("/api/v1/session/measure-unit", server.sessionMeasureUnitHandler)
 	mux.HandleFunc("/api/v1/session/device-info", server.sessionReadDeviceInfoHandler)
 	mux.HandleFunc("/api/v1/session/reset", server.sessionResetDeviceHandler)

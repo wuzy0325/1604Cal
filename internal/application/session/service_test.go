@@ -25,12 +25,14 @@ type fakeMeasureDriver struct {
 	resetErr    error
 }
 
-func (f *fakeMeasureDriver) Connect(_ context.Context) error                 { return nil }
-func (f *fakeMeasureDriver) Disconnect(_ context.Context) error              { return nil }
-func (f *fakeMeasureDriver) ReadValveStatus(_ context.Context) (string, error) { return f.valveStatus, f.valveErr }
+func (f *fakeMeasureDriver) Connect(_ context.Context) error    { return nil }
+func (f *fakeMeasureDriver) Disconnect(_ context.Context) error { return nil }
+func (f *fakeMeasureDriver) ReadValveStatus(_ context.Context) (string, error) {
+	return f.valveStatus, f.valveErr
+}
 func (f *fakeMeasureDriver) SetValveStatus(_ context.Context, _ string) error { return nil }
-func (f *fakeMeasureDriver) ReadUnit(_ context.Context) (string, error)      { return f.unit, f.unitErr }
-func (f *fakeMeasureDriver) SetUnit(_ context.Context, _ string) error       { return nil }
+func (f *fakeMeasureDriver) ReadUnit(_ context.Context) (string, error)       { return f.unit, f.unitErr }
+func (f *fakeMeasureDriver) SetUnit(_ context.Context, _ string) error        { return nil }
 func (f *fakeMeasureDriver) CollectData(_ context.Context, _ []int) ([]float64, error) {
 	return f.collectData, f.collectErr
 }
@@ -38,6 +40,12 @@ func (f *fakeMeasureDriver) ReadDeviceInfo(_ context.Context) (map[string]string
 	return f.info, f.infoErr
 }
 func (f *fakeMeasureDriver) Reset(_ context.Context) error { return f.resetErr }
+func (f *fakeMeasureDriver) CalibrateZero(_ context.Context, _ []int) ([]float64, error) {
+	return []float64{0}, nil
+}
+func (f *fakeMeasureDriver) CalibrateFullScale(_ context.Context, _ []int, _ float64) ([]float64, error) {
+	return []float64{1}, nil
+}
 
 type fakePressureDriver struct {
 	pressure  float64
@@ -46,17 +54,19 @@ type fakePressureDriver struct {
 	stableErr error
 }
 
-func (f *fakePressureDriver) Connect(_ context.Context) error                  { return nil }
-func (f *fakePressureDriver) Disconnect(_ context.Context) error               { return nil }
+func (f *fakePressureDriver) Connect(_ context.Context) error                      { return nil }
+func (f *fakePressureDriver) Disconnect(_ context.Context) error                   { return nil }
 func (f *fakePressureDriver) SetTargetPressure(_ context.Context, _ float64) error { return nil }
-func (f *fakePressureDriver) Stop(_ context.Context) error                     { return nil }
-func (f *fakePressureDriver) Exhaust(_ context.Context) error                  { return nil }
+func (f *fakePressureDriver) Stop(_ context.Context) error                         { return nil }
+func (f *fakePressureDriver) Exhaust(_ context.Context) error                      { return nil }
 func (f *fakePressureDriver) ReadCurrentPressure(_ context.Context) (float64, error) {
 	return f.pressure, f.pressErr
 }
-func (f *fakePressureDriver) ReadUnit(_ context.Context) (string, error)    { return "kPa", nil }
-func (f *fakePressureDriver) SetUnit(_ context.Context, _ string) error     { return nil }
-func (f *fakePressureDriver) ReadStability(_ context.Context) (bool, error) { return f.stable, f.stableErr }
+func (f *fakePressureDriver) ReadUnit(_ context.Context) (string, error) { return "kPa", nil }
+func (f *fakePressureDriver) SetUnit(_ context.Context, _ string) error  { return nil }
+func (f *fakePressureDriver) ReadStability(_ context.Context) (bool, error) {
+	return f.stable, f.stableErr
+}
 
 type fakeStore struct {
 	devices map[string]domain.Device
@@ -70,12 +80,12 @@ func newFakeStore(devs ...domain.Device) *fakeStore {
 	return s
 }
 
-func (s *fakeStore) Upsert(dev domain.Device)                { s.devices[dev.ID] = dev }
+func (s *fakeStore) Upsert(dev domain.Device)                      { s.devices[dev.ID] = dev }
 func (s *fakeStore) UpdateStatus(string, domain.DeviceStatus) bool { return true }
-func (s *fakeStore) Delete(string)                            {}
-func (s *fakeStore) Get(id string) (domain.Device, bool)      { d, ok := s.devices[id]; return d, ok }
-func (s *fakeStore) List() []domain.Device                    { return nil }
-func (s *fakeStore) CheckUnitConsistency() (bool, []string)   { return true, nil }
+func (s *fakeStore) Delete(string)                                 {}
+func (s *fakeStore) Get(id string) (domain.Device, bool)           { d, ok := s.devices[id]; return d, ok }
+func (s *fakeStore) List() []domain.Device                         { return nil }
+func (s *fakeStore) CheckUnitConsistency() (bool, []string)        { return true, nil }
 
 type publisher struct {
 	events []string

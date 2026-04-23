@@ -11,8 +11,8 @@
       <div class="status-section">
         <div class="measurement-status">
           <span :class="['status-badge', `status-${measurementStore.state}`]">{{ stateText }}</span>
-          <span v-if="measurementStore.isCollecting" class="row-count">已采集 {{ measurementStore.totalRows }} 行</span>
-          <span v-if="measurementStore.isCollecting" class="realtime-pressure">压力: {{ measurementStore.currentPressure?.toFixed(2) || '--' }} kPa</span>
+          <span v-if="measurementStore.isRunning" class="row-count">已采集 {{ measurementStore.totalRows }} 行</span>
+          <span v-if="measurementStore.isRunning" class="realtime-pressure">压力: {{ measurementStore.currentPressure?.toFixed(2) || '--' }} kPa</span>
         </div>
       </div>
     </div>
@@ -21,7 +21,7 @@
         <el-button type="success" :disabled="!canStart" @click="$emit('start')">
           <el-icon><VideoPlay /></el-icon>开始采集
         </el-button>
-        <el-button :disabled="!measurementStore.isCollecting" @click="$emit('pause')">
+        <el-button :disabled="!measurementStore.isRunning" @click="$emit('pause')">
           <el-icon><VideoPause /></el-icon>暂停
         </el-button>
         <el-button :disabled="!measurementStore.isPaused" @click="$emit('resume')">
@@ -48,10 +48,16 @@ defineEmits<{ start: []; pause: []; resume: []; stop: []; export: [] }>()
 
 const measurementStore = useMeasurementStore()
 
-const canStart = computed(() => measurementStore.isIdle && measurementStore.deviceBound)
+const canStart = computed(() => measurementStore.isStartable && measurementStore.deviceBound)
 
 const stateTextMap: Record<string, string> = {
-  idle: '空闲', collecting: '采集中', paused: '已暂停'
+  idle: '空闲',
+  pressuring: '打压中',
+  stabilizing: '稳定中',
+  collecting: '采集中',
+  completed: '已完成',
+  error: '错误',
+  paused: '已暂停'
 }
 const stateText = computed(() => stateTextMap[measurementStore.state] || measurementStore.state)
 </script>
@@ -66,7 +72,11 @@ const stateText = computed(() => stateTextMap[measurementStore.state] || measure
 .measurement-status { display: flex; gap: var(--spacing-md); align-items: center; font-size: 13px; }
 .status-badge { display: inline-flex; align-items: center; padding: 4px 10px; border-radius: var(--radius-sm); font-size: 12px; font-weight: 600; }
 .status-idle { background: var(--bg-quaternary); color: var(--text-secondary); }
+.status-pressuring { background: var(--status-warning-bg); color: var(--status-warning); }
+.status-stabilizing { background: var(--status-info-bg); color: var(--status-info); }
 .status-collecting { background: var(--status-success-bg); color: var(--status-success); }
+.status-completed { background: var(--status-success-bg); color: var(--status-success); }
+.status-error { background: var(--status-error-bg); color: var(--status-error); }
 .status-paused { background: var(--status-warning-bg); color: var(--status-warning); }
 .row-count { color: var(--text-secondary); font-size: 12px; }
 .realtime-pressure { color: var(--text-primary); font-weight: 600; font-variant-numeric: tabular-nums; font-size: 13px; }

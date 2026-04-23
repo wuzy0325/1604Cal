@@ -3,6 +3,7 @@ package http
 import (
 	"encoding/json"
 	"net/http"
+	"strings"
 
 	apperrors "cal1604/internal/errors"
 )
@@ -33,6 +34,15 @@ type measureUnitResponse struct {
 
 type setMeasureUnitRequest struct {
 	Unit string `json:"unit"`
+}
+
+type calibrateZeroRequest struct {
+	Channels []int `json:"channels"`
+}
+
+type calibrateFullScaleRequest struct {
+	Channels       []int   `json:"channels"`
+	FullScaleValue float64 `json:"fullScaleValue"`
 }
 
 func (s *apiServer) sessionSetDevicesHandler(w http.ResponseWriter, r *http.Request) {
@@ -144,7 +154,7 @@ func (s *apiServer) sessionValveHandler(w http.ResponseWriter, r *http.Request) 
 		}
 		writeSuccess(w, http.StatusOK, valveResponse{Status: status})
 
-	case http.MethodPost:
+	case http.MethodPut, http.MethodPost:
 		var req setValveRequest
 		decoder := json.NewDecoder(r.Body)
 		decoder.DisallowUnknownFields()
@@ -152,19 +162,86 @@ func (s *apiServer) sessionValveHandler(w http.ResponseWriter, r *http.Request) 
 			writeError(w, apperrors.ErrInvalidArgument)
 			return
 		}
-		if req.Status == "" {
+
+		normalizedStatus, ok := normalizeValveStatus(req.Status)
+		if !ok {
 			writeError(w, apperrors.ErrInvalidArgument)
 			return
 		}
 
-		if err := s.sessionService.SetValveStatus(r.Context(), req.Status); err != nil {
+		if err := s.sessionService.SetValveStatus(r.Context(), normalizedStatus); err != nil {
 			writeError(w, err)
 			return
 		}
-		writeSuccess(w, http.StatusOK, valveResponse{Status: req.Status})
+		writeSuccess(w, http.StatusOK, valveResponse{Status: normalizedStatus})
 
 	default:
 		w.WriteHeader(http.StatusMethodNotAllowed)
+	}
+}
+
+func (s *apiServer) sessionCalibrateZeroHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req calibrateZeroRequest
+	decoder := json.NewDecoder(r.Body)
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&req); err != nil {
+		writeError(w, apperrors.ErrInvalidArgument)
+		return
+	}
+	if len(req.Channels) == 0 {
+		writeError(w, apperrors.ErrInvalidArgument)
+		return
+	}
+
+	values, err := s.sessionService.CalibrateZero(r.Context(), req.Channels)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+
+	writeSuccess(w, http.StatusOK, map[string]any{"values": values})
+}
+
+func (s *apiServer) sessionCalibrateFullScaleHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req calibrateFullScaleRequest
+	decoder := json.NewDecoder(r.Body)
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&req); err != nil {
+		writeError(w, apperrors.ErrInvalidArgument)
+		return
+	}
+	if len(req.Channels) == 0 || req.FullScaleValue <= 0 {
+		writeError(w, apperrors.ErrInvalidArgument)
+		return
+	}
+
+	values, err := s.sessionService.CalibrateFullScale(r.Context(), req.Channels, req.FullScaleValue)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+
+	writeSuccess(w, http.StatusOK, map[string]any{"values": values})
+}
+
+func normalizeValveStatus(status string) (string, bool) {
+	switch strings.ToLower(strings.TrimSpace(status)) {
+	case "calibration":
+		return "calibration", true
+	case "measurement":
+		return "measurement", true
+	default:
+		return "", false
 	}
 }
 
@@ -195,7 +272,7 @@ func (s *apiServer) sessionMeasureUnitHandler(w http.ResponseWriter, r *http.Req
 			writeError(w, err)
 			return
 		}
-		writeSuccess(w, http.StatusOK, measureUnitResponse{Unit: req.Unit})
+		writeSuccess(w, http.StatusOK, measureUnitResponse(req))
 
 	default:
 		w.WriteHeader(http.StatusMethodNotAllowed)

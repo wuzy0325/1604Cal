@@ -53,7 +53,7 @@
           </el-button>
           <el-button
             type="danger"
-            @click="calibrationStore.resolveAlarm('retry')"
+            @click="calibrationStore.resolveAlarm('recollect')"
           >
             <el-icon><RefreshRight /></el-icon>
             报警重采

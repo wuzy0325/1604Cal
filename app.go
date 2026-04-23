@@ -9,7 +9,6 @@ import (
 	"strings"
 
 	apihttp "cal1604/internal/api/http"
-	"cal1604/internal/application/deviceconnect"
 	"cal1604/internal/config"
 	"cal1604/internal/device/manager"
 )
@@ -110,15 +109,4 @@ func resolveRuntimeConfig(getenv func(string) string) (config.AppConfig, error) 
 	}
 
 	return config.LoadFromFile(path)
-}
-
-// resolveConnectConfig 根据环境变量解析连接可靠性配置。
-// 当未配置文件路径时，返回内置默认值。
-// 兼容已有调用方。
-func resolveConnectConfig(getenv func(string) string) (deviceconnect.Config, error) {
-	runtimeCfg, err := resolveRuntimeConfig(getenv)
-	if err != nil {
-		return deviceconnect.Config{}, err
-	}
-	return runtimeCfg.ToDeviceConnectConfig(), nil
 }

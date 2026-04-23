@@ -92,7 +92,7 @@ func (s *apiServer) listTemplatesHandler(w http.ResponseWriter, r *http.Request)
 	}
 
 	if templates == nil {
-		templates = []string{}
+		templates = []report.ReportTemplate{}
 	}
 	writeSuccess(w, http.StatusOK, map[string]any{"templates": templates})
 }

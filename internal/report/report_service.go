@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
+	"strconv"
 	"strings"
 
 	"cal1604/internal/application/calibration"
@@ -15,6 +17,14 @@ type Service struct {
 	templateDir string
 }
 
+// ReportTemplate 描述一个可用报告模板。
+type ReportTemplate struct {
+	Name       string `json:"name"`
+	PointCount int    `json:"pointCount"`
+	Mode       string `json:"mode"`
+	Path       string `json:"path"`
+}
+
 // NewService 创建报告服务。
 func NewService(templateDir string) *Service {
 	return &Service{templateDir: templateDir}
@@ -22,12 +32,7 @@ func NewService(templateDir string) *Service {
 
 // ResolveTemplatePath 解析模板绝对路径。
 func (s *Service) ResolveTemplatePath(points int, mode string) (string, error) {
-	filename, err := SelectTemplate(points, mode)
-	if err != nil {
-		return "", err
-	}
-
-	return filepath.Join(s.templateDir, filename), nil
+	return s.MatchTemplate(points, mode)
 }
 
 // ExportReport 根据 CalibrationSession 生成校准报告并保存到 outputPath。
@@ -128,8 +133,8 @@ func (s *Service) exportFallback(outputPath string, standardValues []float64, ch
 	return nil
 }
 
-// GetTemplates 返回模板目录中可用的模板文件列表。
-func (s *Service) GetTemplates() ([]string, error) {
+// GetTemplates 返回模板目录中可用的模板列表与元信息。
+func (s *Service) GetTemplates() ([]ReportTemplate, error) {
 	entries, err := os.ReadDir(s.templateDir)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -138,18 +143,84 @@ func (s *Service) GetTemplates() ([]string, error) {
 		return nil, fmt.Errorf("read template dir: %w", err)
 	}
 
-	var templates []string
+	templates := make([]ReportTemplate, 0, len(entries))
 	for _, entry := range entries {
 		if entry.IsDir() {
 			continue
 		}
-		name := entry.Name()
-		if strings.HasSuffix(strings.ToLower(name), ".xlsx") {
-			templates = append(templates, name)
+
+		template, ok := parseTemplateFileName(entry.Name())
+		if !ok {
+			continue
 		}
+		template.Path = filepath.Join(s.templateDir, entry.Name())
+		templates = append(templates, template)
 	}
 
+	sort.Slice(templates, func(i, j int) bool {
+		if templates[i].PointCount != templates[j].PointCount {
+			return templates[i].PointCount < templates[j].PointCount
+		}
+		if templates[i].Mode != templates[j].Mode {
+			return templates[i].Mode < templates[j].Mode
+		}
+		return templates[i].Name < templates[j].Name
+	})
+
 	return templates, nil
+}
+
+// MatchTemplate 根据点数与模式匹配模板绝对路径。
+func (s *Service) MatchTemplate(pointCount int, mode string) (string, error) {
+	filename, err := SelectTemplate(pointCount, mode)
+	if err != nil {
+		return "", err
+	}
+
+	fullPath := filepath.Join(s.templateDir, filename)
+	if _, err := os.Stat(fullPath); err != nil {
+		if os.IsNotExist(err) {
+			return "", fmt.Errorf("template not found: %s", filename)
+		}
+		return "", fmt.Errorf("check template: %w", err)
+	}
+
+	return fullPath, nil
+}
+
+func parseTemplateFileName(filename string) (ReportTemplate, bool) {
+	ext := filepath.Ext(filename)
+	if !strings.EqualFold(ext, ".xlsx") {
+		return ReportTemplate{}, false
+	}
+
+	base := strings.TrimSuffix(filename, ext)
+	if len(base) < 2 {
+		return ReportTemplate{}, false
+	}
+
+	suffix := strings.ToLower(base[len(base)-1:])
+	pointPart := base[:len(base)-1]
+	pointCount, err := strconv.Atoi(pointPart)
+	if err != nil || pointCount <= 0 {
+		return ReportTemplate{}, false
+	}
+
+	mode := ""
+	switch suffix {
+	case "s":
+		mode = "single"
+	case "m":
+		mode = "roundTrip"
+	default:
+		return ReportTemplate{}, false
+	}
+
+	return ReportTemplate{
+		Name:       base,
+		PointCount: pointCount,
+		Mode:       mode,
+	}, true
 }
 
 // collectChannelData 从会话压力点中按通道提取采集数据。

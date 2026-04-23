@@ -91,8 +91,8 @@ export async function fitData(): Promise<FittingResultDTO> {
   return resp.data
 }
 
-/** 确认报警决策（continue 或 retry） */
-export async function resolveAlarm(decision: 'continue' | 'retry'): Promise<void> {
+/** 确认报警决策（continue/skip/recollect/stop） */
+export async function resolveAlarm(decision: 'continue' | 'skip' | 'recollect' | 'stop'): Promise<void> {
   await requestJSON<ApiResponse<{ status: string }>>('/calibration/resolve-alarm', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },

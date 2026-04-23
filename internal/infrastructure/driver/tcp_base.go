@@ -64,34 +64,6 @@ func (d *tcpConnectionDriver) Disconnect(_ context.Context) error {
 	return nil
 }
 
-// sendCommand 发送命令并读取响应（带超时），用于 WTN1604 协议。
-func (d *tcpConnectionDriver) sendCommand(ctx context.Context, cmd string, readTimeout time.Duration) (string, error) {
-	d.mu.Lock()
-	defer d.mu.Unlock()
-	if d.conn == nil {
-		return "", fmt.Errorf("%s: not connected", d.model)
-	}
-	deadline, ok := ctx.Deadline()
-	if !ok {
-		deadline = time.Now().Add(5 * time.Second)
-	}
-	if err := d.conn.SetWriteDeadline(deadline); err != nil {
-		return "", fmt.Errorf("%s set write deadline: %w", d.model, err)
-	}
-	if _, err := d.conn.Write([]byte(cmd)); err != nil {
-		return "", fmt.Errorf("%s write command %q: %w", d.model, cmd, err)
-	}
-	if err := d.conn.SetReadDeadline(time.Now().Add(readTimeout)); err != nil {
-		return "", fmt.Errorf("%s set read deadline: %w", d.model, err)
-	}
-	buf := make([]byte, 4096)
-	n, err := d.conn.Read(buf)
-	if err != nil {
-		return "", fmt.Errorf("%s read response: %w", d.model, err)
-	}
-	return strings.TrimSpace(string(buf[:n])), nil
-}
-
 // sendSCPICommand 发送 SCPI 命令并读取响应（带超时）。
 func (d *tcpConnectionDriver) sendSCPICommand(ctx context.Context, cmd string, readTimeout time.Duration) (string, error) {
 	d.mu.Lock()

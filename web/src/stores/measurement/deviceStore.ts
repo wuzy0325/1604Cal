@@ -10,6 +10,10 @@ import {
   bindDevices as bindSessionDevices,
   readPressure as readSessionPressure
 } from "@/api/session"
+import {
+  multipressRegister,
+  multipressUnregister
+} from "@/api/multipress"
 import type { DeviceDTO } from "@/types/device"
 import { ElMessage } from 'element-plus'
 
@@ -127,19 +131,16 @@ export const useMeasurementDeviceStore = defineStore('measurementDevices', () =>
 
     try {
       device.status = 'connecting'
-      const updatedDto = await connectDevice(id)
-      const updated = dtoToPressureDevice(updatedDto)
-      Object.assign(device, updated)
+      await multipressRegister(id)
 
-      if (updated.status !== 'connected') {
-        const reason = updatedDto.lastErrorReason || '未知原因'
-        ElMessage.error(`连接设备 ${device.name} 失败：${reason}`)
-        return false
+      device.status = 'connected'
+      if (typeof device.currentPressure !== 'number') {
+        device.currentPressure = 0
       }
 
       ElMessage.success(`设备 ${device.name} 连接成功`)
 
-      // 连接成功后立即绑定到校准服务并读取初始压力
+      // 连接成功后尝试读取初始压力值。
       await refreshPressureForDevice(id)
       return true
     } catch (error) {
@@ -153,8 +154,8 @@ export const useMeasurementDeviceStore = defineStore('measurementDevices', () =>
   // 刷新打压设备的实时压力值
   const refreshPressureForDevice = async (pressureId: string) => {
     try {
-      // 找到任意一个计量设备ID（校准服务需要同时设置两个设备）
-      const anyMeasure = measureDevices.value[0]
+      // 优先选择已连接的计量设备，回退到列表中的第一个设备。
+      const anyMeasure = measureDevices.value.find(d => d.status === 'connected') ?? measureDevices.value[0]
       const measureId = anyMeasure?.id || '__none__'
       if (measureId === '__none__') return
 
@@ -174,7 +175,7 @@ export const useMeasurementDeviceStore = defineStore('measurementDevices', () =>
     for (const device of pressureDevices.value) {
       if (device.status === 'connected') {
         try {
-          const anyMeasure = measureDevices.value[0]
+          const anyMeasure = measureDevices.value.find(d => d.status === 'connected') ?? measureDevices.value[0]
           if (!anyMeasure) continue
           await bindSessionDevices(anyMeasure.id, device.id)
           const pressure = await readSessionPressure()
@@ -191,9 +192,9 @@ export const useMeasurementDeviceStore = defineStore('measurementDevices', () =>
     if (!device) return
 
     try {
-      const updatedDto = await disconnectDevice(id)
-      const updated = dtoToPressureDevice(updatedDto)
-      Object.assign(device, updated)
+      await multipressUnregister(id)
+      device.status = 'disconnected'
+      device.currentPressure = undefined
       ElMessage.success(`设备 ${device.name} 已断开`)
     } catch (error) {
       console.error('断开设备失败:', error)

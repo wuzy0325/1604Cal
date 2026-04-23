@@ -189,6 +189,32 @@ func (s *Service) SetValveStatus(ctx context.Context, status string) error {
 	return drv.SetValveStatus(ctx, status)
 }
 
+// CalibrateZero 对指定通道执行调零校准。
+func (s *Service) CalibrateZero(ctx context.Context, channels []int) ([]float64, error) {
+	s.mu.Lock()
+	drv := s.measureDriver
+	s.mu.Unlock()
+
+	if drv == nil {
+		return nil, ErrMeasureDeviceNotSet
+	}
+
+	return drv.CalibrateZero(ctx, channels)
+}
+
+// CalibrateFullScale 对指定通道执行满量程校准。
+func (s *Service) CalibrateFullScale(ctx context.Context, channels []int, fullScaleValue float64) ([]float64, error) {
+	s.mu.Lock()
+	drv := s.measureDriver
+	s.mu.Unlock()
+
+	if drv == nil {
+		return nil, ErrMeasureDeviceNotSet
+	}
+
+	return drv.CalibrateFullScale(ctx, channels, fullScaleValue)
+}
+
 // ReadMeasureUnit 读取计量设备压力单位。
 func (s *Service) ReadMeasureUnit(ctx context.Context) (string, error) {
 	s.mu.Lock()

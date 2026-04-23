@@ -67,9 +67,41 @@ describe('useMeasurementStore', () => {
     it('computes isCollecting/isPaused/isIdle correctly', () => {
       const store = useMeasurementStore()
       expect(store.isIdle).toBe(true)
+      expect(store.isRunning).toBe(false)
       expect(store.isCollecting).toBe(false)
       expect(store.isPaused).toBe(false)
       expect(store.deviceBound).toBe(false)
+    })
+  })
+
+  describe('isRunning', () => {
+    it('is true for pressuring/stabilizing/collecting', () => {
+      const store = useMeasurementStore()
+
+      store.syncState('pressuring')
+      expect(store.isRunning).toBe(true)
+
+      store.syncState('stabilizing')
+      expect(store.isRunning).toBe(true)
+
+      store.syncState('collecting')
+      expect(store.isRunning).toBe(true)
+    })
+
+    it('is false for idle/paused/completed/error', () => {
+      const store = useMeasurementStore()
+
+      store.syncState('idle')
+      expect(store.isRunning).toBe(false)
+
+      store.syncState('paused')
+      expect(store.isRunning).toBe(false)
+
+      store.syncState('completed')
+      expect(store.isRunning).toBe(false)
+
+      store.syncState('error')
+      expect(store.isRunning).toBe(false)
     })
   })
 
@@ -95,6 +127,34 @@ describe('useMeasurementStore', () => {
       expect(sessionApi.bindMeasureDevice).toHaveBeenCalledWith('m2')
       expect(store.measureDeviceId).toBe('m2')
       expect(store.deviceBound).toBe(true)
+    })
+  })
+
+  describe('unbind device ids', () => {
+    it('clears pressure device id when unbinding pressure device', async () => {
+      vi.mocked(sessionApi.bindDevices).mockResolvedValue(undefined)
+      const store = useMeasurementStore()
+
+      await store.bindDevices('m1', 'p1')
+      expect(store.pressureDeviceId).toBe('p1')
+
+      store.unbindPressureDevice()
+      expect(store.pressureDeviceId).toBe('')
+      expect(store.measureDeviceId).toBe('m1')
+      expect(store.deviceBound).toBe(true)
+    })
+
+    it('clears both ids when unbinding measure device', async () => {
+      vi.mocked(sessionApi.bindDevices).mockResolvedValue(undefined)
+      const store = useMeasurementStore()
+
+      await store.bindDevices('m1', 'p1')
+      expect(store.deviceBound).toBe(true)
+
+      store.unbindMeasureDevice()
+      expect(store.measureDeviceId).toBe('')
+      expect(store.pressureDeviceId).toBe('')
+      expect(store.deviceBound).toBe(false)
     })
   })
 

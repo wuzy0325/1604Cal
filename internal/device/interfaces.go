@@ -28,6 +28,10 @@ type MeasureDriver interface {
 	ReadUnit(ctx context.Context) (string, error)
 	SetUnit(ctx context.Context, unit string) error
 	CollectData(ctx context.Context, channels []int) ([]float64, error)
+	// CalibrateZero 执行调零校准，返回各通道调零结果。
+	CalibrateZero(ctx context.Context, channels []int) ([]float64, error)
+	// CalibrateFullScale 执行满量程校准，返回各通道校准结果。
+	CalibrateFullScale(ctx context.Context, channels []int, fullScaleValue float64) ([]float64, error)
 	ReadDeviceInfo(ctx context.Context) (map[string]string, error)
 	Reset(ctx context.Context) error
 }

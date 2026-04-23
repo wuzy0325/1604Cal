@@ -29,15 +29,15 @@ func (s *Service) Collect(ctx context.Context, pointIndex int) ([]float64, error
 		return nil, fmt.Errorf("invalid point index: %d", pointIndex)
 	}
 	measureDriver := s.measureDriver
-	point := &s.pressurePoints[pointIndex-1]
-	point.Status = "collecting"
-	targetPressure := point.TargetPressure
+	targetPressure := s.pressurePoints[pointIndex-1].TargetPressure
 	channels := s.config.Channels
 	avgCount := s.config.AverageCount
 	if avgCount < 1 {
 		avgCount = 1
 	}
 	s.mu.Unlock()
+
+	s.updatePointStatus(pointIndex, "collecting")
 
 	// 状态迁移: -> collecting
 	if err := s.sessionMachine.Transition(domain.SessionStateCollecting); err != nil {
@@ -81,10 +81,11 @@ func (s *Service) Collect(ctx context.Context, pointIndex int) ([]float64, error
 	}
 
 	s.mu.Lock()
-	point.CollectedData = averaged
-	point.Status = "completed"
+	s.pressurePoints[pointIndex-1].CollectedData = averaged
 	s.currentPoint = pointIndex
 	s.mu.Unlock()
+
+	s.updatePointStatus(pointIndex, "completed")
 
 	// 状态迁移: collecting -> point_done
 	if err := s.sessionMachine.Transition(domain.SessionStatePointDone); err != nil {

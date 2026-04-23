@@ -18,12 +18,14 @@ type fakeMeasureDriver struct {
 	err  error
 }
 
-func (f *fakeMeasureDriver) Connect(_ context.Context) error                 { return nil }
-func (f *fakeMeasureDriver) Disconnect(_ context.Context) error              { return nil }
-func (f *fakeMeasureDriver) ReadValveStatus(_ context.Context) (string, error) { return "measurement", nil }
+func (f *fakeMeasureDriver) Connect(_ context.Context) error    { return nil }
+func (f *fakeMeasureDriver) Disconnect(_ context.Context) error { return nil }
+func (f *fakeMeasureDriver) ReadValveStatus(_ context.Context) (string, error) {
+	return "measurement", nil
+}
 func (f *fakeMeasureDriver) SetValveStatus(_ context.Context, _ string) error { return nil }
-func (f *fakeMeasureDriver) ReadUnit(_ context.Context) (string, error)      { return "kPa", nil }
-func (f *fakeMeasureDriver) SetUnit(_ context.Context, _ string) error       { return nil }
+func (f *fakeMeasureDriver) ReadUnit(_ context.Context) (string, error)       { return "kPa", nil }
+func (f *fakeMeasureDriver) SetUnit(_ context.Context, _ string) error        { return nil }
 func (f *fakeMeasureDriver) CollectData(_ context.Context, _ []int) ([]float64, error) {
 	return f.data, f.err
 }
@@ -31,17 +33,23 @@ func (f *fakeMeasureDriver) ReadDeviceInfo(_ context.Context) (map[string]string
 	return nil, nil
 }
 func (f *fakeMeasureDriver) Reset(_ context.Context) error { return nil }
+func (f *fakeMeasureDriver) CalibrateZero(_ context.Context, _ []int) ([]float64, error) {
+	return nil, nil
+}
+func (f *fakeMeasureDriver) CalibrateFullScale(_ context.Context, _ []int, _ float64) ([]float64, error) {
+	return nil, nil
+}
 
 type fakeStore struct {
 	devices map[string]domain.Device
 }
 
-func (s *fakeStore) Upsert(dev domain.Device)                { s.devices[dev.ID] = dev }
+func (s *fakeStore) Upsert(dev domain.Device)                      { s.devices[dev.ID] = dev }
 func (s *fakeStore) UpdateStatus(string, domain.DeviceStatus) bool { return true }
-func (s *fakeStore) Delete(string)                            {}
-func (s *fakeStore) Get(id string) (domain.Device, bool)      { d, ok := s.devices[id]; return d, ok }
-func (s *fakeStore) List() []domain.Device                    { return nil }
-func (s *fakeStore) CheckUnitConsistency() (bool, []string)   { return true, nil }
+func (s *fakeStore) Delete(string)                                 {}
+func (s *fakeStore) Get(id string) (domain.Device, bool)           { d, ok := s.devices[id]; return d, ok }
+func (s *fakeStore) List() []domain.Device                         { return nil }
+func (s *fakeStore) CheckUnitConsistency() (bool, []string)        { return true, nil }
 
 type embedMD struct{ device.MeasureDriver }
 
@@ -70,6 +78,78 @@ func TestInitialState(t *testing.T) {
 	svc, _ := setupMeasurementService()
 	if svc.State() != measurement.StateIdle {
 		t.Fatalf("expected idle, got %s", svc.State())
+	}
+}
+
+func TestSetStateTransitions(t *testing.T) {
+	tests := []struct {
+		name      string
+		from      measurement.State
+		to        measurement.State
+		wantError bool
+	}{
+		{name: "idle_to_pressuring", from: measurement.StateIdle, to: measurement.StatePressuring},
+		{name: "idle_to_collecting_invalid", from: measurement.StateIdle, to: measurement.StateCollecting, wantError: true},
+		{name: "pressuring_to_stabilizing", from: measurement.StatePressuring, to: measurement.StateStabilizing},
+		{name: "pressuring_to_paused", from: measurement.StatePressuring, to: measurement.StatePaused},
+		{name: "stabilizing_to_collecting", from: measurement.StateStabilizing, to: measurement.StateCollecting},
+		{name: "collecting_to_completed", from: measurement.StateCollecting, to: measurement.StateCompleted},
+		{name: "completed_to_idle", from: measurement.StateCompleted, to: measurement.StateIdle},
+		{name: "error_to_idle", from: measurement.StateError, to: measurement.StateIdle},
+		{name: "paused_to_collecting", from: measurement.StatePaused, to: measurement.StateCollecting},
+		{name: "paused_to_pressuring", from: measurement.StatePaused, to: measurement.StatePressuring},
+		{name: "paused_to_idle", from: measurement.StatePaused, to: measurement.StateIdle},
+		{name: "collecting_to_idle_invalid", from: measurement.StateCollecting, to: measurement.StateIdle, wantError: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			svc, _ := setupMeasurementService()
+			reachState(t, svc, tt.from)
+
+			err := svc.SetState(tt.to)
+			if tt.wantError {
+				if err == nil {
+					t.Fatalf("expected transition %s -> %s to fail", tt.from, tt.to)
+				}
+				return
+			}
+
+			if err != nil {
+				t.Fatalf("unexpected transition error %s -> %s: %v", tt.from, tt.to, err)
+			}
+			if got := svc.State(); got != tt.to {
+				t.Fatalf("expected state %s, got %s", tt.to, got)
+			}
+		})
+	}
+}
+
+func reachState(t *testing.T, svc *measurement.Service, target measurement.State) {
+	t.Helper()
+
+	if target == measurement.StateIdle {
+		return
+	}
+
+	steps := map[measurement.State][]measurement.State{
+		measurement.StatePressuring:  {measurement.StatePressuring},
+		measurement.StateStabilizing: {measurement.StatePressuring, measurement.StateStabilizing},
+		measurement.StateCollecting:  {measurement.StatePressuring, measurement.StateStabilizing, measurement.StateCollecting},
+		measurement.StateCompleted:   {measurement.StatePressuring, measurement.StateStabilizing, measurement.StateCollecting, measurement.StateCompleted},
+		measurement.StateError:       {measurement.StatePressuring, measurement.StateError},
+		measurement.StatePaused:      {measurement.StatePressuring, measurement.StatePaused},
+	}
+
+	path, ok := steps[target]
+	if !ok {
+		t.Fatalf("unsupported target state in test helper: %s", target)
+	}
+
+	for _, state := range path {
+		if err := svc.SetState(state); err != nil {
+			t.Fatalf("reach state %s failed at %s: %v", target, state, err)
+		}
 	}
 }
 

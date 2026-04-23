@@ -48,7 +48,12 @@ export const useMeasurementStore = defineStore('measurement', () => {
   let eventSource: EventSource | null = null
 
   // ── 计算属性 ──
+  const runningStates: MeasurementState[] = ['pressuring', 'stabilizing', 'collecting']
+  const startableStates: MeasurementState[] = ['idle', 'completed', 'error']
+
   const isCollecting = computed(() => state.value === 'collecting')
+  const isRunning = computed(() => runningStates.includes(state.value))
+  const isStartable = computed(() => startableStates.includes(state.value))
   const isPaused = computed(() => state.value === 'paused')
   const isIdle = computed(() => state.value === 'idle')
   const totalRows = computed(() => rows.value.length)
@@ -66,6 +71,19 @@ export const useMeasurementStore = defineStore('measurement', () => {
   const bindMeasureDevice = async (measureDevId: string) => {
     await apiBindMeasureDevice(measureDevId)
     measureDeviceId.value = measureDevId
+  }
+
+  const unbindMeasureDevice = () => {
+    measureDeviceId.value = ''
+    pressureDeviceId.value = ''
+    channelData.value = []
+    valveStatus.value = ''
+    measureUnit.value = ''
+    deviceInfo.value = {}
+  }
+
+  const unbindPressureDevice = () => {
+    pressureDeviceId.value = ''
   }
 
   // ── 实时数据读取 ──
@@ -211,6 +229,8 @@ export const useMeasurementStore = defineStore('measurement', () => {
     deviceInfo,
     // 计算属性
     isCollecting,
+    isRunning,
+    isStartable,
     isPaused,
     isIdle,
     totalRows,
@@ -219,6 +239,8 @@ export const useMeasurementStore = defineStore('measurement', () => {
     // 设备绑定
     bindDevices,
     bindMeasureDevice,
+    unbindMeasureDevice,
+    unbindPressureDevice,
     // 实时数据
     refreshPressure,
     refreshStability,

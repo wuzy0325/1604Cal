@@ -28,3 +28,14 @@ func TestSelectTemplateRejectsPointCountAboveSix(t *testing.T) {
 		t.Fatal("expected point count above six to be rejected")
 	}
 }
+
+func TestSelectTemplateSupportsRoundTripMode(t *testing.T) {
+	got, err := report.SelectTemplate(4, "roundTrip")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if got != "4m.xlsx" {
+		t.Fatalf("expected 4m.xlsx, got %s", got)
+	}
+}

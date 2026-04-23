@@ -21,7 +21,7 @@ var defaultAlarmService = workflow.NewAlarmService()
 type PressurePoint struct {
 	Index          int       `json:"index"`
 	TargetPressure float64   `json:"targetPressure"`
-	Status         string    `json:"status"`    // pending, pressurizing, stabilizing, collecting, completed, error
+	Status         string    `json:"status"`    // pending, pressurizing, stabilizing, collecting, completed, skipped, error
 	Direction      string    `json:"direction"` // forward | backward（回程模式标记正程/回程）
 	CollectedData  []float64 `json:"collectedData,omitempty"`
 	ActualPressure float64   `json:"actualPressure,omitempty"`
@@ -80,6 +80,8 @@ var (
 	ErrNoPendingAlarm = errors.New("no pending alarm")
 	// ErrAutoCollectionRunning 表示自动采集已在运行中。
 	ErrAutoCollectionRunning = errors.New("auto collection already running")
+	// errAutoCollectionStopped 表示自动采集因报警决策主动停止。
+	errAutoCollectionStopped = errors.New("auto collection stopped by alarm decision")
 )
 
 // StatusPublisher 广播事件。
@@ -344,12 +346,20 @@ func (s *Service) RunAutoCollection(ctx context.Context) error {
 			s.autoCollectionMu.Unlock()
 		}()
 
+		s.mu.Lock()
+		startIndex := s.resumePointIndexLocked()
+		totalPoints := len(s.pressurePoints)
+		mode := s.config.ControlMode
+		s.currentPoint = startIndex
+		s.mu.Unlock()
+
 		s.publish("autoCollection.started", map[string]any{
-			"pointCount": len(s.pressurePoints),
-			"mode":       s.config.ControlMode,
+			"pointCount": totalPoints,
+			"mode":       mode,
+			"startIndex": startIndex + 1,
 		})
 
-		for i := s.currentPoint; i < len(s.pressurePoints); i++ {
+		for i := startIndex; i < totalPoints; i++ {
 			s.autoCollectionMu.Lock()
 			ctx := s.autoCollectionCtx
 			s.autoCollectionMu.Unlock()
@@ -362,6 +372,17 @@ func (s *Service) RunAutoCollection(ctx context.Context) error {
 			s.mu.Unlock()
 
 			if err := s.collectPoint(ctx, i+1); err != nil {
+				if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+					return
+				}
+
+				if errors.Is(err, errAutoCollectionStopped) {
+					s.publish("autoCollection.stopped", map[string]any{
+						"pointIndex": i + 1,
+					})
+					return
+				}
+
 				s.publish("autoCollection.error", map[string]any{
 					"pointIndex": i + 1,
 					"error":      err.Error(),
@@ -374,6 +395,10 @@ func (s *Service) RunAutoCollection(ctx context.Context) error {
 				}
 				return
 			}
+
+			s.mu.Lock()
+			s.currentPoint = i + 1
+			s.mu.Unlock()
 		}
 
 		s.autoCollectionMu.Lock()
@@ -381,7 +406,7 @@ func (s *Service) RunAutoCollection(ctx context.Context) error {
 		s.autoCollectionMu.Unlock()
 		if ctx != nil && ctx.Err() == nil {
 			s.publish("autoCollection.completed", map[string]any{
-				"totalPoints": len(s.pressurePoints),
+				"totalPoints": totalPoints,
 			})
 		}
 	}()
@@ -446,15 +471,32 @@ func (s *Service) collectPoint(ctx context.Context, pointIndex int) error {
 	if err != nil {
 		return fmt.Errorf("alarm check point %d: %w", pointIndex, err)
 	}
-	if action == "retry" {
+
+	switch action {
+	case workflow.AlarmDecisionRecollect:
 		s.mu.Lock()
 		if pointIndex >= 1 && pointIndex <= len(s.pressurePoints) {
 			s.pressurePoints[pointIndex-1].Status = "pending"
 			s.pressurePoints[pointIndex-1].CollectedData = nil
+			s.pressurePoints[pointIndex-1].ActualPressure = 0
 		}
 		s.mu.Unlock()
-		s.publish("point.retry", map[string]any{"pointIndex": pointIndex})
+		s.publish("point.recollect", map[string]any{"pointIndex": pointIndex})
 		return s.collectPoint(ctx, pointIndex)
+
+	case workflow.AlarmDecisionSkip:
+		s.mu.Lock()
+		if pointIndex >= 1 && pointIndex <= len(s.pressurePoints) {
+			s.pressurePoints[pointIndex-1].CollectedData = nil
+		}
+		s.mu.Unlock()
+		s.updatePointStatus(pointIndex, "skipped")
+		s.publish("point.skipped", map[string]any{"pointIndex": pointIndex})
+		return nil
+
+	case workflow.AlarmDecisionStop:
+		s.publish("point.stopped", map[string]any{"pointIndex": pointIndex})
+		return errAutoCollectionStopped
 	}
 
 	s.publish("point.completed", map[string]any{"pointIndex": pointIndex, "data": data})
@@ -462,7 +504,7 @@ func (s *Service) collectPoint(ctx context.Context, pointIndex int) error {
 }
 
 // checkAlarm 检查采集数据是否触发报警，若触发则阻塞等待用户决策。
-// 返回决策动作："continue" 或 "retry"。
+// 返回决策动作：continue/skip/recollect/stop。
 func (s *Service) checkAlarm(ctx context.Context, pointIndex int, data []float64) (string, error) {
 	s.mu.Lock()
 	point := s.pressurePoints[pointIndex-1]
@@ -472,7 +514,7 @@ func (s *Service) checkAlarm(ctx context.Context, pointIndex int, data []float64
 	s.mu.Unlock()
 
 	if len(data) == 0 {
-		return "continue", nil
+		return workflow.AlarmDecisionContinue, nil
 	}
 
 	// 多通道报警判定
@@ -485,13 +527,13 @@ func (s *Service) checkAlarm(ctx context.Context, pointIndex int, data []float64
 
 	result := defaultAlarmService.EvaluateMultiChannel(alarmConfig, point.TargetPressure, maxPressure, channelData)
 	if !result.Triggered {
-		return "continue", nil
+		return workflow.AlarmDecisionContinue, nil
 	}
 
 	// 触发报警，进入等待报警确认状态
 	if err := s.sessionMachine.Transition(domain.SessionStateAwaitAlarmResolution); err != nil {
 		// 若状态机不支持该迁移，直接继续
-		return "continue", nil
+		return workflow.AlarmDecisionContinue, nil
 	}
 	s.publishSessionState()
 
@@ -516,14 +558,34 @@ func (s *Service) checkAlarm(ctx context.Context, pointIndex int, data []float64
 		s.alarmCh = nil
 		s.alarmMu.Unlock()
 
-		// 从报警状态恢复
-		_ = s.sessionMachine.Transition(domain.SessionStateCollecting)
-		s.publishSessionState()
-
-		if decision == "retry" {
-			return "retry", nil
+		if err := defaultAlarmService.ValidateDecision(decision); err != nil {
+			return "", err
 		}
-		return "continue", nil
+
+		s.publish("calibration.alarm.resolved", map[string]any{
+			"pointIndex": pointIndex,
+			"decision":   decision,
+			"triggered":  true,
+		})
+
+		switch decision {
+		case workflow.AlarmDecisionStop:
+			_ = s.sessionMachine.Transition(domain.SessionStateStopped)
+			s.publishSessionState()
+			return workflow.AlarmDecisionStop, nil
+		case workflow.AlarmDecisionRecollect:
+			_ = s.sessionMachine.Transition(domain.SessionStatePointDone)
+			s.publishSessionState()
+			return workflow.AlarmDecisionRecollect, nil
+		case workflow.AlarmDecisionSkip:
+			_ = s.sessionMachine.Transition(domain.SessionStatePointDone)
+			s.publishSessionState()
+			return workflow.AlarmDecisionSkip, nil
+		default:
+			_ = s.sessionMachine.Transition(domain.SessionStatePointDone)
+			s.publishSessionState()
+			return workflow.AlarmDecisionContinue, nil
+		}
 	case <-ctx.Done():
 		s.alarmMu.Lock()
 		s.alarmPending = false
@@ -533,8 +595,12 @@ func (s *Service) checkAlarm(ctx context.Context, pointIndex int, data []float64
 	}
 }
 
-// ResolveAlarm 用户确认报警，传入决策动作："continue" 或 "retry"。
+// ResolveAlarm 用户确认报警，传入决策动作：continue/skip/recollect/stop。
 func (s *Service) ResolveAlarm(decision string) error {
+	if err := defaultAlarmService.ValidateDecision(decision); err != nil {
+		return err
+	}
+
 	s.alarmMu.Lock()
 	defer s.alarmMu.Unlock()
 
@@ -542,12 +608,13 @@ func (s *Service) ResolveAlarm(decision string) error {
 		return ErrNoPendingAlarm
 	}
 
-	if decision != "continue" && decision != "retry" {
-		return fmt.Errorf("invalid alarm decision: %s", decision)
-	}
-
 	select {
 	case s.alarmCh <- decision:
+		s.publish("calibration.alarm.resolved", map[string]any{
+			"pointIndex": s.currentPoint + 1,
+			"decision":   decision,
+			"triggered":  true,
+		})
 		return nil
 	default:
 		return fmt.Errorf("alarm channel blocked")
@@ -582,6 +649,8 @@ func (s *Service) RetryPoint(ctx context.Context, pointIndex int) error {
 
 // PauseAutoCollection 暂停自动采集，将状态机迁移到 paused。
 func (s *Service) PauseAutoCollection() error {
+	s.StopAutoCollection()
+
 	if err := s.sessionMachine.Transition(domain.SessionStatePaused); err != nil {
 		return fmt.Errorf("transition to paused: %w", err)
 	}
@@ -591,6 +660,10 @@ func (s *Service) PauseAutoCollection() error {
 
 // ResumeAutoCollection 恢复自动采集，重新启动从当前点的自动采集循环。
 func (s *Service) ResumeAutoCollection(ctx context.Context) error {
+	s.mu.Lock()
+	s.currentPoint = s.resumePointIndexLocked()
+	s.mu.Unlock()
+
 	if err := s.sessionMachine.Transition(domain.SessionStatePressurizing); err != nil {
 		return fmt.Errorf("transition to pressurizing: %w", err)
 	}
@@ -610,7 +683,10 @@ func (s *Service) StopAutoCollection() {
 
 	s.alarmMu.Lock()
 	if s.alarmPending && s.alarmCh != nil {
-		close(s.alarmCh)
+		select {
+		case s.alarmCh <- workflow.AlarmDecisionStop:
+		default:
+		}
 		s.alarmPending = false
 		s.alarmCh = nil
 	}
@@ -625,15 +701,63 @@ func (s *Service) IsAutoCollectionRunning() bool {
 }
 
 func (s *Service) markPointError(pointIndex int, reason string) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if pointIndex >= 1 && pointIndex <= len(s.pressurePoints) {
-		s.pressurePoints[pointIndex-1].Status = "error"
-	}
+	_ = reason
+	s.updatePointStatus(pointIndex, "error")
 }
 
 func (s *Service) publishSessionState() {
 	s.publish("session.state.changed", map[string]any{
 		"state": string(s.sessionMachine.State()),
 	})
+}
+
+// updatePointStatus 更新压力点状态并发布统一事件。
+func (s *Service) updatePointStatus(pointIndex int, status string) {
+	s.mu.Lock()
+	if pointIndex < 1 || pointIndex > len(s.pressurePoints) {
+		s.mu.Unlock()
+		return
+	}
+	point := &s.pressurePoints[pointIndex-1]
+	point.Status = status
+	pointSnapshot := *point
+	if point.CollectedData != nil {
+		pointSnapshot.CollectedData = append([]float64(nil), point.CollectedData...)
+	}
+	s.mu.Unlock()
+
+	s.publish("calibration.point_status", pointSnapshot)
+}
+
+// resumePointIndexLocked 计算恢复自动采集时的起始压力点下标（0-based）。
+func (s *Service) resumePointIndexLocked() int {
+	if len(s.pressurePoints) == 0 {
+		return 0
+	}
+
+	start := s.currentPoint
+	if start < 0 {
+		start = 0
+	}
+	if start >= len(s.pressurePoints) {
+		return len(s.pressurePoints)
+	}
+
+	for i := start; i < len(s.pressurePoints); i++ {
+		if !isPointTerminalStatus(s.pressurePoints[i].Status) {
+			return i
+		}
+	}
+
+	for i := 0; i < start; i++ {
+		if !isPointTerminalStatus(s.pressurePoints[i].Status) {
+			return i
+		}
+	}
+
+	return len(s.pressurePoints)
+}
+
+func isPointTerminalStatus(status string) bool {
+	return status == "completed" || status == "skipped"
 }

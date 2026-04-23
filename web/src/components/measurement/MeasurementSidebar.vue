@@ -26,7 +26,7 @@
           <el-icon><Monitor /></el-icon>
           1604 计量设备
         </h3>
-        <Device1604Panel
+        <MeasurementDevicePanel
           @connect="handleMeasureDeviceConnect"
           @disconnect="handleMeasureDeviceDisconnect"
         />
@@ -96,7 +96,7 @@ import {
   ArrowLeft, ArrowRight, CircleCheckFilled, CircleClose,
   Warning, Grid, Monitor, FirstAidKit, ScaleToOriginal
 } from '@element-plus/icons-vue'
-import Device1604Panel from '@/components/common/Device1604Panel.vue'
+import MeasurementDevicePanel from '@/components/measurement/MeasurementDevicePanel.vue'
 import PressDevicePanel from '@/components/common/PressDevicePanel.vue'
 import ChannelMatrix from '@/components/common/ChannelMatrix.vue'
 import { fetchUnitConsistency } from "@/api/device"
@@ -111,8 +111,13 @@ const deviceStore = useMeasurementDeviceStore()
 const selectedChannels = ref<number[]>([])
 const unitConsistent = ref(true)
 const unitConflicts = ref<string[]>([])
+
+const hasConnectedPressureDevice = computed(() =>
+  deviceStore.pressureDevices.some(d => d.status === 'connected')
+)
+
 const showUnitCheck = computed(() =>
-  measurementStore.deviceBound && measurementStore.pressureDeviceId !== ''
+  measurementStore.deviceBound && hasConnectedPressureDevice.value
 )
 
 const checkUnitConsistency = async () => {
@@ -125,26 +130,50 @@ const checkUnitConsistency = async () => {
 
 const handleMeasureDeviceConnect = async (deviceId: string) => {
   const ok = await deviceStore.connectMeasureDevice(deviceId)
-  if (ok) {
-    await measurementStore.bindMeasureDevice(deviceId)
-    await measurementStore.refreshDeviceInfo()
+  if (!ok) {
+    return
   }
+
+  const connectedPressure = deviceStore.pressureDevices.find(d => d.status === 'connected')
+  if (connectedPressure) {
+    await measurementStore.bindDevices(deviceId, connectedPressure.id)
+    await checkUnitConsistency()
+  } else {
+    await measurementStore.bindMeasureDevice(deviceId)
+  }
+
+  await Promise.all([
+    measurementStore.refreshDeviceInfo(),
+    measurementStore.refreshValveStatus(),
+    measurementStore.refreshMeasureUnit()
+  ])
 }
 
 const handleMeasureDeviceDisconnect = async (deviceId: string) => {
   await deviceStore.disconnectMeasureDevice(deviceId)
+  if (measurementStore.measureDeviceId === deviceId) {
+    measurementStore.unbindMeasureDevice()
+  }
 }
 
 const handlePressDeviceConnect = async (deviceId: string) => {
   const ok = await deviceStore.connectPressureDevice(deviceId)
-  if (ok && measurementStore.measureDeviceId) {
-    await measurementStore.bindDevices(measurementStore.measureDeviceId, deviceId)
-    await checkUnitConsistency()
+  if (!ok) {
+    return
   }
+
+  if (measurementStore.measureDeviceId) {
+    await measurementStore.bindDevices(measurementStore.measureDeviceId, deviceId)
+  }
+
+  await checkUnitConsistency()
 }
 
 const handlePressDeviceDisconnect = async (deviceId: string) => {
   await deviceStore.disconnectPressureDevice(deviceId)
+  if (measurementStore.pressureDeviceId === deviceId) {
+    measurementStore.unbindPressureDevice()
+  }
 }
 
 const handleSetPressure = async (_deviceId: string, pressure: number) => {
@@ -153,7 +182,7 @@ const handleSetPressure = async (_deviceId: string, pressure: number) => {
 
 const prerequisites = computed(() => [
   { label: '设备已选择', satisfied: measurementStore.deviceBound },
-  { label: '打压设备已连接', satisfied: measurementStore.pressureDeviceId !== '' },
+  { label: '打压设备已连接', satisfied: hasConnectedPressureDevice.value },
   { label: '已选择采集通道', satisfied: selectedChannels.value.length > 0 },
   { label: '单位一致', satisfied: unitConsistent.value }
 ])

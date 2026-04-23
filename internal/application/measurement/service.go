@@ -15,16 +15,24 @@ import (
 type State string
 
 const (
-	StateIdle       State = "idle"
-	StateCollecting State = "collecting"
-	StatePaused     State = "paused"
+	StateIdle        State = "idle"
+	StatePressuring  State = "pressuring"
+	StateStabilizing State = "stabilizing"
+	StateCollecting  State = "collecting"
+	StateCompleted   State = "completed"
+	StateError       State = "error"
+	StatePaused      State = "paused"
 )
 
 // 获取状态迁移表。
 var transitions = map[State]map[State]struct{}{
-	StateIdle:       {StateCollecting: {}},
-	StateCollecting: {StatePaused: {}, StateIdle: {}},
-	StatePaused:     {StateCollecting: {}, StateIdle: {}},
+	StateIdle:        {StatePressuring: {}},
+	StatePressuring:  {StateStabilizing: {}, StateError: {}, StatePaused: {}},
+	StateStabilizing: {StateCollecting: {}, StateError: {}, StatePaused: {}},
+	StateCollecting:  {StateCompleted: {}, StateError: {}, StatePaused: {}},
+	StateCompleted:   {StateIdle: {}},
+	StateError:       {StateIdle: {}},
+	StatePaused:      {StatePressuring: {}, StateCollecting: {}, StateIdle: {}},
 }
 
 // CollectedRow 单次采集的数据行。
@@ -74,23 +82,46 @@ func (s *Service) State() State {
 // Start 启动计量采集。
 func (s *Service) Start(ctx context.Context, channels []int) error {
 	s.mu.Lock()
-	if err := s.canTransition(StateCollecting); err != nil {
-		s.mu.Unlock()
-		return fmt.Errorf("start measurement: %w", err)
-	}
-
-	// 检查计量设备是否已绑定
+	// 检查计量设备是否已绑定。
 	if s.sess.MeasureDriver() == nil {
 		s.mu.Unlock()
 		return session.ErrMeasureDeviceNotSet
 	}
 
+	stateChanges := make([]State, 0, 3)
+
+	// 从暂停恢复时保留已采集数据；其他入口重置数据。
+	if s.state != StatePaused {
+		s.rows = nil
+	}
 	s.channels = channels
-	s.rows = nil
-	s.state = StateCollecting
+
+	switch s.state {
+	case StateIdle, StateCompleted, StateError:
+		for _, next := range []State{StatePressuring, StateStabilizing, StateCollecting} {
+			if err := s.setStateLocked(next); err != nil {
+				s.mu.Unlock()
+				return fmt.Errorf("start measurement: %w", err)
+			}
+			stateChanges = append(stateChanges, next)
+		}
+	case StatePaused:
+		if err := s.setStateLocked(StateCollecting); err != nil {
+			s.mu.Unlock()
+			return fmt.Errorf("resume measurement: %w", err)
+		}
+		stateChanges = append(stateChanges, StateCollecting)
+	default:
+		err := fmt.Errorf("invalid transition: %s -> %s", s.state, StateCollecting)
+		s.mu.Unlock()
+		return fmt.Errorf("start measurement: %w", err)
+	}
+
 	s.mu.Unlock()
 
-	s.publish("measurement.state_changed", map[string]any{"state": string(StateCollecting)})
+	for _, state := range stateChanges {
+		s.publish("measurement.state_changed", map[string]any{"state": string(state)})
+	}
 
 	// 启动后台采集循环
 	s.startCollectLoop(ctx)
@@ -101,11 +132,10 @@ func (s *Service) Start(ctx context.Context, channels []int) error {
 // Pause 暂停计量采集。
 func (s *Service) Pause() error {
 	s.mu.Lock()
-	if err := s.canTransition(StatePaused); err != nil {
+	if err := s.setStateLocked(StatePaused); err != nil {
 		s.mu.Unlock()
 		return fmt.Errorf("pause measurement: %w", err)
 	}
-	s.state = StatePaused
 	s.mu.Unlock()
 
 	s.stopCollectLoop()
@@ -121,12 +151,62 @@ func (s *Service) Stop() error {
 		s.mu.Unlock()
 		return fmt.Errorf("not running")
 	}
-	s.state = StateIdle
+
+	stateChanges := make([]State, 0, 2)
+	switch s.state {
+	case StateCollecting:
+		if err := s.setStateLocked(StateCompleted); err != nil {
+			s.mu.Unlock()
+			return fmt.Errorf("stop measurement: %w", err)
+		}
+		stateChanges = append(stateChanges, StateCompleted)
+		if err := s.setStateLocked(StateIdle); err != nil {
+			s.mu.Unlock()
+			return fmt.Errorf("stop measurement: %w", err)
+		}
+		stateChanges = append(stateChanges, StateIdle)
+	case StatePressuring, StateStabilizing:
+		if err := s.setStateLocked(StatePaused); err != nil {
+			s.mu.Unlock()
+			return fmt.Errorf("stop measurement: %w", err)
+		}
+		stateChanges = append(stateChanges, StatePaused)
+		if err := s.setStateLocked(StateIdle); err != nil {
+			s.mu.Unlock()
+			return fmt.Errorf("stop measurement: %w", err)
+		}
+		stateChanges = append(stateChanges, StateIdle)
+	case StatePaused, StateCompleted, StateError:
+		if err := s.setStateLocked(StateIdle); err != nil {
+			s.mu.Unlock()
+			return fmt.Errorf("stop measurement: %w", err)
+		}
+		stateChanges = append(stateChanges, StateIdle)
+	default:
+		s.mu.Unlock()
+		return fmt.Errorf("stop measurement: unsupported state %s", s.state)
+	}
+
 	s.mu.Unlock()
 
 	s.stopCollectLoop()
-	s.publish("measurement.state_changed", map[string]any{"state": string(StateIdle)})
+	for _, state := range stateChanges {
+		s.publish("measurement.state_changed", map[string]any{"state": string(state)})
+	}
 
+	return nil
+}
+
+// SetState 进行显式状态切换，并发布状态变化事件。
+func (s *Service) SetState(state State) error {
+	s.mu.Lock()
+	if err := s.setStateLocked(state); err != nil {
+		s.mu.Unlock()
+		return err
+	}
+	s.mu.Unlock()
+
+	s.publish("measurement.state_changed", map[string]any{"state": string(state)})
 	return nil
 }
 
@@ -269,5 +349,14 @@ func (s *Service) canTransition(target State) error {
 	if _, exists := allowed[target]; !exists {
 		return fmt.Errorf("invalid transition: %s -> %s", s.state, target)
 	}
+	return nil
+}
+
+// setStateLocked 在持有 mu 时更新状态。
+func (s *Service) setStateLocked(target State) error {
+	if err := s.canTransition(target); err != nil {
+		return err
+	}
+	s.state = target
 	return nil
 }
