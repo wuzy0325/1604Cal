@@ -115,3 +115,47 @@ func TestLoadFromFileOverridesCalibrationValveGate(t *testing.T) {
 		t.Fatalf("expected valve gate enabled from config file")
 	}
 }
+
+func TestDefaultMeasurementParamsIndependentFromCalibrationParams(t *testing.T) {
+	appCfg := config.Default()
+
+	if appCfg.CalibrationParams.PointCount == appCfg.MeasurementParams.PointCount {
+		t.Fatalf("expected independent defaults, got both pointCount=%d", appCfg.CalibrationParams.PointCount)
+	}
+}
+
+func TestLoadFromFileOverridesMeasurementParamsIndependently(t *testing.T) {
+	tempDir := t.TempDir()
+	configPath := filepath.Join(tempDir, "app.json")
+
+	content := `{
+		"measurementParams": {
+			"minPressure": 1,
+			"maxPressure": 99,
+			"pointCount": 12,
+			"precision": 3,
+			"averageCount": 4,
+			"stableDurationMs": 8000,
+			"precisionLevel": 0.2,
+			"pressureMode": "roundTrip",
+			"controlMode": "manual"
+		}
+	}`
+
+	if err := os.WriteFile(configPath, []byte(content), 0o600); err != nil {
+		t.Fatalf("write test config: %v", err)
+	}
+
+	appCfg, err := config.LoadFromFile(configPath)
+	if err != nil {
+		t.Fatalf("load config: %v", err)
+	}
+
+	if appCfg.MeasurementParams.PointCount != 12 {
+		t.Fatalf("expected measurement pointCount 12, got %d", appCfg.MeasurementParams.PointCount)
+	}
+
+	if appCfg.CalibrationParams.PointCount != config.Default().CalibrationParams.PointCount {
+		t.Fatalf("expected calibration params unchanged, got %+v", appCfg.CalibrationParams)
+	}
+}

@@ -4,11 +4,36 @@ import (
 	"encoding/json"
 	"net/http"
 
+	"cal1604/internal/application/measurement"
 	apperrors "cal1604/internal/errors"
 )
 
 type measurementStartRequest struct {
 	Channels []int `json:"channels"`
+}
+
+func (s *apiServer) measurementGeneratePointsHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
+	points, err := s.measurementService.GeneratePressurePoints()
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+
+	writeSuccess(w, http.StatusOK, points)
+}
+
+func (s *apiServer) measurementPointsHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
+	writeSuccess(w, http.StatusOK, s.measurementService.GetPoints())
 }
 
 func (s *apiServer) measurementStateHandler(w http.ResponseWriter, r *http.Request) {
@@ -39,12 +64,12 @@ func (s *apiServer) measurementStartHandler(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	if err := s.measurementService.Start(r.Context(), req.Channels); err != nil {
+	if err := s.measurementService.StartWorkflow(r.Context(), req.Channels); err != nil {
 		writeError(w, err)
 		return
 	}
 
-	writeSuccess(w, http.StatusOK, map[string]string{"state": "collecting"})
+	writeSuccess(w, http.StatusOK, map[string]string{"state": string(s.measurementService.State())})
 }
 
 func (s *apiServer) measurementPauseHandler(w http.ResponseWriter, r *http.Request) {
@@ -98,4 +123,57 @@ func (s *apiServer) measurementExportHandler(w http.ResponseWriter, r *http.Requ
 		writeError(w, err)
 		return
 	}
+}
+
+func (s *apiServer) measurementAlarmConfigHandler(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodGet:
+		cfg := s.measurementService.GetAlarmConfig()
+		writeSuccess(w, http.StatusOK, cfg)
+	case http.MethodPost:
+		var cfg measurement.AlarmConfig
+		decoder := json.NewDecoder(r.Body)
+		decoder.DisallowUnknownFields()
+		if err := decoder.Decode(&cfg); err != nil {
+			writeError(w, apperrors.ErrInvalidArgument)
+			return
+		}
+		s.measurementService.SetAlarmConfig(cfg)
+		writeSuccess(w, http.StatusOK, map[string]string{"status": "saved"})
+	default:
+		w.WriteHeader(http.StatusMethodNotAllowed)
+	}
+}
+
+func (s *apiServer) measurementAlarmResolveHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req struct {
+		Decision string `json:"decision"`
+	}
+	decoder := json.NewDecoder(r.Body)
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&req); err != nil {
+		writeError(w, apperrors.ErrInvalidArgument)
+		return
+	}
+
+	if err := s.measurementService.ResolveAlarm(req.Decision); err != nil {
+		writeError(w, err)
+		return
+	}
+
+	writeSuccess(w, http.StatusOK, map[string]string{"status": "resolved"})
+}
+
+func (s *apiServer) measurementAlarmPendingHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
+	writeSuccess(w, http.StatusOK, map[string]bool{"pending": s.measurementService.IsAlarmPending()})
 }

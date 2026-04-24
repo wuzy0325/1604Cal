@@ -6,6 +6,8 @@ import (
 	"net/http"
 
 	"cal1604/internal/api/dto"
+	"cal1604/internal/application/calibration"
+	"cal1604/internal/application/session"
 	apperrors "cal1604/internal/errors"
 )
 
@@ -26,6 +28,18 @@ func writeError(w http.ResponseWriter, err error) {
 		status = http.StatusNotFound
 		code = "NOT_FOUND"
 		message = "resource not found"
+	} else if errors.Is(err, session.ErrDeviceNotFound) {
+		status = http.StatusNotFound
+		code = "DEVICE_NOT_FOUND"
+		message = "device not found"
+	} else if errors.Is(err, session.ErrMeasureDeviceNotSet) || errors.Is(err, calibration.ErrMeasureDeviceNotSet) {
+		status = http.StatusConflict
+		code = "MEASURE_DEVICE_NOT_SET"
+		message = "measure device not set"
+	} else if errors.Is(err, session.ErrPressureDeviceNotSet) || errors.Is(err, calibration.ErrPressureDeviceNotSet) {
+		status = http.StatusConflict
+		code = "PRESSURE_DEVICE_NOT_SET"
+		message = "pressure device not set"
 	} else if errors.Is(err, apperrors.ErrInvalidStateTransition) {
 		status = http.StatusConflict
 		code = "INVALID_STATE_TRANSITION"

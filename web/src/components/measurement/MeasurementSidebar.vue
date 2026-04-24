@@ -8,9 +8,9 @@
       role="button"
       tabindex="0"
       aria-label="切换侧边栏"
-      @click="$emit('toggle')"
-      @keydown.enter="$emit('toggle')"
-      @keydown.space.prevent="$emit('toggle')"
+      @click="emit('toggle')"
+      @keydown.enter="emit('toggle')"
+      @keydown.space.prevent="emit('toggle')"
     >
       <el-icon>
         <ArrowRight v-if="collapsed" />
@@ -70,7 +70,7 @@
         </h3>
         <ChannelMatrix
           :selected-channels="selectedChannels"
-          @update:selected-channels="(ch: number[]) => selectedChannels = ch"
+          @update:selected-channels="handleSelectedChannelsChange"
         />
       </div>
       <div class="sidebar-section">
@@ -91,7 +91,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import {
   ArrowLeft, ArrowRight, CircleCheckFilled, CircleClose,
   Warning, Grid, Monitor, FirstAidKit, ScaleToOriginal
@@ -102,12 +102,23 @@ import ChannelMatrix from '@/components/common/ChannelMatrix.vue'
 import { fetchUnitConsistency } from "@/api/device"
 import { useMeasurementStore } from '@/stores/measurement'
 import { useMeasurementDeviceStore } from '@/stores/measurement/deviceStore'
+import { useDeviceStore } from '@/stores/deviceStore'
+
+interface UnitCheckPayload {
+  consistent: boolean
+  conflicts: string[]
+}
 
 defineProps<{ collapsed: boolean }>()
-defineEmits<{ toggle: [] }>()
+const emit = defineEmits<{
+  toggle: []
+  channelsChange: [channels: number[]]
+  unitCheck: [payload: UnitCheckPayload]
+}>()
 
 const measurementStore = useMeasurementStore()
 const deviceStore = useMeasurementDeviceStore()
+const moduleDeviceStore = useDeviceStore()
 const selectedChannels = ref<number[]>([])
 const unitConsistent = ref(true)
 const unitConflicts = ref<string[]>([])
@@ -120,12 +131,31 @@ const showUnitCheck = computed(() =>
   measurementStore.deviceBound && hasConnectedPressureDevice.value
 )
 
+const unitCheckSatisfied = computed(() =>
+  showUnitCheck.value && unitConsistent.value
+)
+
+const emitUnitCheck = () => {
+  emit('unitCheck', {
+    consistent: unitConsistent.value,
+    conflicts: [...unitConflicts.value]
+  })
+}
+
+const handleSelectedChannelsChange = (channels: number[]) => {
+  selectedChannels.value = channels
+  emit('channelsChange', [...channels])
+}
+
 const checkUnitConsistency = async () => {
   try {
     const result = await fetchUnitConsistency()
     unitConsistent.value = result.consistent
     unitConflicts.value = result.conflicts ?? []
-  } catch { /* 静默失败 */ }
+    emitUnitCheck()
+  } catch {
+    // 静默失败：保留当前 UI 状态，不打断流程。
+  }
 }
 
 const handleMeasureDeviceConnect = async (deviceId: string) => {
@@ -134,11 +164,16 @@ const handleMeasureDeviceConnect = async (deviceId: string) => {
     return
   }
 
+  moduleDeviceStore.setModuleSelection('measurement', { measureDeviceId: deviceId })
+
   const connectedPressure = deviceStore.pressureDevices.find(d => d.status === 'connected')
   if (connectedPressure) {
     await measurementStore.bindDevices(deviceId, connectedPressure.id)
     await checkUnitConsistency()
   } else {
+    unitConsistent.value = true
+    unitConflicts.value = []
+    emitUnitCheck()
     await measurementStore.bindMeasureDevice(deviceId)
   }
 
@@ -154,6 +189,15 @@ const handleMeasureDeviceDisconnect = async (deviceId: string) => {
   if (measurementStore.measureDeviceId === deviceId) {
     measurementStore.unbindMeasureDevice()
   }
+
+  moduleDeviceStore.setModuleSelection('measurement', {
+    measureDeviceId: '',
+    pressureDeviceId: measurementStore.pressureDeviceId
+  })
+
+  unitConsistent.value = true
+  unitConflicts.value = []
+  emitUnitCheck()
 }
 
 const handlePressDeviceConnect = async (deviceId: string) => {
@@ -161,6 +205,8 @@ const handlePressDeviceConnect = async (deviceId: string) => {
   if (!ok) {
     return
   }
+
+  moduleDeviceStore.setModuleSelection('measurement', { pressureDeviceId: deviceId })
 
   if (measurementStore.measureDeviceId) {
     await measurementStore.bindDevices(measurementStore.measureDeviceId, deviceId)
@@ -174,6 +220,15 @@ const handlePressDeviceDisconnect = async (deviceId: string) => {
   if (measurementStore.pressureDeviceId === deviceId) {
     measurementStore.unbindPressureDevice()
   }
+
+  moduleDeviceStore.setModuleSelection('measurement', {
+    measureDeviceId: measurementStore.measureDeviceId,
+    pressureDeviceId: ''
+  })
+
+  unitConsistent.value = true
+  unitConflicts.value = []
+  emitUnitCheck()
 }
 
 const handleSetPressure = async (_deviceId: string, pressure: number) => {
@@ -184,8 +239,17 @@ const prerequisites = computed(() => [
   { label: '设备已选择', satisfied: measurementStore.deviceBound },
   { label: '打压设备已连接', satisfied: hasConnectedPressureDevice.value },
   { label: '已选择采集通道', satisfied: selectedChannels.value.length > 0 },
-  { label: '单位一致', satisfied: unitConsistent.value }
+  { label: '单位一致', satisfied: unitCheckSatisfied.value }
 ])
+
+onMounted(() => {
+  if (measurementStore.channels.length > 0) {
+    selectedChannels.value = [...measurementStore.channels]
+    emit('channelsChange', [...measurementStore.channels])
+  }
+
+  emitUnitCheck()
+})
 
 defineExpose({ checkUnitConsistency, selectedChannels })
 </script>

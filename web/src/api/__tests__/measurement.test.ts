@@ -1,0 +1,63 @@
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+
+import {
+  getMeasurementParamsConfig,
+  saveMeasurementParamsConfig,
+  type MeasurementParamsPayload
+} from '../measurement'
+import * as clientApi from '../client'
+
+vi.mock('../client', () => ({
+  requestJSON: vi.fn()
+}))
+
+describe('measurement api config endpoints', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('loads measurement params from dedicated endpoint', async () => {
+    const payload: MeasurementParamsPayload = {
+      minPressure: 0,
+      maxPressure: 100,
+      pointCount: 6,
+      precision: 2,
+      averageCount: 1,
+      stableDurationMs: 5000,
+      precisionLevel: 0.05,
+      pressureMode: 'single',
+      controlMode: 'auto'
+    }
+
+    vi.mocked(clientApi.requestJSON).mockResolvedValue({ data: payload })
+
+    const result = await getMeasurementParamsConfig()
+
+    expect(result).toEqual(payload)
+    expect(clientApi.requestJSON).toHaveBeenCalledWith('/config/measurement')
+  })
+
+  it('saves measurement params to dedicated endpoint', async () => {
+    const payload: MeasurementParamsPayload = {
+      minPressure: 10,
+      maxPressure: 200,
+      pointCount: 8,
+      precision: 3,
+      averageCount: 2,
+      stableDurationMs: 7000,
+      precisionLevel: 0.1,
+      pressureMode: 'roundTrip',
+      controlMode: 'manual'
+    }
+
+    vi.mocked(clientApi.requestJSON).mockResolvedValue({ data: { status: 'ok' } })
+
+    await saveMeasurementParamsConfig(payload)
+
+    expect(clientApi.requestJSON).toHaveBeenCalledWith('/config/measurement', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    })
+  })
+})

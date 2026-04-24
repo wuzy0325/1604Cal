@@ -44,7 +44,7 @@
           role="progressbar"
           :aria-valuenow="currentPressure"
           aria-valuemin="0"
-          :aria-valuemax="targetPressure"
+          :aria-valuemax="targetPressureForMath"
         >
           <div
             class="mini-bar-fill"
@@ -172,9 +172,19 @@ interface ChannelInfo {
   isActive: boolean
 }
 
+const props = withDefaults(defineProps<{
+  targetPressure?: number | null
+  completedPoints?: number
+  totalPoints?: number
+}>(), {
+  targetPressure: null,
+  completedPoints: 0,
+  totalPoints: 0
+})
+
 // 响应式数据
 const currentPressure = ref(0)
-const targetPressure = ref(1000)
+const eventTargetPressure = ref<number | null>(null)
 const isStable = ref(false)
 const stableDuration = ref(0)
 const stabilityThreshold = ref(0.5)
@@ -192,10 +202,28 @@ const channelData = ref<ChannelInfo[]>(
 )
 
 const deviceStore = useDeviceStore()
-const showProgress = ref(true)
-const completedPoints = ref(3)
-const totalPoints = ref(10)
-const estimatedTime = ref('--')
+
+const totalPoints = computed(() => Math.max(0, Math.round(props.totalPoints)))
+
+const completedPoints = computed(() => {
+  const raw = Math.max(0, Math.round(props.completedPoints))
+  if (totalPoints.value === 0) {
+    return 0
+  }
+
+  return Math.min(totalPoints.value, raw)
+})
+
+const showProgress = computed(() => totalPoints.value > 0)
+
+const estimatedTime = computed(() => {
+  const remaining = totalPoints.value - completedPoints.value
+  if (remaining <= 0) {
+    return '00:00'
+  }
+
+  return '--'
+})
 
 // 计算属性
 const measureDeviceStatusText = computed(() => {
@@ -226,13 +254,34 @@ const pressureDeviceStatusClass = computed(() => ({
   'status-not-selected': pressureDeviceStatus.value === 'not_selected'
 }))
 
+const targetPressure = computed<number | null>(() => {
+  if (typeof props.targetPressure === 'number' && Number.isFinite(props.targetPressure)) {
+    return props.targetPressure
+  }
+
+  if (typeof eventTargetPressure.value === 'number' && Number.isFinite(eventTargetPressure.value)) {
+    return eventTargetPressure.value
+  }
+
+  return null
+})
+
+const targetPressureForMath = computed(() => {
+  if (typeof targetPressure.value === 'number' && targetPressure.value > 0) {
+    return targetPressure.value
+  }
+
+  return 0
+})
+
 const pressurePercentage = computed(() => {
-  if (!targetPressure.value) return 0
-  const percent = (currentPressure.value / targetPressure.value) * 100
+  if (targetPressureForMath.value <= 0) return 0
+  const percent = (currentPressure.value / targetPressureForMath.value) * 100
   return Math.min(Math.max(percent, 0), 100)
 })
 
 const pressureBarClass = computed(() => {
+  if (targetPressure.value === null) return 'bar-normal'
   if (isStable.value) return 'bar-stable'
   if (Math.abs(currentPressure.value - targetPressure.value) <= stabilityThreshold.value) {
     return 'bar-approaching'
@@ -249,11 +298,16 @@ const stabilityText = computed(() =>
   isStable.value ? '已稳定' : '未稳定'
 )
 
-const targetDiff = computed(() =>
-  currentPressure.value - targetPressure.value
-)
+const targetDiff = computed<number | null>(() => {
+  if (targetPressure.value === null) {
+    return null
+  }
+
+  return currentPressure.value - targetPressure.value
+})
 
 const targetDiffClass = computed(() => {
+  if (targetDiff.value === null) return 'diff-unknown'
   const diff = Math.abs(targetDiff.value)
   if (diff <= stabilityThreshold.value) return 'diff-ok'
   if (diff <= stabilityThreshold.value * 3) return 'diff-warning'
@@ -261,6 +315,10 @@ const targetDiffClass = computed(() => {
 })
 
 const targetDiffText = computed(() => {
+  if (targetDiff.value === null) {
+    return '--'
+  }
+
   const diff = targetDiff.value
   const sign = diff > 0 ? '+' : ''
   return `${sign}${formatPressure(diff)} kPa`
@@ -272,9 +330,13 @@ const activeChannels = computed(() =>
 
 const totalChannels = computed(() => 16)
 
-const progressPercent = computed(() =>
-  Math.round((completedPoints.value / totalPoints.value) * 100)
-)
+const progressPercent = computed(() => {
+  if (totalPoints.value <= 0) {
+    return 0
+  }
+
+  return Math.round((completedPoints.value / totalPoints.value) * 100)
+})
 
 // 方法
 function formatPressure(value: number | null): string {
@@ -317,7 +379,7 @@ function setupSSE() {
         currentPressure.value = data.actualPressure
       }
       if (data?.targetPressure !== undefined) {
-        targetPressure.value = data.targetPressure
+        eventTargetPressure.value = data.targetPressure
       }
     }
 
@@ -325,13 +387,6 @@ function setupSSE() {
       const data = payload.data as { data?: number[]; channels?: number[] }
       if (data?.data && data?.channels) {
         updateChannelData(data.data, data.channels)
-      }
-    }
-
-    if (payload.type === 'session.state.changed') {
-      const data = payload.data as { state?: string }
-      if (data?.state === 'completed') {
-        completedPoints.value = totalPoints.value
       }
     }
   })
@@ -347,9 +402,11 @@ function updateChannelData(values: number[], channels: number[]) {
   channels.forEach((ch, idx) => {
     if (ch >= 1 && ch <= 16 && idx < values.length) {
       const chIdx = ch - 1
+      const currentValue = values[idx]
+      const compareTarget = targetPressure.value ?? currentValue
       newChannelData[chIdx] = {
-        value: values[idx],
-        status: Math.abs(values[idx] - targetPressure.value) > stabilityThreshold.value * 3 ? 'warning' : 'ok',
+        value: currentValue,
+        status: Math.abs(currentValue - compareTarget) > stabilityThreshold.value * 3 ? 'warning' : 'ok',
         isActive: true
       }
     }
@@ -649,6 +706,7 @@ onUnmounted(() => {
 .diff-ok { background: var(--status-success-bg); color: var(--status-success); }
 .diff-warning { background: var(--status-warning-bg); color: var(--status-warning); }
 .diff-error { background: var(--status-error-bg); color: var(--status-error); }
+.diff-unknown { background: var(--bg-quaternary); color: var(--text-muted); }
 
 /* 稳定状态 */
 .status-indicator {

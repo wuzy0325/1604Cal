@@ -36,6 +36,7 @@ func (a *App) startup(ctx context.Context) {
 	if err != nil {
 		log.Fatalf("load runtime config failed: %v", err)
 	}
+	configPath := strings.TrimSpace(os.Getenv(configPathEnvName))
 	connectCfg := runtimeCfg.ToDeviceConnectConfig()
 	calibrationCfg := apihttp.CalibrationRuntimeConfig{
 		EnforceValveCalibrationGate: runtimeCfg.Calibration.EnforceValveCalibrationGate,
@@ -47,7 +48,7 @@ func (a *App) startup(ctx context.Context) {
 		log.Fatalf("init persistent device manager failed: %v", err)
 	}
 
-	router := apihttp.NewRouterWithRuntimeConfig(deviceManager, connectCfg, calibrationCfg)
+	router := apihttp.NewRouterWithRuntimeConfig(deviceManager, connectCfg, calibrationCfg, configPath, runtimeCfg)
 
 	// 为桌面环境添加 CORS 支持。
 	// Wails webview 使用 wails:// 协议加载前端页面，

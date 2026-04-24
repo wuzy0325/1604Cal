@@ -44,7 +44,7 @@ func (p chainActiveDriverProvider) GetActiveDriver(id string) device.ConnectionD
 
 // NewRouterWithDeviceManager 基于指定设备管理器创建路由。
 func NewRouterWithDeviceManager(deviceManager deviceManager) http.Handler {
-	return newRouter(deviceManager, nil, deviceconnect.DefaultConfig(), defaultCalibrationRuntimeConfig(), nil)
+	return newRouter(deviceManager, nil, deviceconnect.DefaultConfig(), defaultCalibrationRuntimeConfig(), nil, "")
 }
 
 // NewRouterWithDependencies 基于指定依赖创建路由。
@@ -55,21 +55,22 @@ func (s *apiServer) publishEventAdapter(eventType string, data any) {
 // NewRouterWithDependencies 基于指定依赖创建路由。
 // 该方法用于生产注入与集成测试注入同一套 HTTP 处理逻辑。
 func NewRouterWithDependencies(deviceManager deviceManager, connector deviceConnector) http.Handler {
-	return newRouter(deviceManager, connector, deviceconnect.DefaultConfig(), defaultCalibrationRuntimeConfig(), nil)
+	return newRouter(deviceManager, connector, deviceconnect.DefaultConfig(), defaultCalibrationRuntimeConfig(), nil, "")
 }
 
 // NewRouterWithConnectConfig 基于指定连接配置创建路由。
 func NewRouterWithConnectConfig(deviceManager deviceManager, connectConfig deviceconnect.Config) http.Handler {
-	return newRouter(deviceManager, nil, connectConfig, defaultCalibrationRuntimeConfig(), nil)
+	return newRouter(deviceManager, nil, connectConfig, defaultCalibrationRuntimeConfig(), nil, "")
 }
 
 // NewRouterWithRuntimeConfig 基于连接配置、标定门禁配置和应用配置创建路由。
-func NewRouterWithRuntimeConfig(deviceManager deviceManager, connectConfig deviceconnect.Config, calibrationConfig CalibrationRuntimeConfig, appCfg ...config.AppConfig) http.Handler {
+
+func NewRouterWithRuntimeConfig(deviceManager deviceManager, connectConfig deviceconnect.Config, calibrationConfig CalibrationRuntimeConfig, configPath string, appCfg ...config.AppConfig) http.Handler {
 	var cfg *config.AppConfig
 	if len(appCfg) > 0 {
 		cfg = &appCfg[0]
 	}
-	return newRouter(deviceManager, nil, connectConfig, calibrationConfig, cfg)
+	return newRouter(deviceManager, nil, connectConfig, calibrationConfig, cfg, configPath)
 }
 
 func newRouter(
@@ -78,6 +79,7 @@ func newRouter(
 	connectConfig deviceconnect.Config,
 	calibrationConfig CalibrationRuntimeConfig,
 	appCfg *config.AppConfig,
+	configPath string,
 ) http.Handler {
 	if deviceManager == nil {
 		deviceManager = manager.NewDeviceManager()
@@ -92,6 +94,7 @@ func newRouter(
 		connectConfig:      connectConfig,
 		calibrationService: calibration.NewService(sessionMachine, factory, deviceManager, nil, nil, nil),
 		appConfig:          appCfg,
+		configPath:         configPath,
 	}
 
 	// 报告服务（模板目录为空则使用无模板模式）
@@ -141,6 +144,11 @@ func newRouter(
 		server.sessionService,
 		server.publishEventAdapter,
 	)
+	if appCfg != nil {
+		server.measurementService.SetConfig(measurementConfigFromParams(appCfg.MeasurementParams))
+	} else {
+		server.measurementService.SetConfig(measurementConfigFromParams(config.Default().MeasurementParams))
+	}
 
 	// 注入事件发布、驱动提供者和 session 服务到校准服务
 	server.calibrationService = calibration.NewService(
@@ -164,6 +172,7 @@ func newRouter(
 	// 配置
 	mux.HandleFunc("/api/v1/config/device-connect", server.deviceConnectConfigHandler)
 	mux.HandleFunc("/api/v1/config/calibration", server.calibrationConfigHandler)
+	mux.HandleFunc("/api/v1/config/measurement", server.measurementConfigHandler)
 	mux.HandleFunc("/api/v1/config/alarm", server.alarmConfigHandler)
 
 	// 设备管理
@@ -198,8 +207,13 @@ func newRouter(
 	mux.HandleFunc("/api/v1/measurement/start", server.measurementStartHandler)
 	mux.HandleFunc("/api/v1/measurement/pause", server.measurementPauseHandler)
 	mux.HandleFunc("/api/v1/measurement/stop", server.measurementStopHandler)
+	mux.HandleFunc("/api/v1/measurement/points/generate", server.measurementGeneratePointsHandler)
+	mux.HandleFunc("/api/v1/measurement/points", server.measurementPointsHandler)
 	mux.HandleFunc("/api/v1/measurement/data", server.measurementDataHandler)
 	mux.HandleFunc("/api/v1/measurement/export", server.measurementExportHandler)
+	mux.HandleFunc("/api/v1/config/measurement-alarm", server.measurementAlarmConfigHandler)
+	mux.HandleFunc("/api/v1/measurement/alarm/resolve", server.measurementAlarmResolveHandler)
+	mux.HandleFunc("/api/v1/measurement/alarm/pending", server.measurementAlarmPendingHandler)
 
 	// 校准流程
 	mux.HandleFunc("/api/v1/calibration/devices", server.calibrationSetDevicesHandler)

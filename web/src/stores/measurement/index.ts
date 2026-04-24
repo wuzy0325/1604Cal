@@ -20,13 +20,24 @@ import {
   pauseMeasurement,
   stopMeasurement,
   fetchMeasurementData,
-  getMeasurementExportUrl
+  getMeasurementExportUrl,
+  generateMeasurementPoints,
+  fetchMeasurementPoints,
+  getMeasurementAlarmConfig,
+  saveMeasurementAlarmConfig,
+  checkMeasurementAlarmPending,
+  resolveMeasurementAlarm,
+  getMeasurementParamsConfig,
+  saveMeasurementParamsConfig,
+  type MeasurementPoint,
+  type MeasurementAlarmConfig,
+  type MeasurementParamsPayload
 } from '@/api/measurement'
 import { createEventStream } from '@/api/client'
 import type { StreamEventPayload } from '@/types/api'
-import type { MeasurementState, CollectedRow } from './types'
+import type { MeasurementState, CollectedRow, StabilityUpdate, AlarmData } from './types'
 
-export type { MeasurementState, CollectedRow }
+export type { MeasurementState, CollectedRow, StabilityUpdate }
 
 export const useMeasurementStore = defineStore('measurement', () => {
   // ── 状态 ──
@@ -43,6 +54,24 @@ export const useMeasurementStore = defineStore('measurement', () => {
   const valveStatus = ref('')
   const measureUnit = ref('')
   const deviceInfo = ref<Record<string, string>>({})
+
+  // 稳定性监控状态
+  const stabilityState = ref<StabilityUpdate>({
+    pointIndex: 0,
+    isStable: false,
+    isInRange: false,
+    currentValue: 0,
+    stableDurationMs: 0,
+    requiredDurationMs: 0,
+    progress: 0
+  })
+
+  // 计量工作流相关
+  const config = ref<MeasurementParamsPayload | null>(null)
+  const points = ref<MeasurementPoint[]>([])
+  const alarmConfig = ref<MeasurementAlarmConfig | null>(null)
+  const alarmPending = ref(false)
+  const alarmData = ref<AlarmData | null>(null)
 
   // SSE
   let eventSource: EventSource | null = null
@@ -192,6 +221,19 @@ export const useMeasurementStore = defineStore('measurement', () => {
           rows.value.push({ timestamp: data.timestamp, channels: data.channels })
           break
         }
+        case 'measurement.stability.update':
+          stabilityState.value = payload.data as StabilityUpdate
+          isStable.value = stabilityState.value.isStable
+          currentPressure.value = stabilityState.value.currentValue
+          break
+        case 'measurement.alarm.triggered':
+          alarmPending.value = true
+          alarmData.value = payload.data as AlarmData
+          break
+        case 'measurement.alarm.resolved':
+          alarmPending.value = false
+          alarmData.value = null
+          break
       }
     })
   }
@@ -214,6 +256,57 @@ export const useMeasurementStore = defineStore('measurement', () => {
     state.value = newState
   }
 
+  // ── 计量工作流 ──
+
+  const loadConfig = async () => {
+    try {
+      config.value = await getMeasurementParamsConfig()
+    } catch { /* 静默 */ }
+  }
+
+  const saveConfig = async (params: MeasurementParamsPayload) => {
+    await saveMeasurementParamsConfig(params)
+    config.value = params
+  }
+
+  const loadPoints = async () => {
+    try {
+      points.value = await fetchMeasurementPoints()
+    } catch { /* 静默 */ }
+  }
+
+  const generatePoints = async () => {
+    try {
+      points.value = await generateMeasurementPoints()
+      ElMessage.success('压力点已生成')
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error)
+      ElMessage.error(`生成压力点失败: ${detail}`)
+    }
+  }
+
+  const loadAlarmConfig = async () => {
+    try {
+      alarmConfig.value = await getMeasurementAlarmConfig()
+    } catch { /* 静默 */ }
+  }
+
+  const saveAlarmConfig = async (cfg: MeasurementAlarmConfig) => {
+    await saveMeasurementAlarmConfig(cfg)
+    alarmConfig.value = cfg
+  }
+
+  const refreshAlarmPending = async () => {
+    try {
+      alarmPending.value = await checkMeasurementAlarmPending()
+    } catch { /* 静默 */ }
+  }
+
+  const resolveAlarm = async (decision: 'continue' | 'retry') => {
+    await resolveMeasurementAlarm(decision)
+    alarmPending.value = false
+  }
+
   return {
     // 状态
     state,
@@ -227,6 +320,7 @@ export const useMeasurementStore = defineStore('measurement', () => {
     valveStatus,
     measureUnit,
     deviceInfo,
+    stabilityState,
     // 计算属性
     isCollecting,
     isRunning,
@@ -256,6 +350,20 @@ export const useMeasurementStore = defineStore('measurement', () => {
     pause,
     stop,
     refreshData,
+    // 计量工作流
+    config,
+    points,
+    alarmConfig,
+    alarmPending,
+    alarmData,
+    loadConfig,
+    saveConfig,
+    loadPoints,
+    generatePoints,
+    loadAlarmConfig,
+    saveAlarmConfig,
+    refreshAlarmPending,
+    resolveAlarm,
     // SSE
     setupSSE,
     teardownSSE,

@@ -21,6 +21,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("load runtime config failed: %v", err)
 	}
+	configPath := strings.TrimSpace(os.Getenv(configPathEnvName))
 	connectCfg := runtimeCfg.ToDeviceConnectConfig()
 	calibrationCfg := apihttp.CalibrationRuntimeConfig{
 		EnforceValveCalibrationGate: runtimeCfg.Calibration.EnforceValveCalibrationGate,
@@ -32,7 +33,7 @@ func main() {
 		log.Fatalf("init persistent device manager failed: %v", err)
 	}
 
-	router := apihttp.NewRouterWithRuntimeConfig(deviceManager, connectCfg, calibrationCfg, runtimeCfg)
+	router := apihttp.NewRouterWithRuntimeConfig(deviceManager, connectCfg, calibrationCfg, configPath, runtimeCfg)
 
 	log.Printf("server listening on %s", addr)
 	if err = http.ListenAndServe(addr, router); err != nil {

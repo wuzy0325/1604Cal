@@ -14,41 +14,72 @@ import (
 
 // tcpConnectionDriver 负责维护 TCP 级别连接与命令交互。
 type tcpConnectionDriver struct {
-	model   string
-	address string
-	mu      sync.Mutex
-	conn    net.Conn
+	model    string
+	address  string
+	mu       sync.Mutex
+	conn     net.Conn
+	breaker  *CircuitBreaker
+	retryCfg RetryConfig
 }
 
 func newTCPConnectionDriver(model string, host string, port int) *tcpConnectionDriver {
 	return &tcpConnectionDriver{
-		model:   model,
-		address: net.JoinHostPort(host, strconv.Itoa(port)),
+		model:    model,
+		address:  net.JoinHostPort(host, strconv.Itoa(port)),
+		breaker:  NewCircuitBreaker(DefaultCircuitBreakerConfig()),
+		retryCfg: DefaultRetryConfig(),
 	}
 }
 
 func (d *tcpConnectionDriver) Connect(ctx context.Context) error {
 	d.mu.Lock()
-	defer d.mu.Unlock()
 	if d.conn != nil {
 		_ = d.conn.Close()
 		d.conn = nil
 	}
-	var dialer net.Dialer
-	conn, err := dialer.DialContext(ctx, "tcp", d.address)
-	if err != nil {
-		return fmt.Errorf("%s dial %s: %w", d.model, d.address, err)
+	d.mu.Unlock()
+
+	if !d.breaker.AllowRequest() {
+		return fmt.Errorf("%s: circuit breaker is open", d.model)
 	}
-	if tcpConn, ok := conn.(*net.TCPConn); ok {
-		_ = tcpConn.SetKeepAlive(true)
-		_ = tcpConn.SetKeepAlivePeriod(30 * time.Second)
+
+	var lastErr error
+	rs := NewRetryStrategy(d.retryCfg)
+	for attempt := 0; rs.ShouldRetry(attempt); attempt++ {
+		if attempt > 0 {
+			delay := time.Duration(rs.NextDelay(attempt)) * time.Millisecond
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case <-time.After(delay):
+			}
+		}
+
+		d.mu.Lock()
+		var dialer net.Dialer
+		conn, err := dialer.DialContext(ctx, "tcp", d.address)
+		if err != nil {
+			lastErr = fmt.Errorf("%s dial %s: %w", d.model, d.address, err)
+			d.mu.Unlock()
+			continue
+		}
+		if tcpConn, ok := conn.(*net.TCPConn); ok {
+			_ = tcpConn.SetKeepAlive(true)
+			_ = tcpConn.SetKeepAlivePeriod(30 * time.Second)
+		}
+		_ = conn.SetReadDeadline(time.Now().Add(200 * time.Millisecond))
+		drainBuf := make([]byte, 4096)
+		_, _ = conn.Read(drainBuf)
+		_ = conn.SetReadDeadline(time.Time{})
+		d.conn = conn
+		d.mu.Unlock()
+
+		d.breaker.RecordSuccess()
+		return nil
 	}
-	_ = conn.SetReadDeadline(time.Now().Add(200 * time.Millisecond))
-	drainBuf := make([]byte, 4096)
-	_, _ = conn.Read(drainBuf)
-	_ = conn.SetReadDeadline(time.Time{})
-	d.conn = conn
-	return nil
+
+	d.breaker.RecordFailure()
+	return fmt.Errorf("%s connect failed after %d attempts: %w", d.model, d.retryCfg.MaxAttempts, lastErr)
 }
 
 func (d *tcpConnectionDriver) Disconnect(_ context.Context) error {

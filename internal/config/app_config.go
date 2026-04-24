@@ -16,6 +16,7 @@ type AppConfig struct {
 	DeviceConnect     DeviceConnectFileConfig `json:"deviceConnect"`
 	Calibration       CalibrationFileConfig   `json:"calibration"`
 	CalibrationParams CalibrationParamsConfig `json:"calibrationParams"`
+	MeasurementParams MeasurementParamsConfig `json:"measurementParams"`
 	Alarm             domain.AlarmConfig      `json:"alarm"`
 	LastDevices       LastDevicesConfig       `json:"lastDevices"`
 }
@@ -40,6 +41,19 @@ type CalibrationFileConfig struct {
 
 // CalibrationParamsConfig 校准参数持久化配置。
 type CalibrationParamsConfig struct {
+	MinPressure      float64 `json:"minPressure"`
+	MaxPressure      float64 `json:"maxPressure"`
+	PointCount       int     `json:"pointCount"`
+	Precision        int     `json:"precision"`
+	AverageCount     int     `json:"averageCount"`
+	StableDurationMs int     `json:"stableDurationMs"`
+	PrecisionLevel   float64 `json:"precisionLevel"`
+	PressureMode     string  `json:"pressureMode"`
+	ControlMode      string  `json:"controlMode"`
+}
+
+// MeasurementParamsConfig 计量模块参数持久化配置。
+type MeasurementParamsConfig struct {
 	MinPressure      float64 `json:"minPressure"`
 	MaxPressure      float64 `json:"maxPressure"`
 	PointCount       int     `json:"pointCount"`
@@ -82,6 +96,17 @@ func Default() AppConfig {
 			AverageCount:     1,
 			StableDurationMs: 5000,
 			PrecisionLevel:   0.0005,
+			PressureMode:     "single",
+			ControlMode:      "auto",
+		},
+		MeasurementParams: MeasurementParamsConfig{
+			MinPressure:      0,
+			MaxPressure:      100,
+			PointCount:       6,
+			Precision:        2,
+			AverageCount:     1,
+			StableDurationMs: 5000,
+			PrecisionLevel:   0.05,
 			PressureMode:     "single",
 			ControlMode:      "auto",
 		},

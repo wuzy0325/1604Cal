@@ -16,20 +16,23 @@ type State string
 
 const (
 	StateIdle        State = "idle"
+	StateReady       State = "ready"
 	StatePressuring  State = "pressuring"
 	StateStabilizing State = "stabilizing"
 	StateCollecting  State = "collecting"
 	StateCompleted   State = "completed"
 	StateError       State = "error"
 	StatePaused      State = "paused"
+	StateStopped     State = "stopped"
 )
 
 // 获取状态迁移表。
 var transitions = map[State]map[State]struct{}{
-	StateIdle:        {StatePressuring: {}},
+	StateIdle:        {StateReady: {}, StatePressuring: {}},
+	StateReady:       {StatePressuring: {}, StatePaused: {}, StateIdle: {}, StateError: {}},
 	StatePressuring:  {StateStabilizing: {}, StateError: {}, StatePaused: {}},
 	StateStabilizing: {StateCollecting: {}, StateError: {}, StatePaused: {}},
-	StateCollecting:  {StateCompleted: {}, StateError: {}, StatePaused: {}},
+	StateCollecting:  {StateReady: {}, StateCompleted: {}, StateError: {}, StatePaused: {}},
 	StateCompleted:   {StateIdle: {}},
 	StateError:       {StateIdle: {}},
 	StatePaused:      {StatePressuring: {}, StateCollecting: {}, StateIdle: {}},
@@ -51,13 +54,27 @@ type Service struct {
 	sess    *session.Service
 	publish EventPublisher
 
+	config  Config
+	points  []Point
+	session *Session
+
 	channels []int
 	rows     []CollectedRow
+
+	measureDeviceID  string
+	pressureDeviceID string
+
+	alarmConfig  AlarmConfig
+	alarmPending bool
+	currentAlarm *Alarm
 
 	// collectCtx 用于控制采集 goroutine 的生命周期。
 	collectCtx    context.Context
 	collectCancel context.CancelFunc
 	collectMu     sync.Mutex
+
+	// sessionStore 历史会话持久化存储。
+	sessionStore *SessionStore
 }
 
 // NewService 创建计量服务。
@@ -70,6 +87,13 @@ func NewService(sess *session.Service, publisher EventPublisher) *Service {
 		sess:    sess,
 		publish: publisher,
 	}
+}
+
+// SetSessionStore 设置会话持久化存储。
+func (s *Service) SetSessionStore(store *SessionStore) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.sessionStore = store
 }
 
 // State 返回当前计量状态。
@@ -94,7 +118,8 @@ func (s *Service) Start(ctx context.Context, channels []int) error {
 	if s.state != StatePaused {
 		s.rows = nil
 	}
-	s.channels = channels
+	s.channels = append([]int(nil), channels...)
+	s.sess.SetChannels(channels)
 
 	switch s.state {
 	case StateIdle, StateCompleted, StateError:
@@ -116,6 +141,7 @@ func (s *Service) Start(ctx context.Context, channels []int) error {
 		s.mu.Unlock()
 		return fmt.Errorf("start measurement: %w", err)
 	}
+	s.syncSessionStatusLocked(s.state)
 
 	s.mu.Unlock()
 
@@ -136,6 +162,7 @@ func (s *Service) Pause() error {
 		s.mu.Unlock()
 		return fmt.Errorf("pause measurement: %w", err)
 	}
+	s.syncSessionStatusLocked(StatePaused)
 	s.mu.Unlock()
 
 	s.stopCollectLoop()
@@ -176,7 +203,7 @@ func (s *Service) Stop() error {
 			return fmt.Errorf("stop measurement: %w", err)
 		}
 		stateChanges = append(stateChanges, StateIdle)
-	case StatePaused, StateCompleted, StateError:
+	case StateReady, StatePaused, StateCompleted, StateError:
 		if err := s.setStateLocked(StateIdle); err != nil {
 			s.mu.Unlock()
 			return fmt.Errorf("stop measurement: %w", err)
@@ -186,6 +213,8 @@ func (s *Service) Stop() error {
 		s.mu.Unlock()
 		return fmt.Errorf("stop measurement: unsupported state %s", s.state)
 	}
+	now := time.Now()
+	s.finishSessionLocked(StateStopped, &now)
 
 	s.mu.Unlock()
 
@@ -204,6 +233,7 @@ func (s *Service) SetState(state State) error {
 		s.mu.Unlock()
 		return err
 	}
+	s.syncSessionStatusLocked(state)
 	s.mu.Unlock()
 
 	s.publish("measurement.state_changed", map[string]any{"state": string(state)})
@@ -217,6 +247,28 @@ func (s *Service) GetData() ([]CollectedRow, int) {
 	result := make([]CollectedRow, len(s.rows))
 	copy(result, s.rows)
 	return result, len(result)
+}
+
+// ListSessions 返回历史会话列表。
+func (s *Service) ListSessions() ([]*Session, error) {
+	s.mu.Lock()
+	store := s.sessionStore
+	s.mu.Unlock()
+	if store == nil {
+		return nil, nil
+	}
+	return store.List()
+}
+
+// GetSessionByID 根据 ID 加载历史会话。
+func (s *Service) GetSessionByID(id string) (*Session, error) {
+	s.mu.Lock()
+	store := s.sessionStore
+	s.mu.Unlock()
+	if store == nil {
+		return nil, fmt.Errorf("session store not configured")
+	}
+	return store.Get(id)
 }
 
 // WriteCSV 将已采集数据写入 CSV 格式。
@@ -359,4 +411,25 @@ func (s *Service) setStateLocked(target State) error {
 	}
 	s.state = target
 	return nil
+}
+
+func (s *Service) syncSessionStatusLocked(state State) {
+	if s.session == nil {
+		return
+	}
+	s.session.Status = state
+}
+
+func (s *Service) finishSessionLocked(state State, endTime *time.Time) {
+	if s.session == nil {
+		return
+	}
+	s.session.Status = state
+	s.session.EndTime = endTime
+
+	if s.sessionStore != nil {
+		go func() {
+			_ = s.sessionStore.Save(s.session)
+		}()
+	}
 }

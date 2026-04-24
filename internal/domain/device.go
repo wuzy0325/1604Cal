@@ -33,6 +33,9 @@ type Device struct {
 	Unit   string       `json:"unit"`
 	Status DeviceStatus `json:"status"`
 
+	// IsSimulated 为 true 时使用模拟驱动，不连接真实设备。
+	IsSimulated bool `json:"isSimulated"`
+
 	// LastErrorReason 记录最近一次连接/断连失败原因。
 	LastErrorReason string `json:"lastErrorReason,omitempty"`
 	// LastErrorAt 记录最近一次连接/断连失败时间。

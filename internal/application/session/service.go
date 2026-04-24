@@ -115,14 +115,28 @@ func (s *Service) BindMeasureDevice(measureDevID string) error {
 func (s *Service) SetChannels(channels []int) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.channels = channels
+	s.channels = append([]int(nil), channels...)
 }
 
 // GetChannels 获取当前通道列表。
 func (s *Service) GetChannels() []int {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return s.channels
+	return append([]int(nil), s.channels...)
+}
+
+// MeasureDeviceID 返回当前绑定的计量设备 ID。
+func (s *Service) MeasureDeviceID() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.measureDevID
+}
+
+// PressureDeviceID 返回当前绑定的打压设备 ID。
+func (s *Service) PressureDeviceID() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.pressureDevID
 }
 
 // ReadPressure 读取打压设备当前压力。

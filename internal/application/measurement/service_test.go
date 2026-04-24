@@ -40,6 +40,39 @@ func (f *fakeMeasureDriver) CalibrateFullScale(_ context.Context, _ []int, _ flo
 	return nil, nil
 }
 
+type fakePressureDriver struct {
+	targets          []float64
+	currentPressure  float64
+	stable           bool
+	startControlCall int
+	stopCalled       bool
+}
+
+func (f *fakePressureDriver) Connect(_ context.Context) error    { return nil }
+func (f *fakePressureDriver) Disconnect(_ context.Context) error { return nil }
+func (f *fakePressureDriver) SetTargetPressure(_ context.Context, target float64) error {
+	f.targets = append(f.targets, target)
+	f.currentPressure = target
+	return nil
+}
+func (f *fakePressureDriver) Stop(_ context.Context) error {
+	f.stopCalled = true
+	return nil
+}
+func (f *fakePressureDriver) Exhaust(_ context.Context) error { return nil }
+func (f *fakePressureDriver) ReadCurrentPressure(_ context.Context) (float64, error) {
+	return f.currentPressure, nil
+}
+func (f *fakePressureDriver) ReadUnit(_ context.Context) (string, error) { return "kPa", nil }
+func (f *fakePressureDriver) SetUnit(_ context.Context, _ string) error  { return nil }
+func (f *fakePressureDriver) ReadStability(_ context.Context) (bool, error) {
+	return f.stable, nil
+}
+func (f *fakePressureDriver) StartControl(_ context.Context) error {
+	f.startControlCall++
+	return nil
+}
+
 type fakeStore struct {
 	devices map[string]domain.Device
 }
@@ -74,10 +107,251 @@ func setupMeasurementService() (*measurement.Service, *fakeMeasureDriver) {
 	return svc, mDrv
 }
 
+func setupMeasurementServiceWithPressure() (*measurement.Service, *fakeMeasureDriver, *fakePressureDriver) {
+	mDrv := &fakeMeasureDriver{data: []float64{1.1, 2.2, 3.3}}
+	pDrv := &fakePressureDriver{stable: true}
+	store := &fakeStore{devices: map[string]domain.Device{
+		"m1": {ID: "m1", Type: domain.DeviceTypeMeasure, Model: "WTN1604", Host: "127.0.0.1", Port: 9000},
+		"p1": {ID: "p1", Type: domain.DeviceTypePressure, Model: "ConST811A", Host: "127.0.0.1", Port: 9001},
+	}}
+	sessSvc := session.NewService(store, driver.NewFactory(), func(string, any) {}, &mapProvider{
+		drivers: map[string]device.ConnectionDriver{
+			"m1": embedMD{mDrv},
+			"p1": embedPD{pDrv},
+		},
+	})
+	_ = sessSvc.BindDevices("m1", "p1")
+	svc := measurement.NewService(sessSvc, func(string, any) {})
+	return svc, mDrv, pDrv
+}
+
+type embedPD struct{ device.PressureDriver }
+
 func TestInitialState(t *testing.T) {
 	svc, _ := setupMeasurementService()
 	if svc.State() != measurement.StateIdle {
 		t.Fatalf("expected idle, got %s", svc.State())
+	}
+}
+
+func TestGeneratePressurePointsUsesMeasurementConfig(t *testing.T) {
+	svc, _ := setupMeasurementService()
+	svc.SetConfig(measurement.Config{
+		MinPressure:  0,
+		MaxPressure:  100,
+		PointCount:   5,
+		Precision:    2,
+		PressureMode: "roundTrip",
+	})
+
+	points, err := svc.GeneratePressurePoints()
+	if err != nil {
+		t.Fatalf("GeneratePressurePoints: %v", err)
+	}
+
+	if len(points) != 9 {
+		t.Fatalf("expected 9 points, got %d", len(points))
+	}
+
+	if points[0].Direction != "forward" {
+		t.Fatalf("expected first point direction forward, got %s", points[0].Direction)
+	}
+
+	if points[len(points)-1].Direction != "backward" {
+		t.Fatalf("expected last point direction backward, got %s", points[len(points)-1].Direction)
+	}
+
+	if points[0].TargetPressure != 0 || points[4].TargetPressure != 100 || points[8].TargetPressure != 0 {
+		t.Fatalf("unexpected round-trip pressures: %+v", points)
+	}
+}
+
+func TestStartWorkflowUsesGeneratedPointsAndTransitionsToReady(t *testing.T) {
+	svc, _ := setupMeasurementService()
+	svc.SetConfig(measurement.Config{
+		MinPressure: 0,
+		MaxPressure: 20,
+		PointCount:  3,
+		Precision:   2,
+	})
+	if _, err := svc.GeneratePressurePoints(); err != nil {
+		t.Fatalf("GeneratePressurePoints: %v", err)
+	}
+
+	if err := svc.StartWorkflow(context.Background(), []int{1, 2}); err != nil {
+		t.Fatalf("StartWorkflow: %v", err)
+	}
+
+	if svc.State() != measurement.StateReady {
+		t.Fatalf("expected ready, got %s", svc.State())
+	}
+
+	session := svc.GetSession()
+	if session == nil {
+		t.Fatal("expected measurement session to be created")
+	}
+	if len(session.Points) != 3 {
+		t.Fatalf("expected 3 session points, got %d", len(session.Points))
+	}
+	if len(session.Config.Channels) != 2 {
+		t.Fatalf("expected workflow channels to be stored, got %+v", session.Config.Channels)
+	}
+}
+
+func TestSetConfigInvalidatesExistingPoints(t *testing.T) {
+	svc, _ := setupMeasurementService()
+	svc.SetConfig(measurement.Config{
+		MinPressure: 0,
+		MaxPressure: 20,
+		PointCount:  3,
+		Precision:   2,
+	})
+	if _, err := svc.GeneratePressurePoints(); err != nil {
+		t.Fatalf("GeneratePressurePoints: %v", err)
+	}
+
+	svc.SetConfig(measurement.Config{
+		MinPressure: 0,
+		MaxPressure: 50,
+		PointCount:  5,
+		Precision:   2,
+	})
+
+	if err := svc.StartWorkflow(context.Background(), []int{1}); err == nil {
+		t.Fatal("expected workflow start to require regenerated points after config change")
+	}
+}
+
+func TestStopWorkflowUpdatesSessionStatusToStopped(t *testing.T) {
+	svc, _ := setupMeasurementService()
+	svc.SetConfig(measurement.Config{
+		MinPressure: 0,
+		MaxPressure: 10,
+		PointCount:  2,
+		Precision:   2,
+	})
+	if _, err := svc.GeneratePressurePoints(); err != nil {
+		t.Fatalf("GeneratePressurePoints: %v", err)
+	}
+	if err := svc.StartWorkflow(context.Background(), []int{1}); err != nil {
+		t.Fatalf("StartWorkflow: %v", err)
+	}
+
+	if err := svc.Stop(); err != nil {
+		t.Fatalf("Stop: %v", err)
+	}
+
+	session := svc.GetSession()
+	if session == nil {
+		t.Fatal("expected measurement session after stop")
+	}
+	if session.Status != measurement.StateStopped {
+		t.Fatalf("expected session status stopped, got %s", session.Status)
+	}
+	if session.EndTime == nil {
+		t.Fatal("expected session end time to be recorded")
+	}
+}
+
+func TestResumeRealtimeSamplingSyncsWorkflowSessionStatus(t *testing.T) {
+	svc, _ := setupMeasurementService()
+	svc.SetConfig(measurement.Config{
+		MinPressure: 0,
+		MaxPressure: 10,
+		PointCount:  2,
+		Precision:   2,
+	})
+	if _, err := svc.GeneratePressurePoints(); err != nil {
+		t.Fatalf("GeneratePressurePoints: %v", err)
+	}
+	if err := svc.StartWorkflow(context.Background(), []int{1}); err != nil {
+		t.Fatalf("StartWorkflow: %v", err)
+	}
+	if err := svc.Pause(); err != nil {
+		t.Fatalf("Pause: %v", err)
+	}
+	if err := svc.Start(context.Background(), []int{1}); err != nil {
+		t.Fatalf("Start realtime resume: %v", err)
+	}
+
+	session := svc.GetSession()
+	if session == nil {
+		t.Fatal("expected measurement session after resume")
+	}
+	if session.Status != measurement.StateCollecting {
+		t.Fatalf("expected session status collecting after resume, got %s", session.Status)
+	}
+	_ = svc.Stop()
+}
+
+func TestRunAutoCollectionAdvancesMeasurementPoints(t *testing.T) {
+	svc, _, pressureDrv := setupMeasurementServiceWithPressure()
+	svc.SetConfig(measurement.Config{
+		MinPressure:  0,
+		MaxPressure:  10,
+		PointCount:   2,
+		Precision:    2,
+		AverageCount: 1,
+		StableWaitMs: 10,
+		ControlMode:  "auto",
+	})
+	if _, err := svc.GeneratePressurePoints(); err != nil {
+		t.Fatalf("GeneratePressurePoints: %v", err)
+	}
+	if err := svc.StartWorkflow(context.Background(), []int{1}); err != nil {
+		t.Fatalf("StartWorkflow: %v", err)
+	}
+
+	if err := svc.RunAutoCollection(context.Background()); err != nil {
+		t.Fatalf("RunAutoCollection: %v", err)
+	}
+
+	points := svc.GetPoints()
+	if len(points) != 2 {
+		t.Fatalf("expected 2 points, got %d", len(points))
+	}
+	if points[0].Status != "completed" || points[1].Status != "completed" {
+		t.Fatalf("expected all points completed, got %+v", points)
+	}
+	if len(pressureDrv.targets) != 2 {
+		t.Fatalf("expected 2 pressure targets, got %+v", pressureDrv.targets)
+	}
+}
+
+func TestManualCollectCapturesPointData(t *testing.T) {
+	svc, _, pressureDrv := setupMeasurementServiceWithPressure()
+	svc.SetConfig(measurement.Config{
+		MinPressure:  0,
+		MaxPressure:  20,
+		PointCount:   3,
+		Precision:    2,
+		AverageCount: 1,
+		StableWaitMs: 10,
+		ControlMode:  "manual",
+	})
+	if _, err := svc.GeneratePressurePoints(); err != nil {
+		t.Fatalf("GeneratePressurePoints: %v", err)
+	}
+	if err := svc.StartWorkflow(context.Background(), []int{1, 2}); err != nil {
+		t.Fatalf("StartWorkflow: %v", err)
+	}
+
+	if err := svc.ManualPressurize(context.Background(), 1); err != nil {
+		t.Fatalf("ManualPressurize: %v", err)
+	}
+	if err := svc.ManualCollect(context.Background(), 1); err != nil {
+		t.Fatalf("ManualCollect: %v", err)
+	}
+
+	points := svc.GetPoints()
+	if points[0].Status != "completed" {
+		t.Fatalf("expected first point completed, got %+v", points[0])
+	}
+	if len(points[0].CollectedData) == 0 {
+		t.Fatalf("expected collected data on first point, got %+v", points[0])
+	}
+	if len(pressureDrv.targets) != 1 {
+		t.Fatalf("expected 1 pressure target, got %+v", pressureDrv.targets)
 	}
 }
 
@@ -285,7 +559,118 @@ func TestStateTransitions(t *testing.T) {
 			if !tt.wantErr && err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
-			_ = svc.Stop()
 		})
+	}
+}
+
+func TestMeasurementAlarmConfig(t *testing.T) {
+	svc, _ := setupMeasurementService()
+	svc.SetAlarmConfig(measurement.AlarmConfig{
+		Enabled:         true,
+		EnabledChannels: []int{1, 2},
+		ConfirmOnAlarm:  true,
+		SoundEnabled:    false,
+		Threshold:       0.01,
+	})
+
+	cfg := svc.GetAlarmConfig()
+	if !cfg.Enabled {
+		t.Fatal("expected alarm enabled")
+	}
+	if len(cfg.EnabledChannels) != 2 {
+		t.Fatalf("expected 2 enabled channels, got %d", len(cfg.EnabledChannels))
+	}
+	if !cfg.ConfirmOnAlarm {
+		t.Fatal("expected confirm on alarm")
+	}
+}
+
+func TestMeasurementAlarmCheckNoAlarm(t *testing.T) {
+	svc, _ := setupMeasurementService()
+	svc.SetAlarmConfig(measurement.AlarmConfig{
+		Enabled:         true,
+		EnabledChannels: []int{1},
+		ConfirmOnAlarm:  true,
+		Threshold:       0.1,
+	})
+
+	point := measurement.Point{
+		Index:          1,
+		TargetPressure: 100,
+		ActualPressure: 100.05,
+	}
+
+	alarm, err := svc.CheckAlarm(point)
+	if err != nil {
+		t.Fatalf("CheckAlarm: %v", err)
+	}
+	if alarm != nil {
+		t.Fatalf("expected no alarm, got %+v", alarm)
+	}
+}
+
+func TestMeasurementAlarmCheckTriggersAlarm(t *testing.T) {
+	svc, _ := setupMeasurementService()
+	svc.SetAlarmConfig(measurement.AlarmConfig{
+		Enabled:         true,
+		EnabledChannels: []int{1},
+		ConfirmOnAlarm:  true,
+		Threshold:       0.0004,
+	})
+
+	point := measurement.Point{
+		Index:          1,
+		TargetPressure: 100,
+		ActualPressure: 100.05,
+		CollectedData:  []float64{100.05},
+	}
+
+	alarm, err := svc.CheckAlarm(point)
+	if err != nil {
+		t.Fatalf("CheckAlarm: %v", err)
+	}
+	if alarm == nil {
+		t.Fatal("expected alarm to be triggered")
+	}
+	if len(alarm.OverLimitChannels) == 0 {
+		t.Fatal("expected over limit channels")
+	}
+}
+
+func TestMeasurementAlarmBlocksWhenConfirmRequired(t *testing.T) {
+	svc, _ := setupMeasurementService()
+	svc.SetAlarmConfig(measurement.AlarmConfig{
+		Enabled:         true,
+		EnabledChannels: []int{1},
+		ConfirmOnAlarm:  true,
+		Threshold:       0.0004,
+	})
+
+	point := measurement.Point{
+		Index:          1,
+		TargetPressure: 100,
+		ActualPressure: 100.05,
+		CollectedData:  []float64{100.05},
+	}
+
+	alarm, err := svc.CheckAlarm(point)
+	if err != nil {
+		t.Fatalf("CheckAlarm: %v", err)
+	}
+	if alarm == nil {
+		t.Fatal("expected alarm")
+	}
+
+	if !svc.IsAlarmPending() {
+		t.Fatal("expected alarm to be pending")
+	}
+
+	err = svc.ResolveAlarm("continue")
+	if err != nil {
+		t.Fatalf("ResolveAlarm: %v", err)
+	}
+
+	if svc.IsAlarmPending() {
+		t.Fatal("expected alarm to be resolved")
 	}
 }

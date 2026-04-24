@@ -31,7 +31,7 @@ const ElTableColumnStub = {
 }
 
 describe('MeasurementView', () => {
-  it('renders measurement module title and sidebar device panels', () => {
+  it('renders sampling workspace without the measurement params panel', () => {
     setActivePinia(createPinia())
 
     const wrapper = mount(MeasurementView, {
@@ -49,17 +49,30 @@ describe('MeasurementView', () => {
           ChannelMatrix: {
             template: '<div>ChannelMatrixStub</div>'
           },
+          MeasurementParamsPanel: {
+            template: '<div>MeasurementParamsStub</div>'
+          },
+          MeasurementControl: {
+            template: '<div>MeasurementControlStub</div>'
+          },
+          MeasurementDataView: {
+            template: '<div>MeasurementDataStub</div>'
+          },
           ElTable: ElTableStub,
           ElTableColumn: ElTableColumnStub
         }
       }
     })
 
-    expect(wrapper.text()).toContain('计量工作台')
+    expect(wrapper.text()).toContain('计量实时采样')
     expect(wrapper.text()).toContain('MeasurementDeviceStub')
     expect(wrapper.text()).toContain('PressDeviceStub')
     expect(wrapper.text()).toContain('启动条件')
     expect(wrapper.text()).toContain('ChannelMatrixStub')
+    expect(wrapper.text()).toContain('MeasurementControlStub')
+    expect(wrapper.text()).toContain('MeasurementDataStub')
+    expect(wrapper.text()).toContain('当前页面仅执行实时采样')
+    expect(wrapper.text()).not.toContain('MeasurementParamsStub')
     expect(wrapper.find('.sidebar').exists()).toBe(true)
     expect(wrapper.find('.workbench').exists()).toBe(true)
   })

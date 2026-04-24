@@ -18,6 +18,16 @@ func NewFactory() *Factory {
 
 // Create 根据设备模型返回连接驱动实例。
 func (f *Factory) Create(dev domain.Device) (device.ConnectionDriver, error) {
+	if dev.IsSimulated {
+		switch dev.Type {
+		case domain.DeviceTypeMeasure:
+			return NewSimulatedMeasureDriver(), nil
+		case domain.DeviceTypePressure:
+			return NewSimulatedPressureDriver(), nil
+		default:
+			return nil, fmt.Errorf("unsupported simulated device type: %s", dev.Type)
+		}
+	}
 	model := normalizeModel(dev.Model)
 	switch model {
 	case "WTN1604":
@@ -30,6 +40,15 @@ func (f *Factory) Create(dev domain.Device) (device.ConnectionDriver, error) {
 		return newConST860Driver(dev.Host, dev.Port), nil
 	case "SPC4000":
 		return newSPC4000Driver(dev.Host, dev.Port), nil
+	case "SIMULATED", "GENERIC_SIMULATOR", "SIMULATOR":
+		switch dev.Type {
+		case domain.DeviceTypeMeasure:
+			return NewSimulatedMeasureDriver(), nil
+		case domain.DeviceTypePressure:
+			return NewSimulatedPressureDriver(), nil
+		default:
+			return nil, fmt.Errorf("unsupported simulated device type: %s", dev.Type)
+		}
 	default:
 		return nil, fmt.Errorf("unsupported device model: %s", dev.Model)
 	}
@@ -37,10 +56,15 @@ func (f *Factory) Create(dev domain.Device) (device.ConnectionDriver, error) {
 
 // CreateMeasureDriver 根据设备模型返回计量设备驱动。
 func (f *Factory) CreateMeasureDriver(dev domain.Device) (device.MeasureDriver, error) {
+	if dev.IsSimulated {
+		return NewSimulatedMeasureDriver(), nil
+	}
 	model := normalizeModel(dev.Model)
 	switch model {
 	case "WTN1604":
 		return newWTN1604Driver(dev.Host, dev.Port), nil
+	case "SIMULATED", "GENERIC_SIMULATOR", "SIMULATOR":
+		return NewSimulatedMeasureDriver(), nil
 	default:
 		return nil, fmt.Errorf("unsupported measure device model: %s", dev.Model)
 	}
@@ -48,6 +72,9 @@ func (f *Factory) CreateMeasureDriver(dev domain.Device) (device.MeasureDriver, 
 
 // CreatePressureDriver 根据设备模型返回打压设备驱动。
 func (f *Factory) CreatePressureDriver(dev domain.Device) (device.PressureDriver, error) {
+	if dev.IsSimulated {
+		return NewSimulatedPressureDriver(), nil
+	}
 	model := normalizeModel(dev.Model)
 	switch model {
 	case "CONST811A", "811A":
@@ -58,6 +85,8 @@ func (f *Factory) CreatePressureDriver(dev domain.Device) (device.PressureDriver
 		return newConST860Driver(dev.Host, dev.Port), nil
 	case "SPC4000":
 		return newSPC4000Driver(dev.Host, dev.Port), nil
+	case "SIMULATED", "GENERIC_SIMULATOR", "SIMULATOR":
+		return NewSimulatedPressureDriver(), nil
 	default:
 		return nil, fmt.Errorf("unsupported pressure device model: %s", dev.Model)
 	}
