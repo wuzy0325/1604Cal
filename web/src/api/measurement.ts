@@ -154,3 +154,31 @@ export async function resolveMeasurementAlarm(decision: 'continue' | 'retry'): P
     body: JSON.stringify({ decision })
   })
 }
+
+/** 自动按点采集（逐点打压→稳定→采集） */
+export async function autoCollectMeasurement(): Promise<string> {
+  const resp = await requestJSON<ApiResponse<{ state: string }>>('/measurement/auto-collect', {
+    method: 'POST'
+  })
+  return resp.data.state
+}
+
+/** 手动打压指定测点 */
+export async function manualPressurizeMeasurement(pointIndex: number): Promise<string> {
+  const resp = await requestJSON<ApiResponse<{ state: string }>>('/measurement/manual-pressurize', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ pointIndex })
+  })
+  return resp.data.state
+}
+
+/** 手动采集指定测点 */
+export async function manualCollectMeasurement(pointIndex: number): Promise<string> {
+  const resp = await requestJSON<ApiResponse<{ state: string }>>('/measurement/manual-collect', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ pointIndex })
+  })
+  return resp.data.state
+}

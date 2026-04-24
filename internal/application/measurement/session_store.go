@@ -3,11 +3,11 @@ package measurement
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
-	"time"
 )
 
 // SessionStore 计量会话持久化存储。
@@ -57,10 +57,12 @@ func (ss *SessionStore) List() ([]*Session, error) {
 		path := filepath.Join(ss.dir, entry.Name())
 		data, err := os.ReadFile(path)
 		if err != nil {
+			log.Printf("measurement session: read file %s: %v", entry.Name(), err)
 			continue
 		}
 		var s Session
 		if err := json.Unmarshal(data, &s); err != nil {
+			log.Printf("measurement session: parse file %s: %v", entry.Name(), err)
 			continue
 		}
 		sessions = append(sessions, &s)
@@ -104,10 +106,3 @@ func (ss *SessionStore) Delete(id string) error {
 	return nil
 }
 
-// ensureTimeFields sets default time fields for the session.
-func ensureTimeFields(s *Session) {
-	if s.EndTime == nil {
-		now := time.Now()
-		s.EndTime = &now
-	}
-}

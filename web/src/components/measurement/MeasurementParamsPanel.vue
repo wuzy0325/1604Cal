@@ -143,6 +143,7 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
+import { useMeasurementStore } from '@/stores/measurement'
 
 interface MeasurementUiParams {
   minPressure: number
@@ -159,8 +160,23 @@ interface MeasurementUiParams {
   customPointsText: string
 }
 
+const defaultParams: MeasurementUiParams = {
+  minPressure: 0,
+  maxPressure: 10,
+  pointCount: 5,
+  precision: 3,
+  averageCount: 3,
+  stableWaitS: 3,
+  precisionLevel: 0.05,
+  useCustomPrecision: false,
+  controlMode: 'auto',
+  pressureMode: 'single',
+  useCustomPoints: false,
+  customPointsText: ''
+}
+
 const props = defineProps<{
-  params: MeasurementUiParams
+  params?: MeasurementUiParams
 }>()
 
 const emit = defineEmits<{
@@ -168,23 +184,48 @@ const emit = defineEmits<{
   regenerate: []
 }>()
 
+const measurementStore = useMeasurementStore()
+
+const params = computed<MeasurementUiParams>(() => {
+  if (props.params) return props.params
+  // 从 store config 构造，若无则用默认值
+  const cfg = measurementStore.config
+  if (cfg) {
+    return {
+      minPressure: cfg.minPressure ?? defaultParams.minPressure,
+      maxPressure: cfg.maxPressure ?? defaultParams.maxPressure,
+      pointCount: cfg.pointCount ?? defaultParams.pointCount,
+      precision: cfg.precision ?? defaultParams.precision,
+      averageCount: cfg.averageCount ?? defaultParams.averageCount,
+      stableWaitS: cfg.stableWaitS ?? defaultParams.stableWaitS,
+      precisionLevel: cfg.precisionLevel ?? defaultParams.precisionLevel,
+      useCustomPrecision: cfg.useCustomPrecision ?? defaultParams.useCustomPrecision,
+      controlMode: cfg.controlMode ?? defaultParams.controlMode,
+      pressureMode: cfg.pressureMode ?? defaultParams.pressureMode,
+      useCustomPoints: cfg.useCustomPoints ?? defaultParams.useCustomPoints,
+      customPointsText: cfg.customPointsText ?? defaultParams.customPointsText
+    }
+  }
+  return defaultParams
+})
+
 const precisionLevelOptions = [0.02, 0.05, 0.1, 0.2]
 
 const isParamValid = computed(() => {
-  if (props.params.useCustomPoints) {
-    return parseCustomPoints(props.params.customPointsText).length >= 2
+  if (params.value.useCustomPoints) {
+    return parseCustomPoints(params.value.customPointsText).length >= 2
   }
   return (
-    Number.isFinite(props.params.minPressure) &&
-    Number.isFinite(props.params.maxPressure) &&
-    props.params.pointCount >= 2 &&
-    props.params.averageCount >= 1
+    Number.isFinite(params.value.minPressure) &&
+    Number.isFinite(params.value.maxPressure) &&
+    params.value.pointCount >= 2 &&
+    params.value.averageCount >= 1
   )
 })
 
 const parsedCustomCount = computed(() => {
-  if (!props.params.useCustomPoints) return 0
-  return parseCustomPoints(props.params.customPointsText).length
+  if (!params.value.useCustomPoints) return 0
+  return parseCustomPoints(params.value.customPointsText).length
 })
 
 function toNumber(value: unknown, fallback: number): number {
@@ -205,37 +246,37 @@ function updateField<K extends keyof MeasurementUiParams>(
   value: MeasurementUiParams[K]
 ) {
   emit('update:params', {
-    ...props.params,
+    ...params.value,
     [key]: value
   })
 }
 
 function onMinPressureChange(value: unknown) {
-  updateField('minPressure', toNumber(value, props.params.minPressure))
+  updateField('minPressure', toNumber(value, params.value.minPressure))
 }
 
 function onMaxPressureChange(value: unknown) {
-  updateField('maxPressure', toNumber(value, props.params.maxPressure))
+  updateField('maxPressure', toNumber(value, params.value.maxPressure))
 }
 
 function onPointCountChange(value: unknown) {
-  updateField('pointCount', clamp(toInt(value, props.params.pointCount), 2, 20))
+  updateField('pointCount', clamp(toInt(value, params.value.pointCount), 2, 20))
 }
 
 function onPrecisionChange(value: unknown) {
-  updateField('precision', clamp(toInt(value, props.params.precision), 0, 6))
+  updateField('precision', clamp(toInt(value, params.value.precision), 0, 6))
 }
 
 function onAverageCountChange(value: unknown) {
-  updateField('averageCount', clamp(toInt(value, props.params.averageCount), 1, 20))
+  updateField('averageCount', clamp(toInt(value, params.value.averageCount), 1, 20))
 }
 
 function onStableWaitChange(value: unknown) {
-  updateField('stableWaitS', clamp(toInt(value, props.params.stableWaitS), 1, 10))
+  updateField('stableWaitS', clamp(toInt(value, params.value.stableWaitS), 1, 10))
 }
 
 function onPrecisionLevelChange(value: unknown) {
-  const normalized = clamp(toNumber(value, props.params.precisionLevel), 0.0001, 5)
+  const normalized = clamp(toNumber(value, params.value.precisionLevel), 0.0001, 5)
   updateField('precisionLevel', Number(normalized.toFixed(4)))
 }
 

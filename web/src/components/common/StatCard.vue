@@ -21,23 +21,34 @@ defineProps<{
 </script>
 
 <style scoped lang="scss">
+@import '@/styles/variables.scss';
+
 .stat-card {
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-color);
-  border-radius: 3px;
-  padding: var(--spacing-sm) var(--spacing-md);
+  background: $bg-card;
+  border: 1px solid $border-color;
+  border-radius: $radius-lg;
+  padding: $spacing-4 $spacing-6;
   text-align: center;
+  box-shadow: $shadow-card;
+  transition: all $transition-normal;
+
+  &:hover {
+    box-shadow: $shadow-card-hover;
+    border-color: rgba($primary-500, 0.3);
+  }
 
   .label {
-    color: var(--text-secondary);
-    font-size: 11px;
-    margin-bottom: 2px;
+    color: $text-secondary;
+    font-size: $font-size-xs;
+    margin-bottom: $spacing-1;
+    font-weight: $font-weight-medium;
   }
 
   .value {
-    color: var(--text-primary);
-    font-size: 20px;
-    font-weight: bold;
+    color: $text-primary;
+    font-size: $font-size-3xl;
+    font-weight: $font-weight-bold;
+    font-family: $font-family-mono;
   }
 }
 </style>

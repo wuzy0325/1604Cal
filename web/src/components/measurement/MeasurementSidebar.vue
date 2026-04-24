@@ -79,10 +79,11 @@
           启动条件
         </h3>
         <div class="prerequisites-list">
-          <div v-for="(item, index) in prerequisites" :key="index" class="prereq-item" :class="{ satisfied: item.satisfied }">
-            <el-icon v-if="item.satisfied"><CircleCheckFilled /></el-icon>
-            <el-icon v-else><CircleClose /></el-icon>
-            <span>{{ item.label }}</span>
+          <div v-for="(item, index) in prerequisites" :key="index" class="prereq-item" :class="{ satisfied: item.satisfied, unsatisfied: !item.satisfied }">
+            <el-icon v-if="item.satisfied" class="icon-satisfied"><CircleCheckFilled /></el-icon>
+            <el-icon v-else class="icon-unsatisfied"><CircleCloseFilled /></el-icon>
+            <span class="prereq-label">{{ item.label }}</span>
+            <span class="prereq-status">{{ item.satisfied ? '已满足' : '未满足' }}</span>
           </div>
         </div>
       </div>
@@ -93,7 +94,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import {
-  ArrowLeft, ArrowRight, CircleCheckFilled, CircleClose,
+  ArrowLeft, ArrowRight, CircleCheckFilled, CircleCloseFilled,
   Warning, Grid, Monitor, FirstAidKit, ScaleToOriginal
 } from '@element-plus/icons-vue'
 import MeasurementDevicePanel from '@/components/measurement/MeasurementDevicePanel.vue'
@@ -316,12 +317,34 @@ defineExpose({ checkUnitConsistency, selectedChannels })
 .unit-conflicts { display: flex; flex-direction: column; gap: 2px; .conflict-item { color: var(--status-error); font-size: 11px; padding: 2px 0; } }
 .prerequisites-list {
   background: var(--bg-tertiary); border: 1px solid var(--border-color); border-radius: var(--radius-sm);
-  padding: var(--spacing-sm); display: flex; flex-direction: column; gap: 4px;
+  padding: var(--spacing-sm); display: flex; flex-direction: column; gap: 6px;
   .prereq-item {
-    display: flex; align-items: center; gap: var(--spacing-xs); padding: 2px 0;
-    color: var(--text-muted); font-size: 12px;
-    .el-icon { font-size: 13px; }
-    &.satisfied { color: var(--status-success); }
+    display: flex; align-items: center; gap: var(--spacing-xs); padding: 4px 0;
+    font-size: 12px;
+    .el-icon { font-size: 14px; }
+    .icon-satisfied { color: var(--status-success); }
+    .icon-unsatisfied { color: var(--status-error); }
+    .prereq-label { flex: 1; }
+    .prereq-status {
+      font-size: 10px;
+      padding: 1px 6px;
+      border-radius: 3px;
+      font-weight: 600;
+    }
+    &.satisfied {
+      color: var(--text-primary);
+      .prereq-status {
+        background: var(--status-success-bg);
+        color: var(--status-success);
+      }
+    }
+    &.unsatisfied {
+      color: var(--text-muted);
+      .prereq-status {
+        background: var(--status-error-bg);
+        color: var(--status-error);
+      }
+    }
   }
 }
 @media (max-width: 900px) {

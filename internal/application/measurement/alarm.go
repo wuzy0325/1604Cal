@@ -11,6 +11,7 @@ type AlarmConfig struct {
 	ConfirmOnAlarm  bool    `json:"confirmOnAlarm"`
 	SoundEnabled    bool    `json:"soundEnabled"`
 	Threshold       float64 `json:"threshold"`
+	IsRelative      bool    `json:"isRelative"`
 }
 
 type Alarm struct {
@@ -18,6 +19,7 @@ type Alarm struct {
 	TargetPressure   float64 `json:"targetPressure"`
 	ActualPressure   float64 `json:"actualPressure"`
 	Threshold        float64 `json:"threshold"`
+	IsRelative       bool    `json:"isRelative"`
 	MaxDeviation     float64 `json:"maxDeviation"`
 	OverLimitChannels []int  `json:"overLimitChannels"`
 }
@@ -64,13 +66,14 @@ func (s *Service) CheckAlarm(point Point) (*Alarm, error) {
 		collectedVal := point.CollectedData[ch-1]
 		dev := math.Abs(collectedVal - point.TargetPressure)
 
-		if point.TargetPressure != 0 && dev/point.TargetPressure > cfg.Threshold {
-			percentDev := dev / point.TargetPressure
-			overLimit = append(overLimit, ch)
-			if percentDev > maxDev {
-				maxDev = percentDev
-			}
-		} else if point.TargetPressure == 0 && dev > cfg.Threshold {
+		var exceeds bool
+		if cfg.IsRelative && point.TargetPressure != 0 {
+			exceeds = dev/point.TargetPressure > cfg.Threshold
+		} else {
+			exceeds = dev > cfg.Threshold
+		}
+
+		if exceeds {
 			overLimit = append(overLimit, ch)
 			if dev > maxDev {
 				maxDev = dev
@@ -84,6 +87,7 @@ func (s *Service) CheckAlarm(point Point) (*Alarm, error) {
 			TargetPressure:    point.TargetPressure,
 			ActualPressure:    point.ActualPressure,
 			Threshold:         cfg.Threshold,
+			IsRelative:        cfg.IsRelative,
 			MaxDeviation:      maxDev,
 			OverLimitChannels: overLimit,
 		}

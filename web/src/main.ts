@@ -7,8 +7,7 @@ import 'element-plus/dist/index.css'
 import App from './App.vue'
 import router from './router'
 import { initDesktopApiBase } from './api/client'
-import './styles/variables.scss'
-import './styles/button-override.css'
+import './styles/global.scss'
 
 async function bootstrap() {
   // 在桌面模式下，初始化 API 基础路径指向内嵌 HTTP 服务器。

@@ -214,6 +214,9 @@ func newRouter(
 	mux.HandleFunc("/api/v1/config/measurement-alarm", server.measurementAlarmConfigHandler)
 	mux.HandleFunc("/api/v1/measurement/alarm/resolve", server.measurementAlarmResolveHandler)
 	mux.HandleFunc("/api/v1/measurement/alarm/pending", server.measurementAlarmPendingHandler)
+	mux.HandleFunc("/api/v1/measurement/auto-collect", server.measurementAutoCollectHandler)
+	mux.HandleFunc("/api/v1/measurement/manual-pressurize", server.measurementManualPressurizeHandler)
+	mux.HandleFunc("/api/v1/measurement/manual-collect", server.measurementManualCollectHandler)
 
 	// 校准流程
 	mux.HandleFunc("/api/v1/calibration/devices", server.calibrationSetDevicesHandler)

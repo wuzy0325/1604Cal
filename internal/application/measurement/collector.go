@@ -12,14 +12,32 @@ import (
 
 // RunAutoCollection 按测点顺序执行 measurement 自己的自动采集流程。
 func (s *Service) RunAutoCollection(ctx context.Context) error {
+	if st := s.State(); st != StateReady {
+		return fmt.Errorf("auto collection requires ready state, got %s", st)
+	}
+
 	points := s.GetPoints()
+	pressureDriver := s.sess.PressureDriver()
+
+	var collectErr error
 	for _, point := range points {
 		if err := s.ManualPressurize(ctx, point.Index); err != nil {
-			return err
+			collectErr = err
+			break
 		}
 		if err := s.ManualCollect(ctx, point.Index); err != nil {
-			return err
+			collectErr = err
+			break
 		}
+	}
+
+	// 采集结束后停止压力控制。
+	if pressureDriver != nil {
+		_ = pressureDriver.Stop(ctx)
+	}
+
+	if collectErr != nil {
+		return collectErr
 	}
 
 	if s.State() != StateCompleted {
@@ -38,7 +56,7 @@ func (s *Service) RunAutoCollection(ctx context.Context) error {
 
 // ManualPressurize 对指定 measurement 点执行打压和稳定等待。
 func (s *Service) ManualPressurize(ctx context.Context, pointIndex int) error {
-	pressureDriver, point, stableWaitMs, err := s.preparePressureStep(pointIndex)
+	pressureDriver, point, stableWaitMs, stabilityTimeoutMs, err := s.preparePressureStep(pointIndex)
 	if err != nil {
 		return err
 	}
@@ -62,7 +80,7 @@ func (s *Service) ManualPressurize(ctx context.Context, pointIndex int) error {
 		return err
 	}
 
-	if err := s.waitForMeasurementStability(ctx, pointIndex, pressureDriver, point.TargetPressure, stableWaitMs); err != nil {
+	if err := s.waitForMeasurementStability(ctx, pointIndex, pressureDriver, point.TargetPressure, stableWaitMs, stabilityTimeoutMs); err != nil {
 		return err
 	}
 
@@ -107,6 +125,12 @@ func (s *Service) ManualCollect(ctx context.Context, pointIndex int) error {
 		"data":       averaged,
 	})
 
+	// 采集后自动检查报警。
+	updatedPoint := s.getPoint(pointIndex)
+	if alarm, _ := s.CheckAlarm(updatedPoint); alarm != nil {
+		s.publish("measurement.alarm.triggered", alarm)
+	}
+
 	nextState := StateReady
 	if pointIndex >= totalPoints {
 		nextState = StateCompleted
@@ -118,16 +142,16 @@ func (s *Service) ManualCollect(ctx context.Context, pointIndex int) error {
 	return nil
 }
 
-func (s *Service) preparePressureStep(pointIndex int) (device.PressureDriver, Point, int, error) {
+func (s *Service) preparePressureStep(pointIndex int) (device.PressureDriver, Point, int, int, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	pressureDriver := s.sess.PressureDriver()
 	if pressureDriver == nil {
-		return nil, Point{}, 0, session.ErrPressureDeviceNotSet
+		return nil, Point{}, 0, 0, session.ErrPressureDeviceNotSet
 	}
 	if pointIndex < 1 || pointIndex > len(s.points) {
-		return nil, Point{}, 0, fmt.Errorf("invalid point index: %d", pointIndex)
+		return nil, Point{}, 0, 0, fmt.Errorf("invalid point index: %d", pointIndex)
 	}
 
 	stableWaitMs := s.config.StableWaitMs
@@ -135,7 +159,12 @@ func (s *Service) preparePressureStep(pointIndex int) (device.PressureDriver, Po
 		stableWaitMs = 2000
 	}
 
-	return pressureDriver, s.points[pointIndex-1], stableWaitMs, nil
+	stabilityTimeoutMs := s.config.StabilityTimeoutMs
+	if stabilityTimeoutMs <= 0 {
+		stabilityTimeoutMs = 60000
+	}
+
+	return pressureDriver, s.points[pointIndex-1], stableWaitMs, stabilityTimeoutMs, nil
 }
 
 func (s *Service) prepareCollectStep(pointIndex int) (device.MeasureDriver, Point, []int, int, int, error) {
@@ -177,6 +206,15 @@ func (s *Service) transitionTo(state State) error {
 
 	s.publish("measurement.state_changed", map[string]any{"state": string(state)})
 	return nil
+}
+
+func (s *Service) getPoint(pointIndex int) Point {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if pointIndex < 1 || pointIndex > len(s.points) {
+		return Point{}
+	}
+	return s.points[pointIndex-1]
 }
 
 func (s *Service) updatePointStatus(pointIndex int, status string) {
@@ -240,8 +278,9 @@ func (s *Service) waitForMeasurementStability(
 	pressureDriver device.PressureDriver,
 	targetPressure float64,
 	stableWaitMs int,
+	stabilityTimeoutMs int,
 ) error {
-	deadline := time.Now().Add(60 * time.Second)
+	deadline := time.Now().Add(time.Duration(stabilityTimeoutMs) * time.Millisecond)
 	stableStart := time.Time{}
 	wasInRange := false
 
@@ -325,13 +364,17 @@ func averageMeasurementSamples(samples [][]float64) []float64 {
 	}
 	width := len(samples[0])
 	result := make([]float64, width)
+	counts := make([]int, width)
 	for _, sample := range samples {
 		for i := 0; i < len(sample) && i < width; i++ {
 			result[i] += sample[i]
+			counts[i]++
 		}
 	}
 	for i := range result {
-		result[i] /= float64(len(samples))
+		if counts[i] > 0 {
+			result[i] /= float64(counts[i])
+		}
 	}
 	return result
 }

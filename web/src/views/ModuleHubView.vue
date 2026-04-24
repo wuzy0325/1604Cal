@@ -1,301 +1,491 @@
-<template>
-  <section class="module-hub-page">
-    <div class="desktop-shell">
-      <header class="hero">
-        <p class="hero-caption">
-          1604 融合系统入口
-        </p>
-        <h1>设备管理 + 计量 + 标定统一入口</h1>
-        <p>
-          本系统融合两个历史程序能力，并把设备管理独立为统一模块，供计量与标定模块共享设备选择结果。
-        </p>
-      </header>
-
-      <section class="module-grid">
-        <article class="module-card">
-          <div class="card-header">
-            <p class="module-tag">
-              Device Registry
-            </p>
-            <el-icon class="card-icon">
-              <Tools />
-            </el-icon>
-          </div>
-          <h2>设备管理模块</h2>
-          <p class="module-source">
-            融合能力：统一设备台账（共享给全部业务模块）
-          </p>
-          <ul>
-            <li>集中维护计量设备与打压设备连接状态</li>
-            <li>维护单位一致性检查与连接异常追踪</li>
-            <li>作为计量/标定模块的统一设备来源</li>
-          </ul>
-          <RouterLink
-            class="entry-btn"
-            :to="{ name: 'module-device-management' }"
-          >
-            <el-icon><ArrowRight /></el-icon>
-            进入设备管理
-          </RouterLink>
-        </article>
-
-        <article class="module-card">
-          <div class="card-header">
-            <p class="module-tag">
-              Measurement
-            </p>
-            <el-icon class="card-icon">
-              <DataLine />
-            </el-icon>
-          </div>
-          <h2>计量模块</h2>
-          <p class="module-source">
-            对应旧系统：1605MeassureApp
-          </p>
-          <ul>
-            <li>统一设备台账、连接状态、单位门禁</li>
-            <li>适合作业准备、状态巡检与异常定位</li>
-            <li>作为标定流程前置检查入口</li>
-          </ul>
-          <RouterLink
-            class="entry-btn"
-            :to="{ name: 'module-measurement' }"
-          >
-            <el-icon><ArrowRight /></el-icon>
-            进入计量模块
-          </RouterLink>
-        </article>
-
-        <article class="module-card">
-          <div class="card-header">
-            <p class="module-tag">
-              Calibration
-            </p>
-            <el-icon class="card-icon">
-              <SetUp />
-            </el-icon>
-          </div>
-          <h2>标定模块</h2>
-          <p class="module-source">
-            对应旧系统：1604标定软件
-          </p>
-          <ul>
-            <li>会话状态机驱动的流程控制</li>
-            <li>自动/手动动作与过程状态可视化</li>
-            <li>报告模板选择与结果输出闭环</li>
-          </ul>
-          <RouterLink
-            class="entry-btn"
-            :to="{ name: 'module-calibration' }"
-          >
-            <el-icon><ArrowRight /></el-icon>
-            进入标定模块
-          </RouterLink>
-        </article>
-
-        <article class="module-card">
-          <div class="card-header">
-            <p class="module-tag">
-              Multi-Pressure
-            </p>
-            <el-icon class="card-icon">
-              <Odometer />
-            </el-icon>
-          </div>
-          <h2>多设备打压模块</h2>
-          <p class="module-source">
-            独立模块：并发打压控制
-          </p>
-          <ul>
-            <li>同时控制多台打压设备</li>
-            <li>实时压力监控与稳定检测</li>
-            <li>独立设备注册/注销管理</li>
-          </ul>
-          <RouterLink
-            class="entry-btn"
-            :to="{ name: 'module-multi-pressure' }"
-          >
-            <el-icon><ArrowRight /></el-icon>
-            进入打压模块
-          </RouterLink>
-        </article>
-      </section>
-    </div>
-  </section>
-</template>
-
 <script setup lang="ts">
-import { RouterLink } from 'vue-router'
-import { Tools, DataLine, SetUp, ArrowRight, Odometer } from '@element-plus/icons-vue'
+/**
+ * @file 模块中心视图
+ * @description 应用主页面，包含导航和功能入口
+ * @version 2.0.0
+ */
+import { useRouter } from 'vue-router'
+import { ArrowRight, Tools, DataLine, SetUp, Odometer } from '@element-plus/icons-vue'
+import PageLayout from '@/components/common/PageLayout.vue'
+
+const router = useRouter()
+
+const featureCards = [
+    {
+        title: '设备管理模块',
+        description: '集中维护计量设备与打压设备连接状态，维护单位一致性检查与连接异常追踪',
+        icon: Tools,
+        path: '/device-management',
+        color: 'primary',
+        stats: '统一台账',
+        source: '融合能力'
+    },
+    {
+        title: '计量模块',
+        description: '统一设备台账、连接状态、单位门禁，适合作业准备、状态巡检与异常定位',
+        icon: DataLine,
+        path: '/measurement',
+        color: 'accent',
+        stats: '数据采集',
+        source: '1605MeassureApp'
+    },
+    {
+        title: '标定工作台',
+        description: '会话状态机驱动的流程控制，自动/手动动作与过程状态可视化',
+        icon: SetUp,
+        path: '/calibration',
+        color: 'success',
+        stats: '流程控制',
+        source: '1604标定软件'
+    },
+    {
+        title: '多设备打压控制',
+        description: '同时控制多台打压设备，实时压力监控与稳定检测',
+        icon: Odometer,
+        path: '/multi-pressure',
+        color: 'warning',
+        stats: '并发控制',
+        source: '独立模块'
+    }
+]
+
+function navigateTo(path: string): void {
+    router.push(path)
+}
 </script>
 
+<template>
+    <PageLayout>
+        <!-- 顶部标题栏 -->
+        <header class="page-header">
+            <div class="header-title">
+                <h2>欢迎使用</h2>
+                <p>1604 设备管理 + 计量 + 标定融合系统</p>
+            </div>
+            <div class="header-meta">
+                <span class="version">v2.0.0</span>
+            </div>
+        </header>
+
+        <!-- 欢迎区域 -->
+        <section class="welcome-section">
+            <div class="welcome-card">
+                <div class="welcome-content">
+                    <h3>专业计量标定解决方案</h3>
+                    <p>
+                        本系统融合两个历史程序能力，并把设备管理独立为统一模块，供计量与标定模块共享设备选择结果。
+                        采用现代化界面设计，提供流畅的操作体验。
+                    </p>
+                </div>
+                <div class="welcome-decoration">
+                    <div class="decoration-circle"></div>
+                    <div class="decoration-ring"></div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 功能卡片区域 -->
+        <section class="features-section">
+            <h3 class="section-title">功能入口</h3>
+            <div class="features-grid">
+                <div
+                    v-for="card in featureCards"
+                    :key="card.path"
+                    class="feature-card"
+                    :class="`color-${card.color}`"
+                    @click="navigateTo(card.path)"
+                >
+                    <div class="card-header">
+                        <div class="card-icon">
+                            <el-icon>
+                                <component :is="card.icon" />
+                            </el-icon>
+                        </div>
+                        <span class="card-stats">{{ card.stats }}</span>
+                    </div>
+                    <div class="card-body">
+                        <h4>{{ card.title }}</h4>
+                        <p class="card-source">{{ card.source }}</p>
+                        <p>{{ card.description }}</p>
+                    </div>
+                    <div class="card-footer">
+                        <span>进入功能</span>
+                        <el-icon><ArrowRight /></el-icon>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 快捷操作区域 -->
+        <section class="quick-actions">
+            <h3 class="section-title">快捷操作</h3>
+            <div class="actions-grid">
+                <div class="action-item" @click="navigateTo('/device-management')">
+                    <div class="action-icon primary">
+                        <el-icon><Tools /></el-icon>
+                    </div>
+                    <span>设备管理</span>
+                </div>
+                <div class="action-item" @click="navigateTo('/measurement')">
+                    <div class="action-icon accent">
+                        <el-icon><DataLine /></el-icon>
+                    </div>
+                    <span>开始计量</span>
+                </div>
+                <div class="action-item" @click="navigateTo('/calibration')">
+                    <div class="action-icon success">
+                        <el-icon><SetUp /></el-icon>
+                    </div>
+                    <span>开始标定</span>
+                </div>
+                <div class="action-item" @click="navigateTo('/multi-pressure')">
+                    <div class="action-icon warning">
+                        <el-icon><Odometer /></el-icon>
+                    </div>
+                    <span>打压控制</span>
+                </div>
+            </div>
+        </section>
+    </PageLayout>
+</template>
+
 <style scoped lang="scss">
-.module-hub-page {
-  padding: var(--spacing-lg);
-  box-sizing: border-box;
-  height: 100%;
-  overflow: hidden;
-  background: var(--bg-primary);
+@import '@/styles/variables.scss';
+
+// 页面头部
+.page-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    flex-shrink: 0;
+    padding-bottom: $spacing-4;
+    border-bottom: 1px solid $border-color-light;
+    margin-bottom: $spacing-8;
+
+    .header-title {
+        h2 {
+            font-size: 28px;
+            font-weight: $font-weight-bold;
+            color: $text-primary;
+            margin: 0 0 $spacing-2;
+            letter-spacing: -0.02em;
+        }
+
+        p {
+            font-size: $font-size-lg;
+            color: $text-secondary;
+            margin: 0;
+        }
+    }
+
+    .header-meta {
+        .version {
+            font-size: 11px;
+            color: $text-tertiary;
+            padding: 2px 8px;
+            background: rgba($neutral-800, 0.5);
+            border-radius: $radius-full;
+            border: 1px solid $border-color;
+            font-family: $font-family-mono;
+        }
+    }
 }
 
-.desktop-shell {
-  max-width: 1200px;
-  height: 100%;
-  margin: 0 auto;
-  display: flex;
-  flex-direction: column;
-  gap: var(--spacing-md);
+// 欢迎区域
+.welcome-section {
+    flex-shrink: 0;
+    margin-bottom: $spacing-8;
 }
 
-.hero {
-  margin-bottom: 0;
-  padding-bottom: var(--spacing-xl);
-  border-bottom: 1px solid var(--border-color);
+.welcome-card {
+    position: relative;
+    background: linear-gradient(135deg, rgba($primary-900, 0.4) 0%, rgba($primary-800, 0.2) 100%);
+    border: 1px solid rgba($primary-500, 0.2);
+    border-radius: $radius-xl;
+    padding: $spacing-8;
+    overflow: hidden;
+
+    &::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        right: 0;
+        width: 40%;
+        height: 100%;
+        background: radial-gradient(circle at top right, rgba($primary-500, 0.15), transparent 70%);
+        pointer-events: none;
+    }
 }
 
-.hero-caption {
-  color: var(--accent-primary);
-  font-size: 11px;
-  letter-spacing: 0.1em;
-  margin: 0 0 var(--spacing-sm);
-  text-transform: uppercase;
-  font-weight: 600;
+.welcome-content {
+    position: relative;
+    z-index: 1;
+    max-width: 600px;
+
+    h3 {
+        font-size: $font-size-2xl;
+        font-weight: $font-weight-semibold;
+        color: $text-primary;
+        margin: 0 0 $spacing-3;
+    }
+
+    p {
+        font-size: $font-size-base;
+        color: $text-secondary;
+        line-height: $line-height-relaxed;
+        margin: 0;
+    }
 }
 
-.hero h1 {
-  color: var(--text-primary);
-  margin: 0 0 var(--spacing-sm);
-  font-size: 22px;
-  font-weight: 600;
+// 功能区域
+.features-section {
+    flex-shrink: 0;
+    margin-bottom: $spacing-8;
 }
 
-.hero > p {
-  color: var(--text-secondary);
-  margin: 0;
-  max-width: 800px;
-  font-size: 14px;
-  line-height: 1.6;
+.section-title {
+    font-size: $font-size-lg;
+    font-weight: $font-weight-semibold;
+    color: $text-primary;
+    margin: 0 0 $spacing-4;
+    display: flex;
+    align-items: center;
+    gap: $spacing-2;
+    
+    &::before {
+        content: '';
+        width: 4px;
+        height: 16px;
+        background: $primary-500;
+        border-radius: 2px;
+    }
 }
 
-.module-grid {
-  display: grid;
-  gap: var(--spacing-md);
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
+.features-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    gap: $spacing-6;
 }
 
-.module-card {
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-color);
-  border-radius: 4px;
-  padding: var(--spacing-lg);
-  display: flex;
-  flex-direction: column;
-  transition: all 0.15s ease;
+.feature-card {
+    background: $bg-surface;
+    border: 1px solid $border-color;
+    border-radius: $radius-lg;
+    padding: $spacing-6;
+    cursor: pointer;
+    transition: all $transition-normal;
+    position: relative;
+    overflow: hidden;
 
-  &:hover {
-    border-color: var(--accent-primary);
-  }
+    &:hover {
+        transform: translateY(-4px);
+        background: rgba($neutral-800, 0.8);
+        border-color: $border-color-strong;
+        box-shadow: $shadow-lg;
 
-  &:first-child {
-    border-top: 2px solid var(--accent-primary);
-  }
+        .card-footer {
+            color: $primary-400;
+
+            .el-icon {
+                transform: translateX(4px);
+            }
+        }
+        
+        .card-icon {
+            background: rgba($primary-500, 0.2);
+            color: $primary-400;
+        }
+    }
+    
+    &.color-accent:hover {
+        .card-footer {
+            color: $accent-400;
+        }
+        
+        .card-icon {
+            background: rgba($accent-500, 0.2);
+            color: $accent-400;
+        }
+    }
+    
+    &.color-success:hover {
+        .card-footer {
+            color: $success-400;
+        }
+        
+        .card-icon {
+            background: rgba($success-500, 0.2);
+            color: $success-400;
+        }
+    }
+    
+    &.color-warning:hover {
+        .card-footer {
+            color: $warning-400;
+        }
+        
+        .card-icon {
+            background: rgba($warning-500, 0.2);
+            color: $warning-400;
+        }
+    }
 }
 
 .card-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: var(--spacing-md);
-}
-
-.module-tag {
-  color: var(--text-muted);
-  font-size: 10px;
-  letter-spacing: 0.1em;
-  margin: 0;
-  text-transform: uppercase;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: $spacing-5;
 }
 
 .card-icon {
-  font-size: 20px;
-  color: var(--accent-primary);
+    width: 48px;
+    height: 48px;
+    background: rgba($neutral-800, 0.8);
+    border-radius: $radius-md;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: $text-tertiary;
+    font-size: 24px;
+    transition: all $transition-fast;
+    border: 1px solid rgba($border-color, 0.5);
 }
 
-.module-card h2 {
-  color: var(--text-primary);
-  margin: 0 0 var(--spacing-xs);
-  font-size: 18px;
-  font-weight: 600;
+.card-stats {
+    font-size: 10px;
+    color: $text-tertiary;
+    padding: 2px 8px;
+    background: rgba($neutral-900, 0.5);
+    border-radius: $radius-full;
+    border: 1px solid $border-color-light;
+    font-weight: 500;
 }
 
-.module-source {
-  color: var(--text-secondary);
-  margin: 0 0 var(--spacing-md);
-  font-size: 13px;
+.card-body {
+    margin-bottom: $spacing-6;
+
+    h4 {
+        font-size: $font-size-lg;
+        font-weight: $font-weight-semibold;
+        color: $text-primary;
+        margin: 0 0 $spacing-2;
+    }
+
+    .card-source {
+        font-size: 11px;
+        color: $text-muted;
+        margin: 0 0 $spacing-2;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+    }
+
+    p {
+        font-size: $font-size-sm;
+        color: $text-secondary;
+        line-height: $line-height-normal;
+        margin: 0;
+    }
 }
 
-.module-card ul {
-  color: var(--text-secondary);
-  margin: 0 0 var(--spacing-md);
-  padding-left: 16px;
-  flex: 1;
+.card-footer {
+    display: flex;
+    align-items: center;
+    gap: $spacing-2;
+    font-size: $font-size-sm;
+    color: $text-tertiary;
+    transition: color $transition-fast;
+    font-weight: $font-weight-medium;
+
+    .el-icon {
+        font-size: 14px;
+        transition: transform $transition-fast;
+    }
 }
 
-.module-card li {
-  margin-bottom: 2px;
-  font-size: 13px;
-  line-height: 1.6;
+// 快捷操作
+.quick-actions {
+    flex-shrink: 0;
 }
 
-.entry-btn {
-  background: var(--accent-primary);
-  border-radius: 3px;
-  color: var(--bg-primary);
-  display: inline-flex;
-  align-items: center;
-  gap: var(--spacing-xs);
-  padding: 6px 14px;
-  text-decoration: none;
-  font-weight: 600;
-  font-size: 13px;
-  transition: all 0.15s ease;
-
-  &:hover {
-    background: var(--accent-secondary);
-  }
-
-  .el-icon {
-    font-size: 14px;
-  }
+.actions-grid {
+    display: flex;
+    gap: $spacing-4;
+    flex-wrap: wrap;
 }
 
-@media (max-width: 1200px) {
-  .module-grid {
-    grid-template-columns: repeat(2, 1fr);
-  }
+.action-item {
+    display: flex;
+    align-items: center;
+    gap: $spacing-3;
+    padding: $spacing-4 $spacing-5;
+    background: $bg-surface;
+    border: 1px solid $border-color;
+    border-radius: $radius-md;
+    cursor: pointer;
+    transition: all $transition-fast;
+    min-width: 180px;
+
+    &:hover {
+        background: rgba($neutral-800, 0.8);
+        border-color: $border-color-strong;
+        transform: translateY(-2px);
+        box-shadow: $shadow-md;
+    }
+
+    span {
+        font-size: $font-size-sm;
+        color: $text-secondary;
+        font-weight: $font-weight-medium;
+    }
 }
 
-@media (max-width: 900px) {
-  .module-hub-page {
-    padding: var(--spacing-md);
-  }
+.action-icon {
+    width: 32px;
+    height: 32px;
+    border-radius: $radius-sm;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
 
-  .desktop-shell {
-    max-width: 100%;
-    height: auto;
-    gap: var(--spacing-md);
-  }
+    &.primary {
+        background: rgba($primary-500, 0.1);
+        color: $primary-400;
+        border: 1px solid rgba($primary-500, 0.2);
+    }
 
-  .module-grid {
-    grid-template-columns: 1fr;
-    min-height: auto;
-  }
+    &.success {
+        background: rgba($success-500, 0.1);
+        color: $success-400;
+        border: 1px solid rgba($success-500, 0.2);
+    }
+    
+    &.accent {
+        background: rgba($accent-500, 0.1);
+        color: $accent-400;
+        border: 1px solid rgba($accent-500, 0.2);
+    }
+    
+    &.warning {
+        background: rgba($warning-500, 0.1);
+        color: $warning-400;
+        border: 1px solid rgba($warning-500, 0.2);
+    }
+}
 
-  .hero h1 {
-    font-size: 20px;
-  }
+// 响应式适配
+@media (max-width: 768px) {
+    .features-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .actions-grid {
+        flex-direction: column;
+    }
+    
+    .action-item {
+        min-width: 100%;
+    }
 }
 </style>

@@ -149,8 +149,8 @@ func TestGeneratePressurePointsUsesMeasurementConfig(t *testing.T) {
 		t.Fatalf("GeneratePressurePoints: %v", err)
 	}
 
-	if len(points) != 9 {
-		t.Fatalf("expected 9 points, got %d", len(points))
+	if len(points) != 10 {
+		t.Fatalf("expected 10 points, got %d", len(points))
 	}
 
 	if points[0].Direction != "forward" {
@@ -161,7 +161,7 @@ func TestGeneratePressurePointsUsesMeasurementConfig(t *testing.T) {
 		t.Fatalf("expected last point direction backward, got %s", points[len(points)-1].Direction)
 	}
 
-	if points[0].TargetPressure != 0 || points[4].TargetPressure != 100 || points[8].TargetPressure != 0 {
+	if points[0].TargetPressure != 0 || points[4].TargetPressure != 100 || points[9].TargetPressure != 0 {
 		t.Fatalf("unexpected round-trip pressures: %+v", points)
 	}
 }
@@ -363,7 +363,7 @@ func TestSetStateTransitions(t *testing.T) {
 		wantError bool
 	}{
 		{name: "idle_to_pressuring", from: measurement.StateIdle, to: measurement.StatePressuring},
-		{name: "idle_to_collecting_invalid", from: measurement.StateIdle, to: measurement.StateCollecting, wantError: true},
+		{name: "idle_to_collecting", from: measurement.StateIdle, to: measurement.StateCollecting},
 		{name: "pressuring_to_stabilizing", from: measurement.StatePressuring, to: measurement.StateStabilizing},
 		{name: "pressuring_to_paused", from: measurement.StatePressuring, to: measurement.StatePaused},
 		{name: "stabilizing_to_collecting", from: measurement.StateStabilizing, to: measurement.StateCollecting},

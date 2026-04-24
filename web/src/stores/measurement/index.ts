@@ -29,6 +29,9 @@ import {
   resolveMeasurementAlarm,
   getMeasurementParamsConfig,
   saveMeasurementParamsConfig,
+  autoCollectMeasurement,
+  manualPressurizeMeasurement,
+  manualCollectMeasurement,
   type MeasurementPoint,
   type MeasurementAlarmConfig,
   type MeasurementParamsPayload
@@ -234,6 +237,20 @@ export const useMeasurementStore = defineStore('measurement', () => {
           alarmPending.value = false
           alarmData.value = null
           break
+        case 'measurement.point.status': {
+          const updatedPoint = payload.data as MeasurementPoint
+          const idx = points.value.findIndex(p => p.id === updatedPoint.id)
+          if (idx >= 0) points.value[idx] = updatedPoint
+          break
+        }
+        case 'measurement.data.collected': {
+          const collected = payload.data as { pointIndex: number; channels: number[]; data: number[] }
+          const pointIdx = points.value.findIndex(p => p.index === collected.pointIndex)
+          if (pointIdx >= 0) {
+            points.value[pointIdx] = { ...points.value[pointIdx], collectedData: collected.data, status: 'completed' }
+          }
+          break
+        }
       }
     })
   }
@@ -307,6 +324,38 @@ export const useMeasurementStore = defineStore('measurement', () => {
     alarmPending.value = false
   }
 
+  // ── 按点采集 ──
+
+  const autoCollect = async () => {
+    try {
+      const newState = await autoCollectMeasurement()
+      state.value = newState as MeasurementState
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error)
+      ElMessage.error(`自动采集失败: ${detail}`)
+    }
+  }
+
+  const manualPressurize = async (pointIndex: number) => {
+    try {
+      const newState = await manualPressurizeMeasurement(pointIndex)
+      state.value = newState as MeasurementState
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error)
+      ElMessage.error(`手动打压失败: ${detail}`)
+    }
+  }
+
+  const manualCollect = async (pointIndex: number) => {
+    try {
+      const newState = await manualCollectMeasurement(pointIndex)
+      state.value = newState as MeasurementState
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error)
+      ElMessage.error(`手动采集失败: ${detail}`)
+    }
+  }
+
   return {
     // 状态
     state,
@@ -364,6 +413,10 @@ export const useMeasurementStore = defineStore('measurement', () => {
     saveAlarmConfig,
     refreshAlarmPending,
     resolveAlarm,
+    // 按点采集
+    autoCollect,
+    manualPressurize,
+    manualCollect,
     // SSE
     setupSSE,
     teardownSSE,

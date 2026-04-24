@@ -64,12 +64,12 @@ func TestMeasurementStartCreatesWorkflowSession(t *testing.T) {
 	}
 
 	startState := callMeasurementStateEndpoint(t, router, http.MethodPost, "/api/v1/measurement/start", `{"channels":[1,2]}`)
-	if startState != "ready" {
-		t.Fatalf("expected start state ready, got %s", startState)
+	if startState != "collecting" {
+		t.Fatalf("expected start state collecting, got %s", startState)
 	}
 
-	if state := callMeasurementStateEndpoint(t, router, http.MethodGet, "/api/v1/measurement/state", ""); state != "ready" {
-		t.Fatalf("expected current measurement state ready, got %s", state)
+	if state := callMeasurementStateEndpoint(t, router, http.MethodGet, "/api/v1/measurement/state", ""); state != "collecting" {
+		t.Fatalf("expected current measurement state collecting, got %s", state)
 	}
 
 	listReq := httptest.NewRequest(http.MethodGet, "/api/v1/measurement/points", nil)
@@ -177,8 +177,8 @@ func TestMeasurementGeneratePointsEndpointUsesMeasurementConfig(t *testing.T) {
 		t.Fatalf("decode measurement points response: %v", err)
 	}
 
-	if len(resp.Data) != 9 {
-		t.Fatalf("expected 9 measurement points, got %d", len(resp.Data))
+	if len(resp.Data) != 10 {
+		t.Fatalf("expected 10 measurement points, got %d", len(resp.Data))
 	}
 
 	if resp.Data[0].Direction != "forward" || resp.Data[len(resp.Data)-1].Direction != "backward" {

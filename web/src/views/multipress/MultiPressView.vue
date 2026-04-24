@@ -1,52 +1,17 @@
 <template>
-  <section class="multi-press-page">
-    <div class="desktop-shell">
-      <header class="module-header">
-        <div>
-          <p class="module-caption">
-            Multi-Pressure Control
-          </p>
+  <PageLayout>
+    <!-- 页面头部 -->
+    <header class="page-header">
+      <div class="header-left">
+        <button class="back-btn" @click="goBack">
+          <el-icon><ArrowLeft /></el-icon>
+        </button>
+        <div class="header-title">
           <h1>多设备打压控制</h1>
+          <p>并发控制多台打压设备</p>
         </div>
-
-        <nav class="module-switch">
-          <RouterLink
-            class="switch-btn"
-            :to="{ name: 'module-device-management' }"
-          >
-            设备管理
-          </RouterLink>
-          <RouterLink
-            class="switch-btn"
-            :to="{ name: 'module-measurement' }"
-          >
-            计量模块
-          </RouterLink>
-          <RouterLink
-            class="switch-btn"
-            :to="{ name: 'module-calibration' }"
-          >
-            标定模块
-          </RouterLink>
-          <RouterLink
-            class="switch-btn active"
-            :to="{ name: 'module-multi-pressure' }"
-          >
-            多设备打压
-          </RouterLink>
-          <RouterLink
-            class="switch-btn switch-btn-ghost"
-            :to="{ name: 'module-hub' }"
-          >
-            <el-icon><ArrowLeft /></el-icon>
-            返回
-          </RouterLink>
-        </nav>
-      </header>
-
-      <div class="stats-bar">
-        <StatCard label="注册设备" :value="store.registeredCount" />
-        <StatCard label="打压中" :value="store.pressurizingCount" color="#ffd700" />
+      </div>
+      <div class="header-actions">
         <el-button
           type="danger"
           size="small"
@@ -56,333 +21,283 @@
           全部停止
         </el-button>
       </div>
+    </header>
 
-      <!-- 未注册打压设备 -->
-      <section v-if="store.availableDevices.length > 0" class="available-section">
-        <h3 class="section-title">可用打压设备</h3>
-        <div class="available-grid">
-          <div
-            v-for="dev in store.availableDevices"
-            :key="dev.id"
-            class="available-card"
-          >
-            <div class="available-info">
-              <span class="available-name">{{ dev.name }}</span>
-              <span class="available-detail">{{ dev.host }}:{{ dev.port }}</span>
-            </div>
-            <el-button size="small" type="primary" @click="handleRegister(dev.id)">
-              注册
-            </el-button>
-          </div>
-        </div>
-      </section>
-
-      <!-- 已注册设备卡片网格 -->
-      <section v-if="store.registeredDevices.length > 0" class="registered-section">
-        <h3 class="section-title">已注册设备</h3>
-        <div class="registered-grid">
-          <PressureControlCard
-            v-for="devState in store.registeredDevices"
-            :key="devState.deviceId"
-            :state="devState"
-            :metadata="store.getMeta(devState.deviceId)"
-            @set-pressure="handleSetPressure"
-            @stop="handleStop"
-            @exhaust="handleExhaust"
-            @unregister="handleUnregister"
-            @set-unit="handleSetUnit"
-          />
-        </div>
-      </section>
-
-      <!-- 空状态 -->
-      <section v-if="store.registeredDevices.length === 0 && store.availableDevices.length === 0" class="empty-state">
-        <p class="empty-text">暂无打压设备</p>
-        <p class="empty-hint">请先在设备管理模块中添加打压类型设备</p>
-        <el-button size="small" @click="$router.push({ name: 'module-device-management' })">
-          前往设备管理
-        </el-button>
-      </section>
+    <!-- 统计栏 -->
+    <div class="stats-bar">
+      <StatCard label="注册设备" :value="store.registeredCount" />
+      <StatCard label="打压中" :value="store.pressurizingCount" color="#ffd700" />
     </div>
-  </section>
+
+    <!-- 未注册打压设备 -->
+    <section v-if="store.availableDevices.length > 0" class="available-section">
+      <h3 class="section-title">可用打压设备</h3>
+      <div class="available-grid">
+        <div
+          v-for="dev in store.availableDevices"
+          :key="dev.id"
+          class="available-card"
+        >
+          <div class="available-info">
+            <span class="available-name">{{ dev.name }}</span>
+            <span class="available-detail">{{ dev.host }}:{{ dev.port }}</span>
+          </div>
+          <el-button size="small" type="primary" @click="handleRegister(dev.id)">
+            注册
+          </el-button>
+        </div>
+      </div>
+    </section>
+
+    <!-- 已注册设备卡片网格 -->
+    <section v-if="store.registeredDevices.length > 0" class="registered-section">
+      <h3 class="section-title">已注册设备</h3>
+      <div class="registered-grid">
+        <PressureControlCard
+          v-for="devState in store.registeredDevices"
+          :key="devState.deviceId"
+          :state="devState"
+          :metadata="store.getMeta(devState.deviceId)"
+          @set-pressure="handleSetPressure"
+          @stop="handleStop"
+          @exhaust="handleExhaust"
+          @unregister="handleUnregister"
+          @set-unit="handleSetUnit"
+        />
+      </div>
+    </section>
+
+    <!-- 空状态 -->
+    <section v-if="store.registeredDevices.length === 0 && store.availableDevices.length === 0" class="empty-state">
+      <p class="empty-text">暂无打压设备</p>
+    </section>
+  </PageLayout>
 </template>
 
 <script setup lang="ts">
 import { onMounted, onUnmounted } from 'vue'
-import { RouterLink } from 'vue-router'
+import { useRouter } from 'vue-router'
 import { ArrowLeft } from '@element-plus/icons-vue'
-import { createEventStream } from "@/api/client"
-import type { StreamEventPayload } from "@/types/api"
 import { useMultiPressStore } from '@/stores/multipress'
+import PageLayout from '@/components/common/PageLayout.vue'
 import StatCard from '@/components/common/StatCard.vue'
 import PressureControlCard from './PressureControlCard.vue'
 
+const router = useRouter()
 const store = useMultiPressStore()
-let eventSource: EventSource | null = null
 
-onMounted(async () => {
-  await store.loadPressureDevices()
-  await store.refreshDeviceStates()
-  store.startPolling()
+function goBack(): void {
+  router.push('/')
+}
 
-  eventSource = createEventStream((payload: StreamEventPayload) => {
-    store.handleSSEEvent(payload)
-  })
-})
-
-onUnmounted(() => {
-  store.stopPolling()
-  if (eventSource) {
-    eventSource.close()
-    eventSource = null
-  }
-})
-
-async function handleRegister(deviceId: string) {
+async function handleRegister(deviceId: string): Promise<void> {
   await store.registerDevice(deviceId)
 }
 
-async function handleUnregister(deviceId: string) {
+async function handleSetPressure(payload: { deviceId: string; pressure: number }): Promise<void> {
+  await store.setPressure(payload.deviceId, payload.pressure)
+}
+
+async function handleStop(deviceId: string): Promise<void> {
+  await store.stopPressurizing(deviceId)
+}
+
+async function handleExhaust(deviceId: string): Promise<void> {
+  await store.exhaust(deviceId)
+}
+
+async function handleUnregister(deviceId: string): Promise<void> {
   await store.unregisterDevice(deviceId)
 }
 
-async function handleSetPressure(deviceId: string, target: number) {
-  await store.setPressure(deviceId, target)
+async function handleSetUnit(payload: { deviceId: string; unit: string }): Promise<void> {
+  await store.setUnit(payload.deviceId, payload.unit)
 }
 
-async function handleStop(deviceId: string) {
-  await store.stopDevice(deviceId)
-}
-
-async function handleExhaust(deviceId: string) {
-  await store.exhaustDevice(deviceId)
-}
-
-async function handleSetUnit(deviceId: string, unit: string) {
-  await store.setUnit(deviceId, unit)
-}
-
-async function handleStopAll() {
+async function handleStopAll(): Promise<void> {
   await store.stopAll()
 }
+
+onMounted(() => {
+  store.setupListeners()
+})
+
+onUnmounted(() => {
+  store.cleanup()
+})
 </script>
 
 <style scoped lang="scss">
-.multi-press-page {
-  padding: var(--spacing-lg);
-  box-sizing: border-box;
-  height: 100%;
-  overflow: hidden;
-  background: var(--bg-primary);
-}
+@import '@/styles/variables.scss';
 
-.desktop-shell {
-  max-width: 100%;
-  height: 100%;
-  margin: 0 auto;
+.page-header {
   display: flex;
-  flex-direction: column;
-  gap: var(--spacing-md);
-}
-
-.module-header {
-  align-items: flex-end;
-  border-bottom: 1px solid var(--border-color);
-  display: flex;
-  gap: var(--spacing-lg);
   justify-content: space-between;
-  padding-bottom: var(--spacing-lg);
+  align-items: flex-end;
   flex-shrink: 0;
-  min-height: 52px;
+  padding-bottom: $spacing-4;
+  border-bottom: 1px solid $border-color-light;
 }
 
-.module-caption {
-  color: var(--accent-primary);
-  font-size: 11px;
-  letter-spacing: 0.08em;
-  margin: 0 0 var(--spacing-xs);
-  text-transform: uppercase;
-  font-weight: 600;
-}
-
-.module-header h1 {
-  color: var(--text-primary);
-  margin: 0;
-  font-size: 20px;
-  font-weight: 600;
-}
-
-.module-switch {
+.header-left {
   display: flex;
-  flex-wrap: wrap;
-  gap: var(--spacing-xs);
+  align-items: center;
+  gap: $spacing-4;
 }
 
-.switch-btn {
-  background: var(--bg-tertiary);
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-sm);
-  color: var(--text-secondary);
-  padding: 6px 14px;
-  text-decoration: none;
-  font-size: 13px;
-  transition: all 0.15s ease;
-  display: inline-flex;
+.back-btn {
+  width: 40px;
+  height: 40px;
+  background: rgba($neutral-800, 0.6);
+  border: 1px solid $border-color;
+  border-radius: $radius-md;
+  color: $text-secondary;
+  cursor: pointer;
+  transition: all $transition-fast;
+  display: flex;
   align-items: center;
-  gap: var(--spacing-xs);
+  justify-content: center;
+  font-size: 18px;
 
   &:hover {
-    background: var(--bg-quaternary);
-    color: var(--text-primary);
-  }
-
-  .el-icon {
-    font-size: 12px;
+    background: rgba($neutral-700, 0.8);
+    color: $text-primary;
+    border-color: $border-color-strong;
   }
 }
 
-.switch-btn.active {
-  background: var(--accent-primary);
-  border-color: var(--accent-primary);
-  color: var(--bg-primary);
-  font-weight: 600;
+.header-title {
+  h1 {
+    font-size: 28px;
+    font-weight: $font-weight-bold;
+    color: $text-primary;
+    margin: 0 0 $spacing-1;
+    letter-spacing: -0.02em;
+  }
+
+  p {
+    font-size: $font-size-sm;
+    color: $text-secondary;
+    margin: 0;
+  }
 }
 
-.switch-btn-ghost {
-  background: transparent;
+.header-actions {
+  display: flex;
+  gap: $spacing-3;
 }
 
 .stats-bar {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--spacing-md);
+  gap: $spacing-4;
   flex-shrink: 0;
 }
 
 .section-title {
-  color: var(--text-secondary);
-  font-size: 12px;
-  text-transform: uppercase;
-  letter-spacing: 1px;
-  margin: 0 0 var(--spacing-sm);
-  font-weight: 600;
+  font-size: $font-size-lg;
+  font-weight: $font-weight-semibold;
+  color: $text-primary;
+  margin: 0 0 $spacing-4;
+  display: flex;
+  align-items: center;
+  gap: $spacing-2;
+  
+  &::before {
+    content: '';
+    width: 4px;
+    height: 16px;
+    background: $primary-500;
+    border-radius: 2px;
+  }
 }
 
-/* 可用设备区 */
-.available-section {
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-color);
-  border-radius: 4px;
-  padding: var(--spacing-md);
+.available-section,
+.registered-section {
   flex-shrink: 0;
 }
 
 .available-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: var(--spacing-sm);
+  gap: $spacing-4;
 }
 
 .available-card {
+  background: $bg-card;
+  border: 1px solid $border-color;
+  border-radius: $radius-lg;
+  padding: $spacing-4;
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  padding: var(--spacing-sm) var(--spacing-md);
-  background: var(--bg-tertiary);
-  border-radius: 3px;
-  border: 1px solid var(--border-color);
+  justify-content: space-between;
+  gap: $spacing-4;
+  transition: all $transition-fast;
+
+  &:hover {
+    border-color: rgba($primary-500, 0.3);
+    box-shadow: $shadow-md;
+  }
 }
 
 .available-info {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: $spacing-1;
 }
 
 .available-name {
-  color: var(--text-primary);
-  font-size: 13px;
-  font-weight: 600;
+  font-size: $font-size-base;
+  font-weight: $font-weight-medium;
+  color: $text-primary;
 }
 
 .available-detail {
-  color: var(--text-secondary);
-  font-size: 11px;
-}
-
-/* 已注册设备区 */
-.registered-section {
-  display: flex;
-  flex-direction: column;
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
+  font-size: $font-size-xs;
+  color: $text-tertiary;
+  font-family: $font-family-mono;
 }
 
 .registered-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
-  gap: var(--spacing-md);
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: $spacing-6;
 }
 
-/* 空状态 */
 .empty-state {
+  flex: 1;
   display: flex;
-  flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 80px 0;
-  gap: var(--spacing-sm);
-  flex: 1;
-  min-height: 0;
 }
 
 .empty-text {
-  color: var(--text-secondary);
-  font-size: 16px;
-  margin: 0;
+  font-size: $font-size-lg;
+  color: $text-tertiary;
 }
 
-.empty-hint {
-  color: var(--text-muted);
-  font-size: 13px;
-  margin: 0;
-}
-
-@media (max-width: 1200px) {
-  .registered-grid {
-    grid-template-columns: repeat(2, 1fr);
-  }
-}
-
-@media (max-width: 900px) {
-  .multi-press-page {
-    padding: var(--spacing-md);
-    overflow: auto;
-  }
-
-  .module-header {
+// 响应式适配
+@media (max-width: 768px) {
+  .page-header {
     flex-direction: column;
     align-items: flex-start;
-    gap: var(--spacing-md);
+    gap: $spacing-4;
   }
 
+  .header-left {
+    width: 100%;
+  }
+
+  .header-title h1 {
+    font-size: $font-size-xl;
+  }
+  
   .stats-bar {
     flex-direction: column;
-    align-items: flex-start;
   }
-
+  
+  .available-grid,
   .registered-grid {
     grid-template-columns: 1fr;
-  }
-
-  .available-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .registered-section {
-    overflow-y: visible;
   }
 }
 </style>

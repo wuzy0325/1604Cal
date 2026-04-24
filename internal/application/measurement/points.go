@@ -12,17 +12,18 @@ import (
 // 当前阶段先由 measurement 模块自己持有参数与点位计划，
 // 后续自动/手动采集流程在此基础上继续扩展。
 type Config struct {
-	Channels       []int     `json:"channels"`
-	MinPressure    float64   `json:"minPressure"`
-	MaxPressure    float64   `json:"maxPressure"`
-	PointCount     int       `json:"pointCount"`
-	Precision      int       `json:"precision"`
-	AverageCount   int       `json:"averageCount"`
-	PrecisionLevel float64   `json:"precisionLevel"`
-	StableWaitMs   int       `json:"stableWaitMs"`
-	PressureMode   string    `json:"pressureMode"`
-	ControlMode    string    `json:"controlMode"`
-	CustomPoints   []float64 `json:"customPoints"`
+	Channels            []int     `json:"channels"`
+	MinPressure         float64   `json:"minPressure"`
+	MaxPressure         float64   `json:"maxPressure"`
+	PointCount          int       `json:"pointCount"`
+	Precision           int       `json:"precision"`
+	AverageCount        int       `json:"averageCount"`
+	PrecisionLevel      float64   `json:"precisionLevel"`
+	StableWaitMs        int       `json:"stableWaitMs"`
+	StabilityTimeoutMs  int       `json:"stabilityTimeoutMs"`
+	PressureMode        string    `json:"pressureMode"`
+	ControlMode         string    `json:"controlMode"`
+	CustomPoints        []float64 `json:"customPoints"`
 }
 
 // Point 表示计量模块测点计划中的单个压力点。
@@ -45,6 +46,8 @@ func (s *Service) SetConfig(config Config) {
 	s.config = config
 	s.points = nil
 	s.session = nil
+	s.alarmPending = false
+	s.currentAlarm = nil
 	if len(config.Channels) > 0 {
 		s.channels = append([]int(nil), config.Channels...)
 	}
@@ -112,7 +115,7 @@ func generatePointsFromConfig(config Config) ([]Point, error) {
 		step = (maxPressure - minPressure) / float64(config.PointCount-1)
 	}
 
-	points := make([]Point, 0, config.PointCount*2-1)
+	points := make([]Point, 0, config.PointCount*2)
 	for i := 0; i < config.PointCount; i++ {
 		pressure := roundToPrecision(minPressure+step*float64(i), precision)
 		points = append(points, Point{
@@ -128,7 +131,7 @@ func generatePointsFromConfig(config Config) ([]Point, error) {
 		return points, nil
 	}
 
-	for i := config.PointCount - 2; i >= 0; i-- {
+	for i := config.PointCount - 1; i >= 0; i-- {
 		pressure := roundToPrecision(minPressure+step*float64(i), precision)
 		points = append(points, Point{
 			ID:             "measurement-point-" + strconv.Itoa(len(points)+1),
@@ -153,7 +156,7 @@ func generatePointsFromCustom(config Config) ([]Point, error) {
 		precision = 0
 	}
 
-	points := make([]Point, 0, len(config.CustomPoints)*2-1)
+	points := make([]Point, 0, len(config.CustomPoints)*2)
 	for i, pressure := range config.CustomPoints {
 		rounded := roundToPrecision(pressure, precision)
 		points = append(points, Point{
@@ -169,7 +172,7 @@ func generatePointsFromCustom(config Config) ([]Point, error) {
 		return points, nil
 	}
 
-	for i := len(config.CustomPoints) - 2; i >= 0; i-- {
+	for i := len(config.CustomPoints) - 1; i >= 0; i-- {
 		rounded := roundToPrecision(config.CustomPoints[i], precision)
 		points = append(points, Point{
 			ID:             "measurement-point-" + strconv.Itoa(len(points)+1),

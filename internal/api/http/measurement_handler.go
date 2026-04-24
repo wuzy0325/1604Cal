@@ -69,6 +69,13 @@ func (s *apiServer) measurementStartHandler(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
+	if err := s.measurementService.Start(r.Context(), req.Channels); err != nil {
+		// Start 失败时回滚到 idle。
+		_ = s.measurementService.Stop()
+		writeError(w, err)
+		return
+	}
+
 	writeSuccess(w, http.StatusOK, map[string]string{"state": string(s.measurementService.State())})
 }
 
@@ -176,4 +183,66 @@ func (s *apiServer) measurementAlarmPendingHandler(w http.ResponseWriter, r *htt
 	}
 
 	writeSuccess(w, http.StatusOK, map[string]bool{"pending": s.measurementService.IsAlarmPending()})
+}
+
+func (s *apiServer) measurementAutoCollectHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
+	if err := s.measurementService.RunAutoCollection(r.Context()); err != nil {
+		writeError(w, err)
+		return
+	}
+
+	writeSuccess(w, http.StatusOK, map[string]string{"state": string(s.measurementService.State())})
+}
+
+func (s *apiServer) measurementManualPressurizeHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req struct {
+		PointIndex int `json:"pointIndex"`
+	}
+	decoder := json.NewDecoder(r.Body)
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&req); err != nil {
+		writeError(w, apperrors.ErrInvalidArgument)
+		return
+	}
+
+	if err := s.measurementService.ManualPressurize(r.Context(), req.PointIndex); err != nil {
+		writeError(w, err)
+		return
+	}
+
+	writeSuccess(w, http.StatusOK, map[string]string{"state": string(s.measurementService.State())})
+}
+
+func (s *apiServer) measurementManualCollectHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req struct {
+		PointIndex int `json:"pointIndex"`
+	}
+	decoder := json.NewDecoder(r.Body)
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&req); err != nil {
+		writeError(w, apperrors.ErrInvalidArgument)
+		return
+	}
+
+	if err := s.measurementService.ManualCollect(r.Context(), req.PointIndex); err != nil {
+		writeError(w, err)
+		return
+	}
+
+	writeSuccess(w, http.StatusOK, map[string]string{"state": string(s.measurementService.State())})
 }

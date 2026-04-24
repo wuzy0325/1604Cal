@@ -98,14 +98,20 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { DataLine, Download, SetUp } from '@element-plus/icons-vue'
+import { useMeasurementStore } from '@/stores/measurement'
 import type { CollectedRow } from '@/stores/measurement'
 
 const props = defineProps<{
-  rows: CollectedRow[]
-  channels: number[]
+  rows?: CollectedRow[]
+  channels?: number[]
 }>()
 
 defineEmits<{ 'export-csv': [] }>()
+
+const measurementStore = useMeasurementStore()
+
+const rows = computed(() => props.rows ?? measurementStore.rows)
+const channels = computed(() => props.channels ?? measurementStore.channels)
 
 interface DisplayRow {
   index: number
@@ -127,7 +133,7 @@ function estimateActualPressure(row: CollectedRow | undefined): string {
     return '--'
   }
 
-  const sourceChannels = props.channels.length > 0 ? props.channels : visibleChannels.value
+  const sourceChannels = channels.value.length > 0 ? channels.value : visibleChannels.value
   const values = sourceChannels
     .map(channel => row.channels[String(channel)])
     .filter((value): value is number => typeof value === 'number' && Number.isFinite(value))
@@ -141,12 +147,12 @@ function estimateActualPressure(row: CollectedRow | undefined): string {
 }
 
 const visibleChannels = computed(() => {
-  if (props.channels.length > 0) {
-    return props.channels
+  if (channels.value.length > 0) {
+    return channels.value
   }
 
   const channelSet = new Set<number>()
-  for (const row of props.rows) {
+  for (const row of rows.value) {
     for (const key of Object.keys(row.channels)) {
       const channel = Number(key)
       if (Number.isInteger(channel)) {
@@ -159,7 +165,7 @@ const visibleChannels = computed(() => {
 })
 
 const tableRows = computed<DisplayRow[]>(() => {
-  return props.rows.map((row, index) => {
+  return rows.value.map((row, index) => {
     const channelValues: Record<number, string> = {}
 
     for (const channel of visibleChannels.value) {

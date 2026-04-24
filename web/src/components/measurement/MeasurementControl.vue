@@ -95,7 +95,7 @@ import { useMeasurementStore } from '@/stores/measurement'
 const props = defineProps({
   channels: {
     type: Array as PropType<number[]>,
-    required: true
+    default: undefined
   },
   canStart: {
     type: Boolean,
@@ -103,15 +103,15 @@ const props = defineProps({
   },
   isStable: {
     type: Boolean,
-    default: false
+    default: undefined
   },
   stableSeconds: {
     type: Number,
-    default: 0
+    default: undefined
   },
   selectedChannelCount: {
     type: Number,
-    default: 0
+    default: undefined
   }
 })
 
@@ -131,6 +131,27 @@ const canStart = computed(() => {
   }
 
   return measurementStore.isStartable && measurementStore.deviceBound
+})
+
+const isStable = computed(() => {
+  if (typeof props.isStable === 'boolean') {
+    return props.isStable
+  }
+  return measurementStore.isStable
+})
+
+const stableSeconds = computed(() => {
+  if (typeof props.stableSeconds === 'number') {
+    return props.stableSeconds
+  }
+  return measurementStore.stabilityState.stableDurationMs / 1000
+})
+
+const selectedChannelCount = computed(() => {
+  if (typeof props.selectedChannelCount === 'number') {
+    return props.selectedChannelCount
+  }
+  return measurementStore.channels.length
 })
 
 const stateTextMap: Record<string, string> = {

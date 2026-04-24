@@ -1,171 +1,186 @@
 <template>
-  <section class="module-page">
-    <div class="desktop-shell">
-      <header class="module-header">
-        <div>
-          <p class="module-caption">
-            Unified Device Registry
-          </p>
-          <h1>设备管理模块</h1>
+  <PageLayout>
+    <!-- 页面头部 -->
+    <header class="page-header">
+      <div class="header-left">
+        <button class="back-btn" @click="goBack">
+          <el-icon><ArrowLeft /></el-icon>
+        </button>
+        <div class="header-title">
+          <h1>设备管理</h1>
+          <p>配置和管理打压设备与计量设备</p>
         </div>
+      </div>
+      <div class="header-actions">
+        <button
+          class="action-btn refresh"
+          :class="{ loading: refreshing }"
+          @click="handleRefresh"
+        >
+          <el-icon><Refresh /></el-icon>
+          <span>刷新</span>
+        </button>
+      </div>
+    </header>
 
-        <nav class="module-switch">
-          <RouterLink
-            class="switch-btn active"
-            :to="{ name: 'module-device-management' }"
-          >
-            设备管理
-          </RouterLink>
-          <RouterLink
-            class="switch-btn"
-            :to="{ name: 'module-measurement' }"
-          >
-            计量模块
-          </RouterLink>
-          <RouterLink
-            class="switch-btn"
-            :to="{ name: 'module-calibration' }"
-          >
-            标定模块
-          </RouterLink>
-          <RouterLink
-            class="switch-btn"
-            :to="{ name: 'module-multi-pressure' }"
-          >
-            多设备打压
-          </RouterLink>
-          <RouterLink
-            class="switch-btn switch-btn-ghost"
-            :to="{ name: 'module-hub' }"
-          >
-            <el-icon><ArrowLeft /></el-icon>
-            返回
-          </RouterLink>
-        </nav>
-      </header>
-
-      <DeviceManagementPanel class="module-panel" />
-    </div>
-  </section>
+    <!-- 设备管理面板 -->
+    <DeviceManagementPanel class="content-panel" />
+  </PageLayout>
 </template>
 
 <script setup lang="ts">
-import { RouterLink } from 'vue-router'
-import { ArrowLeft } from '@element-plus/icons-vue'
-
+import { ref, onMounted, onUnmounted } from 'vue'
+import { useRouter } from 'vue-router'
+import { Refresh, ArrowLeft } from '@element-plus/icons-vue'
+import { useDeviceStore } from '@/stores/deviceStore'
+import PageLayout from '@/components/common/PageLayout.vue'
 import DeviceManagementPanel from '@/components/device/DeviceManagementPanel.vue'
+
+const router = useRouter()
+const deviceStore = useDeviceStore()
+
+/** 刷新加载状态 */
+const refreshing = ref(false)
+
+/**
+ * 返回首页
+ */
+function goBack(): void {
+  router.push('/')
+}
+
+/**
+ * 刷新设备列表
+ */
+async function handleRefresh(): Promise<void> {
+  refreshing.value = true
+  try {
+    await deviceStore.loadDevices()
+    await deviceStore.checkUnitConsistency()
+  } finally {
+    refreshing.value = false
+  }
+}
+
+// 生命周期：挂载时初始化
+onMounted(async () => {
+  deviceStore.setupListeners()
+  await deviceStore.loadDevices()
+  await deviceStore.checkUnitConsistency()
+})
+
+// 生命周期：卸载时清理
+onUnmounted(() => {
+  deviceStore.cleanup()
+})
 </script>
 
 <style scoped lang="scss">
-.module-page {
-  padding: var(--spacing-lg);
-  box-sizing: border-box;
-  height: 100%;
-  overflow: hidden;
-  background: var(--bg-primary);
-}
+@import '@/styles/variables.scss';
 
-.desktop-shell {
-  max-width: 100%;
-  height: 100%;
-  margin: 0 auto;
+.page-header {
   display: flex;
-  flex-direction: column;
-  gap: var(--spacing-md);
-}
-
-.module-header {
-  align-items: flex-end;
-  border-bottom: 1px solid var(--border-color);
-  display: flex;
-  gap: var(--spacing-lg);
   justify-content: space-between;
-  padding-bottom: var(--spacing-lg);
+  align-items: flex-end;
   flex-shrink: 0;
-  min-height: 52px;
+  padding-bottom: $spacing-4;
+  border-bottom: 1px solid $border-color-light;
 }
 
- .module-panel {
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: $spacing-4;
+}
+
+.back-btn {
+  width: 40px;
+  height: 40px;
+  background: rgba($neutral-800, 0.6);
+  border: 1px solid $border-color;
+  border-radius: $radius-md;
+  color: $text-secondary;
+  cursor: pointer;
+  transition: all $transition-fast;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+
+  &:hover {
+    background: rgba($neutral-700, 0.8);
+    color: $text-primary;
+    border-color: $border-color-strong;
+  }
+}
+
+.header-title {
+  h1 {
+    font-size: 28px;
+    font-weight: $font-weight-bold;
+    color: $text-primary;
+    margin: 0 0 $spacing-1;
+    letter-spacing: -0.02em;
+  }
+
+  p {
+    font-size: $font-size-sm;
+    color: $text-secondary;
+    margin: 0;
+  }
+}
+
+.header-actions {
+  display: flex;
+  gap: $spacing-3;
+}
+
+.action-btn {
+  display: flex;
+  align-items: center;
+  gap: $spacing-2;
+  padding: $spacing-2 $spacing-4;
+  background: rgba($neutral-800, 0.6);
+  border: 1px solid $border-color;
+  border-radius: $radius-md;
+  color: $text-secondary;
+  cursor: pointer;
+  transition: all $transition-fast;
+  font-size: $font-size-sm;
+  font-weight: $font-weight-medium;
+
+  &:hover {
+    background: rgba($neutral-700, 0.8);
+    color: $text-primary;
+    border-color: $border-color-strong;
+  }
+
+  &.refresh.loading {
+    opacity: 0.6;
+    pointer-events: none;
+  }
+}
+
+.content-panel {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  overflow-x: hidden;
 }
 
-.module-caption {
-  color: var(--accent-primary);
-  font-size: 11px;
-  letter-spacing: 0.08em;
-  margin: 0 0 var(--spacing-xs);
-  text-transform: uppercase;
-  font-weight: 600;
-}
-
-.module-header h1 {
-  color: var(--text-primary);
-  margin: 0;
-  font-size: 20px;
-  font-weight: 600;
-}
-
-.module-switch {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--spacing-xs);
-}
-
-.switch-btn {
-  background: var(--bg-tertiary);
-  border: 1px solid var(--border-color);
-  border-radius: 3px;
-  color: var(--text-secondary);
-  padding: 5px 12px;
-  text-decoration: none;
-  font-size: 13px;
-  transition: all 0.15s ease;
-  display: inline-flex;
-  align-items: center;
-  gap: var(--spacing-xs);
-
-  &:hover {
-    background: var(--bg-quaternary);
-    color: var(--text-primary);
-  }
-
-  .el-icon {
-    font-size: 12px;
-  }
-}
-
-.switch-btn.active {
-  background: var(--accent-primary);
-  border-color: var(--accent-primary);
-  color: var(--bg-primary);
-  font-weight: 600;
-}
-
-.switch-btn-ghost {
-  background: transparent;
-}
-
-@media (max-width: 900px) {
-  .module-page {
-    padding: var(--spacing-md);
-    overflow: auto;
-  }
-
-  .desktop-shell {
-    max-width: 100%;
-    height: auto;
-    gap: var(--spacing-md);
-  }
-
-  .module-header {
+// 响应式适配
+@media (max-width: 768px) {
+  .page-header {
     flex-direction: column;
+    align-items: flex-start;
+    gap: $spacing-4;
   }
 
-  .module-switch {
+  .header-left {
     width: 100%;
+  }
+
+  .header-title h1 {
+    font-size: $font-size-xl;
   }
 }
 </style>

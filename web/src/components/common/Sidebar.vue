@@ -1,176 +1,321 @@
 <template>
   <aside class="sidebar">
-    <div class="logo">
-      <span class="logo-icon">&#9733;</span>
-      <span class="logo-text">1604校准系统</span>
+    <div class="sidebar-header">
+      <div class="logo">
+        <div class="logo-icon">
+          <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M12 2L2 7L12 12L22 7L12 2Z" fill="currentColor" fill-opacity="0.2"/>
+            <path d="M2 17L12 22L22 17" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M2 12L12 17L22 12" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </div>
+        <div class="logo-text">
+          <h1>1604系统</h1>
+          <span>融合平台</span>
+        </div>
+      </div>
     </div>
-    <div class="sidebar-search">
-      <input type="text" placeholder="搜索..." aria-label="搜索" />
-    </div>
-    <nav class="nav-menu">
-      <div class="nav-section-title">模块</div>
-      <router-link
-        :to="{ name: 'module-hub' }"
+
+    <nav class="sidebar-nav">
+      <div
+        v-for="item in menuItems"
+        :key="item.path"
         class="nav-item"
-        :class="{ active: $route.name === 'module-hub' }"
+        :class="{ active: isActive(item.path) }"
+        @click="handleNavigate(item.path)"
       >
-        <el-icon>
-          <HomeFilled />
+        <el-icon class="nav-icon">
+          <component :is="item.icon" />
         </el-icon>
-        <span>模块入口</span>
-      </router-link>
-      <router-link
-        :to="{ name: 'module-device-management' }"
-        class="nav-item"
-        :class="{ active: $route.name === 'module-device-management' }"
-      >
-        <el-icon>
-          <Setting />
-        </el-icon>
-        <span>设备管理</span>
-      </router-link>
-      <router-link
-        :to="{ name: 'module-measurement' }"
-        class="nav-item"
-        :class="{ active: $route.name === 'module-measurement' }"
-      >
-        <el-icon>
-          <Tools />
-        </el-icon>
-        <span>计量工作台</span>
-      </router-link>
-      <router-link
-        :to="{ name: 'module-calibration' }"
-        class="nav-item"
-        :class="{ active: $route.name === 'module-calibration' }"
-      >
-        <el-icon>
-          <SetUp />
-        </el-icon>
-        <span>标定工作台</span>
-      </router-link>
-      <router-link
-        :to="{ name: 'module-multi-pressure' }"
-        class="nav-item"
-        :class="{ active: $route.name === 'module-multi-pressure' }"
-      >
-        <el-icon>
-          <Odometer />
-        </el-icon>
-        <span>多设备打压</span>
-      </router-link>
+        <div class="nav-content">
+          <span class="nav-title">{{ item.title }}</span>
+          <span class="nav-desc">{{ item.description }}</span>
+        </div>
+      </div>
     </nav>
+
+    <div class="sidebar-footer">
+      <div class="system-status">
+        <div class="status-dot online"></div>
+        <span>系统运行正常</span>
+      </div>
+    </div>
   </aside>
 </template>
 
 <script setup lang="ts">
-import { HomeFilled, Odometer, Setting, SetUp, Tools } from '@element-plus/icons-vue'
+import { computed } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
+import { House, Tools, DataLine, SetUp, Odometer } from '@element-plus/icons-vue'
+
+const router = useRouter()
+const route = useRoute()
+
+const menuItems = [
+  { path: '/', icon: House, title: '首页', description: '系统概览' },
+  { path: '/device-management', icon: Tools, title: '设备管理', description: '设备台账管理' },
+  { path: '/measurement', icon: DataLine, title: '计量模块', description: '计量数据采集' },
+  { path: '/calibration', icon: SetUp, title: '标定工作台', description: '设备标定校准' },
+  { path: '/multi-pressure', icon: Odometer, title: '多设备打压', description: '多设备并行控制' }
+]
+
+function isActive(path: string): boolean {
+  return route.path === path
+}
+
+function handleNavigate(path: string): void {
+  router.push(path)
+}
 </script>
 
 <style scoped lang="scss">
+@import '@/styles/variables.scss';
+
 .sidebar {
-  width: 220px;
-  height: 100vh;
-  background: var(--bg-secondary);
-  border-right: 1px solid var(--border-color);
+  width: $sidebar-width;
+  height: 100%;
+  background: $sidebar-bg;
+  border-right: 1px solid $border-color;
   display: flex;
   flex-direction: column;
   flex-shrink: 0;
+  position: relative;
+  z-index: 10;
+}
 
-  .logo {
+.sidebar-header {
+  padding: $spacing-6;
+  border-bottom: 1px solid $border-color;
+}
+
+.logo {
+  display: flex;
+  align-items: center;
+  gap: $spacing-3;
+
+  .logo-icon {
+    width: 40px;
+    height: 40px;
+    color: $primary-400;
     display: flex;
     align-items: center;
-    gap: 8px;
-    padding: 14px 16px;
-    border-bottom: 1px solid var(--border-color);
+    justify-content: center;
+    background: rgba($primary-500, 0.1);
+    border-radius: $radius-md;
 
-    .logo-icon {
-      color: var(--accent-primary);
-      font-size: 18px;
+    svg {
+      width: 24px;
+      height: 24px;
     }
+  }
 
-    .logo-text {
-      color: var(--text-primary);
-      font-size: 14px;
-      font-weight: 700;
+  .logo-text {
+    display: flex;
+    flex-direction: column;
+
+    h1 {
+      font-size: $font-size-lg;
+      font-weight: $font-weight-bold;
+      color: $text-primary;
+      line-height: 1.2;
+      margin: 0;
       letter-spacing: 0.5px;
     }
+
+    span {
+      font-size: 10px;
+      color: $text-tertiary;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+    }
   }
+}
 
-  .sidebar-search {
-    padding: 10px 12px;
-    border-bottom: 1px solid var(--border-color);
+// 导航菜单
+.sidebar-nav {
+  flex: 1;
+  padding: $spacing-4;
+  overflow-y: auto;
+}
 
-    input {
-      width: 100%;
-      background: var(--bg-primary);
-      border: 1px solid var(--border-color-strong);
-      color: var(--text-primary);
-      padding: 5px 10px;
-      border-radius: 3px;
-      font-size: 12px;
-      outline: none;
-      &:focus-visible {
-        outline: 2px solid var(--accent-primary);
-        outline-offset: -2px;
-        border-radius: var(--radius-sm);
-      }
+.nav-item {
+  display: flex;
+  align-items: center;
+  gap: $spacing-3;
+  padding: $spacing-3 $spacing-4;
+  margin-bottom: $spacing-1;
+  border-radius: $radius-md;
+  cursor: pointer;
+  transition: all $transition-fast;
+  position: relative;
+  overflow: hidden;
 
-      &:focus {
-        border-color: var(--accent-primary);
-      }
+  &:hover {
+    background: rgba($neutral-700, 0.5);
 
-      &::placeholder {
-        color: var(--text-muted);
-      }
+    .nav-icon {
+      color: $text-primary;
+    }
+    
+    .nav-title {
+      color: $text-primary;
     }
   }
 
-  .nav-section-title {
-    padding: 16px 16px 4px;
-    font-size: 10px;
-    text-transform: uppercase;
-    letter-spacing: 1.5px;
-    color: var(--text-muted);
-    font-weight: 600;
+  &.active {
+    background: rgba($primary-500, 0.15);
+    
+    &::before {
+      content: '';
+      position: absolute;
+      left: 0;
+      top: 50%;
+      transform: translateY(-50%);
+      height: 20px;
+      width: 3px;
+      background: $primary-500;
+      border-radius: 0 $radius-full $radius-full 0;
+    }
+
+    .nav-icon {
+      color: $primary-400;
+    }
+
+    .nav-title {
+      color: $text-primary;
+      font-weight: $font-weight-medium;
+    }
+  }
+}
+
+.nav-icon {
+  font-size: 18px;
+  color: $text-tertiary;
+  transition: color $transition-fast;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+}
+
+.nav-content {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  flex: 1;
+  min-width: 0;
+}
+
+.nav-title {
+  font-size: $font-size-base;
+  color: $text-secondary;
+  transition: color $transition-fast;
+}
+
+.nav-desc {
+  font-size: 11px;
+  color: $text-muted;
+  display: none; // 默认隐藏描述，保持侧边栏简洁
+}
+
+// 侧边栏底部
+.sidebar-footer {
+  padding: $spacing-4 $spacing-6;
+  border-top: 1px solid $border-color;
+  background: rgba($neutral-900, 0.3);
+}
+
+.system-status {
+  display: flex;
+  align-items: center;
+  gap: $spacing-2;
+  font-size: $font-size-xs;
+  color: $text-tertiary;
+
+  .status-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    position: relative;
+
+    &.online {
+      background: $success-500;
+      box-shadow: 0 0 6px rgba($success-500, 0.4);
+
+      &::after {
+        content: '';
+        position: absolute;
+        inset: -3px;
+        border-radius: 50%;
+        border: 1px solid $success-500;
+        opacity: 0.3;
+        animation: pulse 2s ease-in-out infinite;
+      }
+    }
+  }
+}
+
+@keyframes pulse {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 0.3;
+  }
+  50% {
+    transform: scale(1.5);
+    opacity: 0;
+  }
+}
+
+// 响应式适配
+@media (max-width: 768px) {
+  .sidebar {
+    width: 100%;
+    height: auto;
+    flex-direction: row;
+    padding: $spacing-3;
+    align-items: center;
+    border-right: none;
+    border-bottom: 1px solid $border-color;
+
+    .sidebar-header,
+    .sidebar-footer {
+      display: none;
+    }
   }
 
-  .nav-menu {
-    flex: 1;
+  .sidebar-nav {
+    display: flex;
+    gap: $spacing-2;
     padding: 0;
-    overflow-y: auto;
+    overflow-x: auto;
+    
+    &::-webkit-scrollbar {
+      display: none;
+    }
+  }
 
-    .nav-item {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      padding: 8px 16px;
-      color: var(--text-secondary);
-      text-decoration: none;
-      font-size: 13px;
-      border-left: 2px solid transparent;
-      transition: all 0.15s;
+  .nav-item {
+    flex-direction: column;
+    padding: $spacing-2;
+    margin: 0;
+    min-width: 60px;
+    text-align: center;
+    background: transparent;
 
-      &:hover {
-        background: var(--bg-tertiary);
-        color: var(--text-primary);
-      }
+    &:hover {
+      background: rgba($neutral-700, 0.3);
+    }
 
-      &.active {
-        background: var(--bg-tertiary);
-        color: var(--accent-primary);
-        border-left-color: var(--accent-primary);
-      }
-
-      .el-icon {
-        font-size: 16px;
-      }
-
-      /* 模块入口之后的分组间距 */
-      &:first-child {
-        margin-top: 4px;
+    &.active {
+      background: rgba($primary-500, 0.1);
+      
+      &::before {
+        display: none;
       }
     }
+  }
+  
+  .nav-title {
+    font-size: 10px;
   }
 }
 </style>

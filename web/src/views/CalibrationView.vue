@@ -1,87 +1,256 @@
 <template>
-  <section class="module-page">
-    <div class="desktop-shell">
-      <header class="module-header">
-        <div>
-          <p class="module-caption">Calibration Workbench</p>
+  <PageLayout>
+    <!-- 页面头部 -->
+    <header class="page-header">
+      <div class="header-left">
+        <button class="back-btn" @click="goBack">
+          <el-icon><ArrowLeft /></el-icon>
+        </button>
+        <div class="header-title">
           <h1>标定工作台</h1>
+          <p>设备标定校准与数据采集</p>
         </div>
-        <nav class="module-switch">
-          <RouterLink class="switch-btn" :to="{ name: 'module-device-management' }">设备管理</RouterLink>
-          <RouterLink class="switch-btn" :to="{ name: 'module-measurement' }">计量模块</RouterLink>
-          <RouterLink class="switch-btn active" :to="{ name: 'module-calibration' }">标定模块</RouterLink>
-          <RouterLink class="switch-btn" :to="{ name: 'module-multi-pressure' }">多设备打压</RouterLink>
-          <RouterLink class="switch-btn switch-btn-ghost" :to="{ name: 'module-hub' }">
-            <el-icon><ArrowLeft /></el-icon>返回
-          </RouterLink>
-        </nav>
-      </header>
-
-      <div class="calibration-layout">
-        <CalibrationSidebar :collapsed="sidebarCollapsed" @toggle="sidebarCollapsed = !sidebarCollapsed" />
-        <main class="workbench">
-          <ProgressIndicator :current-step="calibrationStore.currentStep" />
-          <CalibrationParams />
-          <CalibrationControl />
-          <CalibrationDataView @select-template="dialogsRef?.openTemplateDialog()" />
-          <div v-if="dialogsRef?.templateFilename" class="template-result-bar">
-            <el-icon><DocumentChecked /></el-icon>
-            <span>当前报告模板：{{ dialogsRef.templateFilename }}</span>
-          </div>
-        </main>
       </div>
+      <div class="header-actions">
+        <span class="state-badge" :class="stateClass">{{ stateLabel }}</span>
+      </div>
+    </header>
 
-      <CalibrationDialogs ref="dialogsRef" />
+    <!-- 标定工作台内容 -->
+    <div class="workbench-content">
+      <CalibrationSidebar :collapsed="sidebarCollapsed" @toggle="sidebarCollapsed = !sidebarCollapsed" />
+      
+      <main class="workbench-main">
+        <ProgressIndicator :current-step="calibrationStore.currentStep" />
+        <CalibrationParams />
+        <CalibrationControl />
+        <CalibrationDataView @select-template="dialogsRef?.openTemplateDialog()" />
+        <div v-if="dialogsRef?.templateFilename" class="template-result-bar">
+          <el-icon><DocumentChecked /></el-icon>
+          <span>当前报告模板：{{ dialogsRef.templateFilename }}</span>
+        </div>
+      </main>
     </div>
-  </section>
+
+    <CalibrationDialogs ref="dialogsRef" />
+  </PageLayout>
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
-import { RouterLink } from 'vue-router'
+import { ref, computed } from 'vue'
+import { useRouter } from 'vue-router'
 import { ArrowLeft, DocumentChecked } from '@element-plus/icons-vue'
+import { useCalibrationStore } from '@/stores/calibration'
+import { useCalibrationSync } from '@/composables/useCalibrationSync'
+import { useConfigPersistence } from '@/composables/useConfigPersistence'
+import PageLayout from '@/components/common/PageLayout.vue'
 import CalibrationSidebar from '@/components/calibration/CalibrationSidebar.vue'
 import CalibrationParams from '@/components/calibration/CalibrationParams.vue'
 import CalibrationControl from '@/components/calibration/CalibrationControl.vue'
 import CalibrationDataView from '@/components/calibration/CalibrationDataView.vue'
 import CalibrationDialogs from '@/components/calibration/CalibrationDialogs.vue'
 import ProgressIndicator from '@/components/calibration/ProgressIndicator.vue'
-import { useCalibrationStore } from '@/stores/calibration'
-import { useCalibrationSync } from '@/composables/useCalibrationSync'
-import { useConfigPersistence } from '@/composables/useConfigPersistence'
 
+const router = useRouter()
 const calibrationStore = useCalibrationStore()
 const sidebarCollapsed = ref(false)
 const dialogsRef = ref<InstanceType<typeof CalibrationDialogs>>()
 
 useCalibrationSync()
 useConfigPersistence()
+
+function goBack(): void {
+  router.push('/')
+}
+
+const stateLabel = computed(() => {
+  const state = calibrationStore.sessionState
+  const stateMap: Record<string, string> = {
+    idle: '空闲',
+    preparing: '准备中',
+    running: '运行中',
+    paused: '已暂停',
+    completed: '已完成',
+    error: '错误'
+  }
+  return stateMap[state] || state
+})
+
+const stateClass = computed(() => {
+  const state = calibrationStore.sessionState
+  const classMap: Record<string, string> = {
+    idle: 'state-idle',
+    preparing: 'state-preparing',
+    running: 'state-running',
+    paused: 'state-paused',
+    completed: 'state-completed',
+    error: 'state-error'
+  }
+  return classMap[state] || ''
+})
 </script>
 
 <style scoped lang="scss">
-.module-page { padding: var(--spacing-lg); box-sizing: border-box; height: 100%; overflow: hidden; background: var(--bg-primary); }
-.desktop-shell { max-width: 100%; height: 100%; margin: 0 auto; display: flex; flex-direction: column; gap: var(--spacing-md); }
-.module-header { align-items: flex-end; border-bottom: 1px solid var(--border-color); display: flex; gap: var(--spacing-lg); justify-content: space-between; padding-bottom: var(--spacing-lg); flex-shrink: 0; min-height: 52px; }
-.module-caption { color: var(--accent-primary); font-size: 11px; letter-spacing: 0.08em; margin: 0 0 var(--spacing-xs); text-transform: uppercase; font-weight: 600; }
-.module-header h1 { color: var(--text-primary); margin: 0; font-size: 20px; font-weight: 600; }
-.module-switch { display: flex; flex-wrap: wrap; gap: var(--spacing-xs); }
-.switch-btn { background: var(--bg-tertiary); border: 1px solid var(--border-color); border-radius: var(--radius-sm); color: var(--text-secondary); padding: 5px 12px; text-decoration: none; font-size: 13px; transition: all 0.15s ease; display: inline-flex; align-items: center; gap: var(--spacing-xs);
-  &:hover { background: var(--bg-quaternary); color: var(--text-primary); }
-  .el-icon { font-size: 12px; }
+@import '@/styles/variables.scss';
+
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  flex-shrink: 0;
+  padding-bottom: $spacing-4;
+  border-bottom: 1px solid $border-color-light;
 }
-.switch-btn.active { background: var(--accent-primary); border-color: var(--accent-primary); color: var(--bg-primary); font-weight: 600; }
-.switch-btn-ghost { background: transparent; }
-.calibration-layout { flex: 1; min-height: 0; display: flex; gap: 0; background: var(--bg-primary); }
-.workbench { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: var(--spacing-lg); padding: var(--spacing-lg); overflow-y: auto; overflow-x: hidden; }
-.template-result-bar { display: flex; align-items: center; gap: var(--spacing-xs); padding: var(--spacing-xs) var(--spacing-md); background: var(--status-success-bg-subtle); border: 1px solid rgba(78, 201, 176, 0.3); border-radius: var(--radius-sm); font-size: 13px; flex-shrink: 0;
-  .el-icon { color: var(--status-success); }
-  span { color: var(--text-secondary); }
+
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: $spacing-4;
 }
-@media (max-width: 900px) {
-  .module-page { padding: var(--spacing-md); overflow: auto; }
-  .desktop-shell { max-width: 100%; height: auto; gap: var(--spacing-md); }
-  .module-header { flex-direction: column; }
-  .calibration-layout { flex-direction: column; min-height: auto; }
-  .workbench { overflow: visible; gap: var(--spacing-md); padding: var(--spacing-md); }
+
+.back-btn {
+  width: 40px;
+  height: 40px;
+  background: rgba($neutral-800, 0.6);
+  border: 1px solid $border-color;
+  border-radius: $radius-md;
+  color: $text-secondary;
+  cursor: pointer;
+  transition: all $transition-fast;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+
+  &:hover {
+    background: rgba($neutral-700, 0.8);
+    color: $text-primary;
+    border-color: $border-color-strong;
+  }
+}
+
+.header-title {
+  h1 {
+    font-size: 28px;
+    font-weight: $font-weight-bold;
+    color: $text-primary;
+    margin: 0 0 $spacing-1;
+    letter-spacing: -0.02em;
+  }
+
+  p {
+    font-size: $font-size-sm;
+    color: $text-secondary;
+    margin: 0;
+  }
+}
+
+.header-actions {
+  display: flex;
+  gap: $spacing-3;
+}
+
+.state-badge {
+  padding: $spacing-2 $spacing-4;
+  border-radius: $radius-md;
+  font-size: $font-size-sm;
+  font-weight: $font-weight-medium;
+  
+  &.state-idle {
+    background: rgba($neutral-700, 0.5);
+    color: $text-secondary;
+  }
+  
+  &.state-preparing,
+  &.state-running {
+    background: rgba($primary-500, 0.2);
+    color: $primary-400;
+  }
+  
+  &.state-paused {
+    background: rgba($warning-500, 0.2);
+    color: $warning-400;
+  }
+  
+  &.state-completed {
+    background: rgba($success-500, 0.2);
+    color: $success-400;
+  }
+  
+  &.state-error {
+    background: rgba($danger-500, 0.2);
+    color: $danger-400;
+  }
+}
+
+.workbench-content {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  gap: $spacing-6;
+  overflow: hidden;
+}
+
+.workbench-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-6;
+  overflow-y: auto;
+  
+  &::-webkit-scrollbar {
+    width: 8px;
+  }
+  
+  &::-webkit-scrollbar-thumb {
+    background: $neutral-700;
+    border-radius: 4px;
+  }
+  
+  &::-webkit-scrollbar-track {
+    background: transparent;
+  }
+}
+
+.template-result-bar {
+  display: flex;
+  align-items: center;
+  gap: $spacing-2;
+  padding: $spacing-3 $spacing-4;
+  background: rgba($success-500, 0.1);
+  border: 1px solid rgba($success-500, 0.3);
+  border-radius: $radius-md;
+  font-size: $font-size-sm;
+  flex-shrink: 0;
+
+  .el-icon {
+    color: $success-400;
+  }
+
+  span {
+    color: $text-secondary;
+  }
+}
+
+// 响应式适配
+@media (max-width: 768px) {
+  .page-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: $spacing-4;
+  }
+
+  .header-left {
+    width: 100%;
+  }
+
+  .header-title h1 {
+    font-size: $font-size-xl;
+  }
+  
+  .workbench-content {
+    flex-direction: column;
+  }
 }
 </style>

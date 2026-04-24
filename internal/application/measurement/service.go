@@ -28,12 +28,12 @@ const (
 
 // 获取状态迁移表。
 var transitions = map[State]map[State]struct{}{
-	StateIdle:        {StateReady: {}, StatePressuring: {}},
-	StateReady:       {StatePressuring: {}, StatePaused: {}, StateIdle: {}, StateError: {}},
+	StateIdle:        {StateReady: {}, StatePressuring: {}, StateCollecting: {}},
+	StateReady:       {StatePressuring: {}, StateCollecting: {}, StatePaused: {}, StateIdle: {}, StateError: {}},
 	StatePressuring:  {StateStabilizing: {}, StateError: {}, StatePaused: {}},
 	StateStabilizing: {StateCollecting: {}, StateError: {}, StatePaused: {}},
 	StateCollecting:  {StateReady: {}, StateCompleted: {}, StateError: {}, StatePaused: {}},
-	StateCompleted:   {StateIdle: {}},
+	StateCompleted:   {StateIdle: {}, StateCollecting: {}},
 	StateError:       {StateIdle: {}},
 	StatePaused:      {StatePressuring: {}, StateCollecting: {}, StateIdle: {}},
 }
@@ -72,6 +72,7 @@ type Service struct {
 	collectCtx    context.Context
 	collectCancel context.CancelFunc
 	collectMu     sync.Mutex
+	collectWg     sync.WaitGroup
 
 	// sessionStore 历史会话持久化存储。
 	sessionStore *SessionStore
@@ -122,14 +123,12 @@ func (s *Service) Start(ctx context.Context, channels []int) error {
 	s.sess.SetChannels(channels)
 
 	switch s.state {
-	case StateIdle, StateCompleted, StateError:
-		for _, next := range []State{StatePressuring, StateStabilizing, StateCollecting} {
-			if err := s.setStateLocked(next); err != nil {
-				s.mu.Unlock()
-				return fmt.Errorf("start measurement: %w", err)
-			}
-			stateChanges = append(stateChanges, next)
+	case StateIdle, StateCompleted, StateError, StateReady:
+		if err := s.setStateLocked(StateCollecting); err != nil {
+			s.mu.Unlock()
+			return fmt.Errorf("start measurement: %w", err)
 		}
+		stateChanges = append(stateChanges, StateCollecting)
 	case StatePaused:
 		if err := s.setStateLocked(StateCollecting); err != nil {
 			s.mu.Unlock()
@@ -324,15 +323,11 @@ func (s *Service) startCollectLoop(ctx context.Context) {
 	}
 	s.collectCtx, s.collectCancel = context.WithCancel(ctx)
 	collectCtx := s.collectCtx
+	s.collectWg.Add(1)
 	s.collectMu.Unlock()
 
 	go func() {
-		defer func() {
-			s.collectMu.Lock()
-			s.collectCancel = nil
-			s.collectCtx = nil
-			s.collectMu.Unlock()
-		}()
+		defer s.collectWg.Done()
 
 		ticker := time.NewTicker(500 * time.Millisecond)
 		defer ticker.Stop()
@@ -381,15 +376,18 @@ func (s *Service) startCollectLoop(ctx context.Context) {
 	}()
 }
 
-// stopCollectLoop 停止后台采集 goroutine。
+// stopCollectLoop 停止后台采集 goroutine 并等待其退出。
 func (s *Service) stopCollectLoop() {
 	s.collectMu.Lock()
-	if s.collectCancel != nil {
-		s.collectCancel()
-		s.collectCancel = nil
-		s.collectCtx = nil
-	}
+	cancel := s.collectCancel
+	s.collectCancel = nil
+	s.collectCtx = nil
 	s.collectMu.Unlock()
+
+	if cancel != nil {
+		cancel()
+		s.collectWg.Wait()
+	}
 }
 
 // canTransition 检查从当前状态是否可迁移到目标状态。
@@ -428,8 +426,9 @@ func (s *Service) finishSessionLocked(state State, endTime *time.Time) {
 	s.session.EndTime = endTime
 
 	if s.sessionStore != nil {
+		snapshot := *s.session
 		go func() {
-			_ = s.sessionStore.Save(s.session)
+			_ = s.sessionStore.Save(&snapshot)
 		}()
 	}
 }
