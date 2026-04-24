@@ -151,7 +151,7 @@ func newSessionRouterWithMeasureDriverAndRuntimeConfig(t *testing.T, runtimeCfg 
 			},
 		},
 	}
-	router := newRouter(store, connector, deviceconnect.DefaultConfig(), runtimeCfg, nil)
+	router := newRouter(store, connector, deviceconnect.DefaultConfig(), runtimeCfg, nil, "")
 
 	bindBody := bytes.NewReader([]byte(`{"measureDeviceId":"m1","pressureDeviceId":""}`))
 	bindReq := httptest.NewRequest(http.MethodPost, "/api/v1/session/devices", bindBody)
