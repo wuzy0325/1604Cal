@@ -85,9 +85,10 @@ export const useMeasurementStore = defineStore('measurement', () => {
   // 计量工作流相关
   const config = ref<MeasurementParamsPayload | null>(null)
   const points = ref<MeasurementPoint[]>([])
+  const currentPointIndex = ref(0)
   const alarmConfig = ref<MeasurementAlarmConfig>({
     enabled: true,
-    enabledChannels: [],
+    enabledChannels: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
     confirmOnAlarm: false,
     soundEnabled: true,
     threshold: 5.0
@@ -374,6 +375,26 @@ export const useMeasurementStore = defineStore('measurement', () => {
 
   // ── 按点采集 ──
 
+  const startPoint = (index: number) => {
+    currentPointIndex.value = index
+  }
+
+  const completePoint = () => {
+    currentPointIndex.value++
+  }
+
+  const resetCollection = () => {
+    currentPointIndex.value = 0
+    rows.value = []
+    points.value = []
+    state.value = 'idle'
+  }
+
+  const updatePointTarget = (pointId: string, targetPressure: number) => {
+    const pt = points.value.find(p => p.id === pointId)
+    if (pt) pt.targetPressure = targetPressure
+  }
+
   const autoCollect = async () => {
     try {
       const newState = await autoCollectMeasurement()
@@ -451,6 +472,7 @@ export const useMeasurementStore = defineStore('measurement', () => {
     // 计量工作流
     config,
     points,
+    currentPointIndex,
     alarmConfig,
     alarmPending,
     alarmData,
@@ -463,6 +485,10 @@ export const useMeasurementStore = defineStore('measurement', () => {
     refreshAlarmPending,
     resolveAlarm,
     // 按点采集
+    startPoint,
+    completePoint,
+    resetCollection,
+    updatePointTarget,
     autoCollect,
     manualPressurize,
     manualCollect,

@@ -114,6 +114,7 @@
 import { ref, computed, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { useMeasurementStore } from '@/stores/measurement'
+import { fetchUnitConsistency } from '@/api/device'
 
 const measurementStore = useMeasurementStore()
 
@@ -159,6 +160,10 @@ async function onGenerateClick() {
   if (!isParamValid.value) {
     ElMessage.warning('请先填写有效的计量参数')
     return
+  }
+  const unitCheck = await fetchUnitConsistency().catch(() => null)
+  if (unitCheck && !unitCheck.consistent) {
+    ElMessage.warning('设备压力单位不一致，建议统一单位后再生成压力表')
   }
   await measurementStore.generatePoints()
 }

@@ -236,6 +236,8 @@ export const useMultiPressStore = defineStore('multipress', () => {
     startPolling,
     stopPolling,
     getMeta,
-    refreshDeviceStates
+    refreshDeviceStates,
+    setupListeners: startPolling,
+    cleanup: stopPolling
   }
 })

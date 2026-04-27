@@ -98,15 +98,35 @@
     <div class="flex-spacer" />
 
     <div class="control-buttons">
-      <button
-        type="button"
-        class="ctrl-btn btn-start btn-primary-action"
-        :disabled="!canStart"
-        @click="$emit('start')"
-      >
-        <el-icon><VideoPlay /></el-icon>
-        开始采集
-      </button>
+      <template v-if="measurementStore.measurementParams.controlMode === 'auto'">
+        <button
+          type="button"
+          class="ctrl-btn btn-start btn-primary-action"
+          :disabled="!canStart"
+          @click="$emit('start')"
+        >
+          <el-icon><VideoPlay /></el-icon>
+          开始采集
+        </button>
+      </template>
+      <template v-else>
+        <button
+          type="button"
+          class="ctrl-btn btn-start btn-primary-action"
+          :disabled="!canManualPressurize"
+          @click="$emit('manual-pressurize')"
+        >
+          手动打压
+        </button>
+        <button
+          type="button"
+          class="ctrl-btn btn-collect"
+          :disabled="!canManualCollect"
+          @click="$emit('manual-collect')"
+        >
+          采集
+        </button>
+      </template>
       <button
         type="button"
         class="ctrl-btn btn-pause"
@@ -190,12 +210,14 @@ defineEmits<{
   reset: []
   export: []
   'select-channel': []
+  'manual-pressurize': []
+  'manual-collect': []
 }>()
 
 const measurementStore = useMeasurementStore()
 
 const completedCount = computed(() =>
-  measurementStore.points.filter(p => p.status === 'completed').length
+  measurementStore.currentPointIndex
 )
 
 const totalCount = computed(() => measurementStore.points.length)
@@ -211,6 +233,16 @@ function setControlMode(mode: 'auto' | 'manual') {
 
 const hasCompletedPoints = computed(() =>
   measurementStore.points.some(p => p.status === 'completed')
+)
+
+const canManualPressurize = computed(() =>
+  measurementStore.points.length > 0 && !measurementStore.isRunning
+)
+
+const canManualCollect = computed(() =>
+  measurementStore.measurementParams.controlMode === 'manual' &&
+  measurementStore.state === 'stabilizing' &&
+  measurementStore.isStable
 )
 
 const enabledChannelsDesc = computed(() => {

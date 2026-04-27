@@ -68,6 +68,12 @@
       </div>
     </div>
 
+    <div v-else class="empty-table-state">
+      <el-empty description="请配置参数并生成压力表" :image-size="80">
+        <p class="empty-hint">设置最小值、最大值和点数后点击"生成压力表"</p>
+      </el-empty>
+    </div>
+
     <!-- 实时采样数据 -->
     <div v-if="tableRows.length > 0" class="sample-section">
       <div class="table-header">
