@@ -131,7 +131,7 @@ func generatePointsFromConfig(config Config) ([]Point, error) {
 		return points, nil
 	}
 
-	for i := config.PointCount - 1; i >= 0; i-- {
+	for i := config.PointCount - 1; i > 0; i-- {
 		pressure := roundToPrecision(minPressure+step*float64(i), precision)
 		points = append(points, Point{
 			ID:             "measurement-point-" + strconv.Itoa(len(points)+1),
@@ -172,7 +172,7 @@ func generatePointsFromCustom(config Config) ([]Point, error) {
 		return points, nil
 	}
 
-	for i := len(config.CustomPoints) - 1; i >= 0; i-- {
+	for i := len(config.CustomPoints) - 1; i > 0; i-- {
 		rounded := roundToPrecision(config.CustomPoints[i], precision)
 		points = append(points, Point{
 			ID:             "measurement-point-" + strconv.Itoa(len(points)+1),

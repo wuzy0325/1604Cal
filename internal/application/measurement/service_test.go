@@ -149,8 +149,8 @@ func TestGeneratePressurePointsUsesMeasurementConfig(t *testing.T) {
 		t.Fatalf("GeneratePressurePoints: %v", err)
 	}
 
-	if len(points) != 10 {
-		t.Fatalf("expected 10 points, got %d", len(points))
+	if len(points) != 9 {
+		t.Fatalf("expected 9 points (5 forward + 4 backward), got %d", len(points))
 	}
 
 	if points[0].Direction != "forward" {
@@ -161,8 +161,12 @@ func TestGeneratePressurePointsUsesMeasurementConfig(t *testing.T) {
 		t.Fatalf("expected last point direction backward, got %s", points[len(points)-1].Direction)
 	}
 
-	if points[0].TargetPressure != 0 || points[4].TargetPressure != 100 || points[9].TargetPressure != 0 {
-		t.Fatalf("unexpected round-trip pressures: %+v", points)
+	// forward: 0, 25, 50, 75, 100; backward: 100, 75, 50, 25
+	expected := []float64{0, 25, 50, 75, 100, 100, 75, 50, 25}
+	for i, exp := range expected {
+		if points[i].TargetPressure != exp {
+			t.Fatalf("points[%d].TargetPressure = %v, want %v", i, points[i].TargetPressure, exp)
+		}
 	}
 }
 

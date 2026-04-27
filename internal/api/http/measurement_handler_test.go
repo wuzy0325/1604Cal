@@ -177,12 +177,20 @@ func TestMeasurementGeneratePointsEndpointUsesMeasurementConfig(t *testing.T) {
 		t.Fatalf("decode measurement points response: %v", err)
 	}
 
-	if len(resp.Data) != 10 {
-		t.Fatalf("expected 10 measurement points, got %d", len(resp.Data))
+	if len(resp.Data) != 9 {
+		t.Fatalf("expected 9 measurement points (5 forward + 4 backward), got %d", len(resp.Data))
 	}
 
 	if resp.Data[0].Direction != "forward" || resp.Data[len(resp.Data)-1].Direction != "backward" {
 		t.Fatalf("unexpected point directions: %+v", resp.Data)
+	}
+
+	// verify forward: [0, 25, 50, 75, 100], backward: [100, 75, 50, 25]
+	expected := []float64{0, 25, 50, 75, 100, 100, 75, 50, 25}
+	for i, exp := range expected {
+		if resp.Data[i].TargetPressure != exp {
+			t.Fatalf("points[%d].TargetPressure = %v, want %v", i, resp.Data[i].TargetPressure, exp)
+		}
 	}
 
 	listReq := httptest.NewRequest(http.MethodGet, "/api/v1/measurement/points", nil)

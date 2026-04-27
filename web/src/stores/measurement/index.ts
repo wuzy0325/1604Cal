@@ -69,10 +69,29 @@ export const useMeasurementStore = defineStore('measurement', () => {
     progress: 0
   })
 
+  // 计量参数（UI 直接绑定，与 backend config 映射）
+  const measurementParams = ref({
+    minPressure: 0,
+    maxPressure: 10,
+    pointCount: 5,
+    precision: 3,
+    averageCount: 3,
+    stableWaitS: 3,
+    precisionLevel: 0.05,
+    pressureMode: 'single' as 'single' | 'roundTrip',
+    controlMode: 'auto' as 'auto' | 'manual'
+  })
+
   // 计量工作流相关
   const config = ref<MeasurementParamsPayload | null>(null)
   const points = ref<MeasurementPoint[]>([])
-  const alarmConfig = ref<MeasurementAlarmConfig | null>(null)
+  const alarmConfig = ref<MeasurementAlarmConfig>({
+    enabled: true,
+    enabledChannels: [],
+    confirmOnAlarm: false,
+    soundEnabled: true,
+    threshold: 5.0
+  })
   const alarmPending = ref(false)
   const alarmData = ref<AlarmData | null>(null)
 
@@ -277,7 +296,22 @@ export const useMeasurementStore = defineStore('measurement', () => {
 
   const loadConfig = async () => {
     try {
-      config.value = await getMeasurementParamsConfig()
+      const cfg = await getMeasurementParamsConfig()
+      config.value = cfg
+      // 同步到 UI 绑定源
+      if (cfg) {
+        measurementParams.value = {
+          minPressure: cfg.minPressure,
+          maxPressure: cfg.maxPressure,
+          pointCount: cfg.pointCount,
+          precision: cfg.precision,
+          averageCount: cfg.averageCount,
+          stableWaitS: Math.round(cfg.stableDurationMs / 1000),
+          precisionLevel: cfg.precisionLevel,
+          pressureMode: cfg.pressureMode as 'single' | 'roundTrip',
+          controlMode: cfg.controlMode as 'auto' | 'manual'
+        }
+      }
     } catch { /* 静默 */ }
   }
 
@@ -294,6 +328,20 @@ export const useMeasurementStore = defineStore('measurement', () => {
 
   const generatePoints = async () => {
     try {
+      const p = measurementParams.value
+      const payload: MeasurementParamsPayload = {
+        minPressure: p.minPressure,
+        maxPressure: p.maxPressure,
+        pointCount: p.pointCount,
+        precision: p.precision,
+        averageCount: p.averageCount,
+        stableDurationMs: p.stableWaitS * 1000,
+        precisionLevel: p.precisionLevel,
+        pressureMode: p.pressureMode,
+        controlMode: p.controlMode
+      }
+      await saveMeasurementParamsConfig(payload)
+      config.value = payload
       points.value = await generateMeasurementPoints()
       ElMessage.success('压力点已生成')
     } catch (error) {
@@ -363,6 +411,7 @@ export const useMeasurementStore = defineStore('measurement', () => {
     channels,
     measureDeviceId,
     pressureDeviceId,
+    measurementParams,
     currentPressure,
     isStable,
     channelData,

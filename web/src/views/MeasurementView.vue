@@ -35,10 +35,11 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ArrowLeft } from '@element-plus/icons-vue'
 import { useMeasurementStore } from '@/stores/measurement'
+import { useMeasurementDeviceStore } from '@/stores/measurement/deviceStore'
 import PageLayout from '@/components/common/PageLayout.vue'
 import MeasurementSidebar from '@/components/measurement/MeasurementSidebar.vue'
 import MeasurementControl from '@/components/measurement/MeasurementControl.vue'
@@ -47,9 +48,14 @@ import MeasurementDataView from '@/components/measurement/MeasurementDataView.vu
 
 const router = useRouter()
 const measurementStore = useMeasurementStore()
+const deviceStore = useMeasurementDeviceStore()
 
 const sidebarCollapsed = ref(false)
 const sidebarRef = ref()
+
+onMounted(() => {
+  deviceStore.loadDevices()
+})
 
 function goBack(): void {
   router.push('/')

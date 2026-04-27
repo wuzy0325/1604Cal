@@ -4,64 +4,58 @@
       <div class="control-group">
         <label>最小值(kPa)</label>
         <el-input-number
-          :model-value="params.minPressure"
+          v-model.number="measurementStore.measurementParams.minPressure"
           :precision="2"
           :step="0.1"
           size="small"
-          @update:model-value="onMinPressureChange"
         />
       </div>
 
       <div class="control-group">
         <label>最大值(kPa)</label>
         <el-input-number
-          :model-value="params.maxPressure"
+          v-model.number="measurementStore.measurementParams.maxPressure"
           :precision="2"
           :step="0.1"
           size="small"
-          @update:model-value="onMaxPressureChange"
         />
       </div>
 
       <div class="control-group">
         <label>测点数</label>
         <el-input-number
-          :model-value="params.pointCount"
+          v-model.number="measurementStore.measurementParams.pointCount"
           :min="2"
-          :max="20"
+          :max="11"
           size="small"
-          @update:model-value="onPointCountChange"
         />
       </div>
 
       <div class="control-group">
         <label>精度</label>
         <el-input-number
-          :model-value="params.precision"
+          v-model.number="measurementStore.measurementParams.precision"
           :min="0"
           :max="6"
           size="small"
-          @update:model-value="onPrecisionChange"
         />
       </div>
 
       <div class="control-group">
         <label>平均次数</label>
         <el-input-number
-          :model-value="params.averageCount"
+          v-model.number="measurementStore.measurementParams.averageCount"
           :min="1"
           :max="20"
           size="small"
-          @update:model-value="onAverageCountChange"
         />
       </div>
 
       <div class="control-group">
         <label>稳定时间</label>
         <el-select
-          :model-value="params.stableWaitS"
+          v-model.number="measurementStore.measurementParams.stableWaitS"
           size="small"
-          @update:model-value="onStableWaitChange"
         >
           <el-option label="1s" :value="1" />
           <el-option label="3s" :value="3" />
@@ -74,34 +68,29 @@
         <label>精度 Level</label>
         <div class="precision-level-controls">
           <el-select
-            v-if="!params.useCustomPrecision"
-            :model-value="params.precisionLevel"
+            v-if="!useCustomPrecision"
+            v-model.number="storePrecisionLevel"
             size="small"
-            @update:model-value="onPrecisionLevelChange"
           >
             <el-option
               v-for="item in precisionLevelOptions"
               :key="item"
-              :label="`${item.toFixed(2)}%`"
+              :label="`${(item * 100).toFixed(2)}%`"
               :value="item"
             />
           </el-select>
 
           <el-input-number
             v-else
-            :model-value="params.precisionLevel"
+            v-model.number="customPrecisionValue"
             :min="0.0001"
             :max="5"
             :step="0.0001"
             :precision="4"
             size="small"
-            @update:model-value="onPrecisionLevelChange"
           />
 
-          <el-checkbox
-            :model-value="params.useCustomPrecision"
-            @update:model-value="onCustomPrecisionToggle"
-          >
+          <el-checkbox v-model="useCustomPrecision">
             自定义
           </el-checkbox>
         </div>
@@ -109,31 +98,11 @@
 
       <div class="flex-spacer" />
 
-      <div class="custom-points-toggle">
-        <el-switch
-          :model-value="params.useCustomPoints"
-          size="small"
-          @update:model-value="onCustomPointsToggle"
-        />
-        <span class="toggle-label">自定义点</span>
-      </div>
-
-      <div v-if="params.useCustomPoints" class="custom-points-row">
-        <label>压力值列表</label>
-        <el-input
-          :model-value="params.customPointsText"
-          size="small"
-          placeholder="逗号分隔, 如: 0,2.5,5,7.5,10"
-          @update:model-value="onCustomPointsTextChange"
-        />
-        <span class="custom-points-hint">{{ parsedCustomCount }} 个压力点</span>
-      </div>
-
       <el-button
         type="primary"
         size="small"
         :disabled="!isParamValid"
-        @click="$emit('regenerate')"
+        @click="onGenerateClick"
       >
         生成压力表
       </el-button>
@@ -142,163 +111,56 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { ref, computed, watch } from 'vue'
+import { ElMessage } from 'element-plus'
 import { useMeasurementStore } from '@/stores/measurement'
-
-interface MeasurementUiParams {
-  minPressure: number
-  maxPressure: number
-  pointCount: number
-  precision: number
-  averageCount: number
-  stableWaitS: number
-  precisionLevel: number
-  useCustomPrecision: boolean
-  controlMode: 'auto' | 'manual'
-  pressureMode: 'single' | 'roundTrip'
-  useCustomPoints: boolean
-  customPointsText: string
-}
-
-const defaultParams: MeasurementUiParams = {
-  minPressure: 0,
-  maxPressure: 10,
-  pointCount: 5,
-  precision: 3,
-  averageCount: 3,
-  stableWaitS: 3,
-  precisionLevel: 0.05,
-  useCustomPrecision: false,
-  controlMode: 'auto',
-  pressureMode: 'single',
-  useCustomPoints: false,
-  customPointsText: ''
-}
-
-const props = defineProps<{
-  params?: MeasurementUiParams
-}>()
-
-const emit = defineEmits<{
-  'update:params': [value: MeasurementUiParams]
-  regenerate: []
-}>()
 
 const measurementStore = useMeasurementStore()
 
-const params = computed<MeasurementUiParams>(() => {
-  if (props.params) return props.params
-  // 从 store config 构造，若无则用默认值
-  const cfg = measurementStore.config
-  if (cfg) {
-    return {
-      minPressure: cfg.minPressure ?? defaultParams.minPressure,
-      maxPressure: cfg.maxPressure ?? defaultParams.maxPressure,
-      pointCount: cfg.pointCount ?? defaultParams.pointCount,
-      precision: cfg.precision ?? defaultParams.precision,
-      averageCount: cfg.averageCount ?? defaultParams.averageCount,
-      stableWaitS: cfg.stableWaitS ?? defaultParams.stableWaitS,
-      precisionLevel: cfg.precisionLevel ?? defaultParams.precisionLevel,
-      useCustomPrecision: cfg.useCustomPrecision ?? defaultParams.useCustomPrecision,
-      controlMode: cfg.controlMode ?? defaultParams.controlMode,
-      pressureMode: cfg.pressureMode ?? defaultParams.pressureMode,
-      useCustomPoints: cfg.useCustomPoints ?? defaultParams.useCustomPoints,
-      customPointsText: cfg.customPointsText ?? defaultParams.customPointsText
-    }
-  }
-  return defaultParams
-})
+const precisionLevelOptions = [0.0001, 0.0002, 0.0005, 0.001, 0.002]
 
-const precisionLevelOptions = [0.02, 0.05, 0.1, 0.2]
+const p = computed(() => measurementStore.measurementParams)
 
 const isParamValid = computed(() => {
-  if (params.value.useCustomPoints) {
-    return parseCustomPoints(params.value.customPointsText).length >= 2
-  }
   return (
-    Number.isFinite(params.value.minPressure) &&
-    Number.isFinite(params.value.maxPressure) &&
-    params.value.pointCount >= 2 &&
-    params.value.averageCount >= 1
+    Number.isFinite(p.value.minPressure) &&
+    Number.isFinite(p.value.maxPressure) &&
+    p.value.maxPressure > p.value.minPressure &&
+    p.value.pointCount >= 2 &&
+    p.value.pointCount <= 11 &&
+    p.value.averageCount >= 1
   )
 })
 
-const parsedCustomCount = computed(() => {
-  if (!params.value.useCustomPoints) return 0
-  return parseCustomPoints(params.value.customPointsText).length
+const useCustomPrecision = ref(false)
+const customPrecisionValue = ref(p.value.precisionLevel)
+
+const storePrecisionLevel = computed({
+  get: () => useCustomPrecision.value ? customPrecisionValue.value : p.value.precisionLevel,
+  set: (val: number) => {
+    const normalized = Number.isFinite(val) ? Math.min(5, Math.max(0.0001, val)) : p.value.precisionLevel
+    p.value.precisionLevel = Number(normalized.toFixed(4))
+  }
 })
 
-function toNumber(value: unknown, fallback: number): number {
-  return typeof value === 'number' && Number.isFinite(value) ? value : fallback
-}
+watch(p, () => {
+  if (!useCustomPrecision.value) {
+    customPrecisionValue.value = p.value.precisionLevel
+  }
+}, { deep: true })
 
-function toInt(value: unknown, fallback: number): number {
-  const numeric = toNumber(value, fallback)
-  return Math.max(1, Math.round(numeric))
-}
+watch(customPrecisionValue, (val) => {
+  if (useCustomPrecision.value && Number.isFinite(val)) {
+    storePrecisionLevel.value = val
+  }
+})
 
-function clamp(value: number, min: number, max: number): number {
-  return Math.min(max, Math.max(min, value))
-}
-
-function updateField<K extends keyof MeasurementUiParams>(
-  key: K,
-  value: MeasurementUiParams[K]
-) {
-  emit('update:params', {
-    ...params.value,
-    [key]: value
-  })
-}
-
-function onMinPressureChange(value: unknown) {
-  updateField('minPressure', toNumber(value, params.value.minPressure))
-}
-
-function onMaxPressureChange(value: unknown) {
-  updateField('maxPressure', toNumber(value, params.value.maxPressure))
-}
-
-function onPointCountChange(value: unknown) {
-  updateField('pointCount', clamp(toInt(value, params.value.pointCount), 2, 20))
-}
-
-function onPrecisionChange(value: unknown) {
-  updateField('precision', clamp(toInt(value, params.value.precision), 0, 6))
-}
-
-function onAverageCountChange(value: unknown) {
-  updateField('averageCount', clamp(toInt(value, params.value.averageCount), 1, 20))
-}
-
-function onStableWaitChange(value: unknown) {
-  updateField('stableWaitS', clamp(toInt(value, params.value.stableWaitS), 1, 10))
-}
-
-function onPrecisionLevelChange(value: unknown) {
-  const normalized = clamp(toNumber(value, params.value.precisionLevel), 0.0001, 5)
-  updateField('precisionLevel', Number(normalized.toFixed(4)))
-}
-
-function onCustomPrecisionToggle(value: unknown) {
-  updateField('useCustomPrecision', value === true)
-}
-
-function onCustomPointsToggle(value: unknown) {
-  updateField('useCustomPoints', value === true)
-}
-
-function onCustomPointsTextChange(value: unknown) {
-  updateField('customPointsText', String(value ?? ''))
-}
-
-function parseCustomPoints(text: string): number[] {
-  return text
-    .split(/[,;\s]+/)
-    .map(s => s.trim())
-    .filter(s => s.length > 0)
-    .map(s => Number(s))
-    .filter(n => Number.isFinite(n) && !Number.isNaN(n))
+async function onGenerateClick() {
+  if (!isParamValid.value) {
+    ElMessage.warning('请先填写有效的计量参数')
+    return
+  }
+  await measurementStore.generatePoints()
 }
 </script>
 
@@ -364,43 +226,6 @@ function parseCustomPoints(text: string): number[] {
 
 .flex-spacer {
   flex: 1;
-}
-
-.custom-points-toggle {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-xs);
-  margin-left: auto;
-
-  .toggle-label {
-    color: var(--text-muted);
-    font-size: 11px;
-    white-space: nowrap;
-  }
-}
-
-.custom-points-row {
-  display: flex;
-  align-items: flex-end;
-  gap: var(--spacing-xs);
-  width: 100%;
-
-  label {
-    color: var(--text-muted);
-    font-size: 11px;
-    font-weight: 500;
-    white-space: nowrap;
-  }
-
-  :deep(.el-input) {
-    width: 280px;
-  }
-
-  .custom-points-hint {
-    color: var(--text-secondary);
-    font-size: 12px;
-    white-space: nowrap;
-  }
 }
 
 @media (max-width: 900px) {

@@ -196,6 +196,7 @@ func measurementConfigFromParams(params config.MeasurementParamsConfig) measurem
 		PrecisionLevel: params.PrecisionLevel,
 		PressureMode:   params.PressureMode,
 		ControlMode:    params.ControlMode,
+		CustomPoints:   params.CustomPoints,
 	}
 }
 

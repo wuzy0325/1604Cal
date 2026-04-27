@@ -3,6 +3,7 @@ package calibration
 import (
 	"context"
 	"fmt"
+	"math"
 	"time"
 
 	"cal1604/internal/device"
@@ -136,17 +137,21 @@ func (s *Service) GeneratePressurePoints() ([]PressurePoint, error) {
 	minP := s.config.MinPressure
 	maxP := s.config.MaxPressure
 	if maxP <= minP {
-		maxP = minP + 100
+		return nil, fmt.Errorf("maxPressure(%v) must be greater than minPressure(%v)", maxP, minP)
 	}
 
 	step := (maxP - minP) / float64(points-1)
+	prec := s.config.Precision
+	if prec < 0 {
+		prec = 0
+	}
 
 	// 正程：递增
 	forward := make([]PressurePoint, points)
 	for i := 0; i < points; i++ {
 		forward[i] = PressurePoint{
 			Index:          i + 1,
-			TargetPressure: minP + step*float64(i),
+			TargetPressure: roundToPrec(minP+step*float64(i), prec),
 			Status:         "pending",
 			Direction:      "forward",
 		}
@@ -158,12 +163,12 @@ func (s *Service) GeneratePressurePoints() ([]PressurePoint, error) {
 		return s.pressurePoints, nil
 	}
 
-	// 回程：递降（不含最后一个正程点，即最大值，避免重复）
+	// 回程：递降（从 maxP 到 minP+step，不含 minP），匹配参考模块语义
 	backward := make([]PressurePoint, points-1)
 	for i := 0; i < points-1; i++ {
 		backward[i] = PressurePoint{
 			Index:          points + i + 1,
-			TargetPressure: maxP - step*float64(i+1),
+			TargetPressure: roundToPrec(maxP-step*float64(i), prec),
 			Status:         "pending",
 			Direction:      "backward",
 		}
@@ -173,6 +178,14 @@ func (s *Service) GeneratePressurePoints() ([]PressurePoint, error) {
 	s.currentPoint = 0
 
 	return s.pressurePoints, nil
+}
+
+func roundToPrec(value float64, precision int) float64 {
+	if precision <= 0 {
+		return math.Round(value)
+	}
+	factor := math.Pow10(precision)
+	return math.Round(value*factor) / factor
 }
 
 // GetPressurePoints 获取当前压力点列表。

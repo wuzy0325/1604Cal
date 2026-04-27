@@ -54,15 +54,16 @@ type CalibrationParamsConfig struct {
 
 // MeasurementParamsConfig 计量模块参数持久化配置。
 type MeasurementParamsConfig struct {
-	MinPressure      float64 `json:"minPressure"`
-	MaxPressure      float64 `json:"maxPressure"`
-	PointCount       int     `json:"pointCount"`
-	Precision        int     `json:"precision"`
-	AverageCount     int     `json:"averageCount"`
-	StableDurationMs int     `json:"stableDurationMs"`
-	PrecisionLevel   float64 `json:"precisionLevel"`
-	PressureMode     string  `json:"pressureMode"`
-	ControlMode      string  `json:"controlMode"`
+	MinPressure      float64   `json:"minPressure"`
+	MaxPressure      float64   `json:"maxPressure"`
+	PointCount       int       `json:"pointCount"`
+	Precision        int       `json:"precision"`
+	AverageCount     int       `json:"averageCount"`
+	StableDurationMs int       `json:"stableDurationMs"`
+	PrecisionLevel   float64   `json:"precisionLevel"`
+	PressureMode     string    `json:"pressureMode"`
+	ControlMode      string    `json:"controlMode"`
+	CustomPoints     []float64 `json:"customPoints,omitempty"`
 }
 
 // LastDevicesConfig 记录上次使用的设备 ID，用于页面加载时自动绑定。

@@ -1,14 +1,63 @@
 <template>
   <section class="control-bar secondary">
     <div class="param-group">
-      <span class="param-label">采样状态</span>
-      <span class="state-text">{{ stateText }}</span>
+      <span class="param-label">控制模式</span>
+      <div class="segment-group">
+        <button
+          type="button"
+          class="segment-btn"
+          :class="{ active: measurementStore.measurementParams.controlMode === 'auto' }"
+          @click="setControlMode('auto')"
+        >
+          自动
+        </button>
+        <button
+          type="button"
+          class="segment-btn"
+          :class="{ active: measurementStore.measurementParams.controlMode === 'manual' }"
+          @click="setControlMode('manual')"
+        >
+          手动
+        </button>
+      </div>
     </div>
 
     <div class="param-group">
-      <span class="param-label">已选通道</span>
-      <span class="channel-count">{{ selectedChannelCount }}/16</span>
+      <span class="param-label">打压模式</span>
+      <div class="segment-group">
+        <button
+          type="button"
+          class="segment-btn"
+          :class="{ active: measurementStore.measurementParams.pressureMode === 'single' }"
+          @click="measurementStore.measurementParams.pressureMode = 'single'"
+        >
+          单程
+        </button>
+        <button
+          type="button"
+          class="segment-btn"
+          :class="{ active: measurementStore.measurementParams.pressureMode === 'roundTrip' }"
+          @click="measurementStore.measurementParams.pressureMode = 'roundTrip'"
+        >
+          回程
+        </button>
+      </div>
     </div>
+
+    <div class="param-group">
+      <span class="param-label">进度</span>
+      <div class="progress-container">
+        <div class="progress-text">
+          <span class="progress-count">{{ completedCount }}/{{ totalCount }}</span>
+          <span class="progress-percent">{{ progressPercent }}%</span>
+        </div>
+        <div class="progress-bar-bg">
+          <div class="progress-bar-fill" :style="{ width: progressPercent + '%' }" />
+        </div>
+      </div>
+    </div>
+
+    <div class="divider" />
 
     <div class="param-group">
       <span class="param-label">稳定</span>
@@ -26,17 +75,37 @@
       >{{ stableSeconds.toFixed(1) }}s</span>
     </div>
 
+    <div class="param-group alarm-group">
+      <span class="param-label">报警设置</span>
+      <label class="inline-check">
+        <input v-model="measurementStore.alarmConfig.enabled" type="checkbox" />
+        <span>启用</span>
+      </label>
+      <label class="inline-check">
+        <input v-model="measurementStore.alarmConfig.soundEnabled" type="checkbox" />
+        <span>声音</span>
+      </label>
+      <label class="inline-check">
+        <input v-model="measurementStore.alarmConfig.confirmOnAlarm" type="checkbox" />
+        <span>报警确认</span>
+      </label>
+      <button class="channel-select-btn" @click="$emit('select-channel')">
+        通道选择
+        <span class="channel-count">({{ enabledChannelsDesc }})</span>
+      </button>
+    </div>
+
     <div class="flex-spacer" />
 
     <div class="control-buttons">
       <button
         type="button"
-        class="ctrl-btn btn-start"
+        class="ctrl-btn btn-start btn-primary-action"
         :disabled="!canStart"
         @click="$emit('start')"
       >
         <el-icon><VideoPlay /></el-icon>
-        开始采样
+        开始采集
       </button>
       <button
         type="button"
@@ -57,12 +126,20 @@
       </button>
       <button
         type="button"
-        class="ctrl-btn btn-stop"
+        class="ctrl-btn btn-stop btn-danger-action"
         :disabled="measurementStore.isIdle"
         @click="$emit('stop')"
       >
         <el-icon><CloseBold /></el-icon>
         停止
+      </button>
+      <button
+        v-if="hasCompletedPoints"
+        type="button"
+        class="ctrl-btn btn-reset btn-danger-action"
+        @click="$emit('reset')"
+      >
+        重置
       </button>
       <button
         v-if="measurementStore.totalRows > 0"
@@ -71,18 +148,8 @@
         @click="$emit('export')"
       >
         <el-icon><Download /></el-icon>
-        导出CSV
+        导出报告
       </button>
-      <span
-        v-if="measurementStore.totalRows > 0"
-        class="row-count"
-      >{{ measurementStore.totalRows }} 条采样</span>
-      <span
-        v-if="measurementStore.isRunning"
-        class="realtime-pressure"
-      >
-        压力 {{ measurementStore.currentPressure?.toFixed(2) || '--' }} kPa
-      </span>
     </div>
   </section>
 </template>
@@ -120,10 +187,38 @@ defineEmits<{
   pause: []
   resume: []
   stop: []
+  reset: []
   export: []
+  'select-channel': []
 }>()
 
 const measurementStore = useMeasurementStore()
+
+const completedCount = computed(() =>
+  measurementStore.points.filter(p => p.status === 'completed').length
+)
+
+const totalCount = computed(() => measurementStore.points.length)
+
+const progressPercent = computed(() => {
+  if (totalCount.value === 0) return 0
+  return Math.round((completedCount.value / totalCount.value) * 100)
+})
+
+function setControlMode(mode: 'auto' | 'manual') {
+  measurementStore.measurementParams.controlMode = mode
+}
+
+const hasCompletedPoints = computed(() =>
+  measurementStore.points.some(p => p.status === 'completed')
+)
+
+const enabledChannelsDesc = computed(() => {
+  const chs = measurementStore.channels
+  if (chs.length === 0) return '全部'
+  if (chs.length <= 3) return chs.join(',')
+  return `${chs[0]}-${chs[chs.length - 1]}`
+})
 
 const canStart = computed(() => {
   if (typeof props.canStart === 'boolean') {
@@ -146,25 +241,6 @@ const stableSeconds = computed(() => {
   }
   return measurementStore.stabilityState.stableDurationMs / 1000
 })
-
-const selectedChannelCount = computed(() => {
-  if (typeof props.selectedChannelCount === 'number') {
-    return props.selectedChannelCount
-  }
-  return measurementStore.channels.length
-})
-
-const stateTextMap: Record<string, string> = {
-  idle: '空闲',
-  pressuring: '打压中',
-  stabilizing: '稳定中',
-  collecting: '采集中',
-  completed: '已完成',
-  error: '错误',
-  paused: '已暂停'
-}
-
-const stateText = computed(() => stateTextMap[measurementStore.state] || measurementStore.state)
 </script>
 
 <style scoped lang="scss">
@@ -240,6 +316,10 @@ const stateText = computed(() => stateTextMap[measurementStore.state] || measure
   color: var(--text-secondary);
   font-size: 12px;
   margin-bottom: 3px;
+}
+
+.progress-count {
+  color: var(--text-secondary);
 }
 
 .progress-percent {
@@ -371,6 +451,19 @@ const stateText = computed(() => stateTextMap[measurementStore.state] || measure
 .btn-export {
   background: color-mix(in srgb, var(--status-info) 15%, var(--bg-secondary));
   color: var(--status-info);
+}
+
+.btn-primary-action {
+  background: var(--status-success) !important;
+  color: var(--bg-primary) !important;
+  border-color: var(--status-success) !important;
+  font-weight: 600;
+}
+
+.btn-danger-action {
+  background: color-mix(in srgb, var(--status-error) 16%, var(--bg-secondary));
+  color: var(--status-error);
+  border-color: color-mix(in srgb, var(--status-error) 45%, var(--border-color-strong));
 }
 
 .state-text {

@@ -1,117 +1,213 @@
 <template>
   <div class="data-table-wrapper">
-    <div class="table-header">
-      <div class="table-title">
-        <el-icon><DataLine /></el-icon>
-        <h3>实时采样数据</h3>
-        <span
-          v-if="tableRows.length > 0"
-          class="record-count"
-        >{{ rows.length }} 条采样</span>
+    <!-- 压力点表 -->
+    <div v-if="points.length > 0" class="points-section">
+      <div class="table-header">
+        <div class="table-title">
+          <el-icon><Aim /></el-icon>
+          <h3>目标压力表与数据采集</h3>
+          <span class="record-count">{{ points.length }} 个测点</span>
+        </div>
       </div>
-      <div class="table-actions">
-        <button
-          type="button"
-          class="action-btn"
-          disabled
-        >
-          报告模板
-        </button>
-        <button
-          type="button"
-          class="action-btn"
-          :disabled="rows.length === 0"
-          @click="$emit('export-csv')"
-        >
-          <el-icon><Download /></el-icon>
-          导出CSV
-        </button>
-      </div>
-    </div>
-
-    <div
-      v-if="tableRows.length === 0"
-      class="empty-state"
-    >
-      <el-icon class="empty-icon">
-        <SetUp />
-      </el-icon>
-      <p>请先选择采集通道并开始采样</p>
-      <p class="empty-hint">
-        当前页面仅展示实时采样结果，不生成测点压力表。
-      </p>
-    </div>
-
-    <div
-      v-else
-      class="table-scroll"
-    >
-      <table class="data-table">
-        <thead>
-          <tr>
-            <th class="col-index">
-              序号
-            </th>
-            <th class="col-pressure">
-              平均压力
-            </th>
-            <th
-              v-for="ch in visibleChannels"
-              :key="ch"
-              class="col-channel"
+      <div class="table-scroll">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th class="col-index">序号</th>
+              <th class="col-status">状态</th>
+              <th class="col-target">目标值</th>
+              <th v-for="ch in channelCount" :key="ch" class="col-channel">{{ ch }}</th>
+              <th class="col-time">时间</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr
+              v-for="pt in points"
+              :key="pt.id"
+              :class="getRowClass(pt)"
             >
-              CH{{ ch }}
-            </th>
-            <th class="col-time">
-              时间
-            </th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr
-            v-for="row in tableRows"
-            :key="row.index"
+              <td class="cell-index">
+                <div class="index-cell-wrap">
+                  <span>{{ pt.index }}</span>
+                  <span
+                    v-if="isRoundTrip"
+                    :class="['trip-badge', pt.direction === 'forward' ? 'forward' : 'backward']"
+                  >
+                    {{ pt.direction === 'forward' ? '正' : '回' }}
+                  </span>
+                </div>
+              </td>
+              <td class="cell-status">
+                <span :class="['status-tag', getStatusType(pt.status)]">
+                  <span :class="['status-dot', getStatusType(pt.status)]" />
+                  {{ getStatusText(pt.status) }}
+                </span>
+              </td>
+              <td class="cell-target">
+                <input
+                  :value="pt.targetPressure"
+                  type="number"
+                  class="target-input"
+                  :step="precisionStep"
+                  @change="onTargetChange(pt.id, ($event.target as HTMLInputElement).valueAsNumber)"
+                />
+              </td>
+              <td v-for="ch in channelCount" :key="ch" class="cell-channel">
+                <div v-if="pt.collectedData && pt.collectedData[ch - 1] !== undefined" class="channel-value">
+                  {{ pt.collectedData[ch - 1].toFixed(precisionForDisplay) }}
+                </div>
+                <div v-else class="channel-value empty">--</div>
+              </td>
+              <td class="cell-time">
+                <span v-if="pt.collectTime" class="time-display">{{ formatTime(pt.collectTime) }}</span>
+                <span v-else class="time-display empty">--:--:--</span>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- 实时采样数据 -->
+    <div v-if="tableRows.length > 0" class="sample-section">
+      <div class="table-header">
+        <div class="table-title">
+          <el-icon><DataLine /></el-icon>
+          <h3>实时采样数据</h3>
+          <span class="record-count">{{ rows.length }} 条采样</span>
+        </div>
+        <div class="table-actions">
+          <button
+            type="button"
+            class="action-btn"
+            :disabled="rows.length === 0"
+            @click="$emit('export-csv')"
           >
-            <td class="cell-index">
-              {{ row.index }}
-            </td>
-            <td class="cell-pressure">
-              {{ row.actualPressure }}
-            </td>
-            <td
-              v-for="ch in visibleChannels"
-              :key="`${row.index}-${ch}`"
-              class="cell-channel"
-            >
-              {{ row.channelValues[ch] ?? '--' }}
-            </td>
-            <td class="cell-time">
-              {{ row.collectTime }}
-            </td>
-          </tr>
-        </tbody>
-      </table>
+            <el-icon><Download /></el-icon>
+            导出CSV
+          </button>
+        </div>
+      </div>
+      <div class="table-scroll">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th class="col-index">序号</th>
+              <th class="col-pressure">平均压力</th>
+              <th v-for="ch in visibleChannels" :key="ch" class="col-channel">CH{{ ch }}</th>
+              <th class="col-time">时间</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="row in tableRows" :key="row.index">
+              <td class="cell-index">{{ row.index }}</td>
+              <td class="cell-pressure">{{ row.actualPressure }}</td>
+              <td v-for="ch in visibleChannels" :key="`${row.index}-${ch}`" class="cell-channel">
+                {{ row.channelValues[ch] ?? '--' }}
+              </td>
+              <td class="cell-time">{{ row.collectTime }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed } from 'vue'
-import { DataLine, Download, SetUp } from '@element-plus/icons-vue'
+import { DataLine, Download, SetUp, Aim } from '@element-plus/icons-vue'
 import { useMeasurementStore } from '@/stores/measurement'
 import type { CollectedRow } from '@/stores/measurement'
+import type { MeasurementPoint } from '@/api/measurement'
 
 const props = defineProps<{
   rows?: CollectedRow[]
   channels?: number[]
 }>()
 
-defineEmits<{ 'export-csv': [] }>()
+const emit = defineEmits<{ 'export-csv': [] }>()
 
 const measurementStore = useMeasurementStore()
 
 const rows = computed(() => props.rows ?? measurementStore.rows)
 const channels = computed(() => props.channels ?? measurementStore.channels)
+const points = computed<MeasurementPoint[]>(() => measurementStore.points)
+
+const isRoundTrip = computed(() => measurementStore.measurementParams.pressureMode === 'roundTrip')
+const precisionForDisplay = computed(() => measurementStore.measurementParams.precision)
+const channelCount = 16
+
+const precisionStep = computed(() => Math.pow(10, -(measurementStore.measurementParams.precision || 2)))
+
+function getRowClass(pt: MeasurementPoint): string {
+  return pt.status === 'completed' ? 'row-completed' : ''
+}
+
+function getStatusType(status: string): string {
+  const map: Record<string, string> = {
+    pending: 'pending',
+    pressuring: 'processing',
+    pressurizing: 'processing',
+    stabilizing: 'processing',
+    collecting: 'processing',
+    completed: 'completed',
+    error: 'error'
+  }
+  return map[status] || 'pending'
+}
+
+function getStatusText(status: string): string {
+  const map: Record<string, string> = {
+    pending: '待采集',
+    pressuring: '打压中',
+    pressurizing: '打压中',
+    stabilizing: '稳定中',
+    collecting: '采集中',
+    completed: '已完成',
+    error: '出错'
+  }
+  return map[status] || status
+}
+
+function onTargetChange(pointId: string, value: number | null) {
+  if (value === null || isNaN(value)) return
+  const pt = points.value.find(p => p.id === pointId)
+  if (pt) {
+    pt.targetPressure = value
+  }
+}
+
+function formatTime(timestamp: string): string {
+  try {
+    return new Date(timestamp).toLocaleTimeString('zh-CN', { hour12: false })
+  } catch {
+    return '--:--:--'
+  }
+}
+
+function estimateActualPressure(row: CollectedRow | undefined): string {
+  if (!row) return '--'
+  const sourceChannels = channels.value.length > 0 ? channels.value : visibleChannels.value
+  const values = sourceChannels
+    .map(ch => row.channels[String(ch)])
+    .filter((value): value is number => typeof value === 'number' && Number.isFinite(value))
+  if (values.length === 0) return '--'
+  const average = values.reduce((sum, val) => sum + val, 0) / values.length
+  return average.toFixed(3)
+}
+
+const visibleChannels = computed(() => {
+  if (channels.value.length > 0) return channels.value
+  const channelSet = new Set<number>()
+  for (const row of rows.value) {
+    for (const key of Object.keys(row.channels)) {
+      const ch = Number(key)
+      if (Number.isInteger(ch)) channelSet.add(ch)
+    }
+  }
+  return Array.from(channelSet).sort((a, b) => a - b)
+})
 
 interface DisplayRow {
   index: number
@@ -120,63 +216,13 @@ interface DisplayRow {
   collectTime: string
 }
 
-function formatTime(timestamp: string): string {
-  try {
-    return new Date(timestamp).toLocaleTimeString('zh-CN', { hour12: false })
-  } catch {
-    return '--:--:--'
-    }
-}
-
-function estimateActualPressure(row: CollectedRow | undefined): string {
-  if (!row) {
-    return '--'
-  }
-
-  const sourceChannels = channels.value.length > 0 ? channels.value : visibleChannels.value
-  const values = sourceChannels
-    .map(channel => row.channels[String(channel)])
-    .filter((value): value is number => typeof value === 'number' && Number.isFinite(value))
-
-  if (values.length === 0) {
-    return '--'
-  }
-
-  const average = values.reduce((sum, value) => sum + value, 0) / values.length
-  return average.toFixed(3)
-}
-
-const visibleChannels = computed(() => {
-  if (channels.value.length > 0) {
-    return channels.value
-  }
-
-  const channelSet = new Set<number>()
-  for (const row of rows.value) {
-    for (const key of Object.keys(row.channels)) {
-      const channel = Number(key)
-      if (Number.isInteger(channel)) {
-        channelSet.add(channel)
-      }
-    }
-  }
-
-  return Array.from(channelSet).sort((left, right) => left - right)
-})
-
 const tableRows = computed<DisplayRow[]>(() => {
   return rows.value.map((row, index) => {
     const channelValues: Record<number, string> = {}
-
-    for (const channel of visibleChannels.value) {
-      const raw = row.channels[String(channel)]
-      if (typeof raw !== 'number' || Number.isNaN(raw)) {
-        channelValues[channel] = '--'
-      } else {
-        channelValues[channel] = raw.toFixed(3)
-      }
+    for (const ch of visibleChannels.value) {
+      const raw = row.channels[String(ch)]
+      channelValues[ch] = (typeof raw === 'number' && !isNaN(raw)) ? raw.toFixed(3) : '--'
     }
-
     return {
       index: index + 1,
       actualPressure: estimateActualPressure(row),
@@ -189,63 +235,66 @@ const tableRows = computed<DisplayRow[]>(() => {
 
 <style scoped lang="scss">
 .data-table-wrapper {
-  flex: 1;
-  min-height: 0;
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-md);
-  padding: var(--spacing-xs) var(--spacing-sm);
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  gap: var(--spacing-sm);
+}
+
+.points-section,
+.sample-section {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.points-section {
+  flex-shrink: 0;
+}
+
+.sample-section {
+  flex: 1;
 }
 
 .table-header {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  margin-bottom: var(--spacing-xs);
-  flex-shrink: 0;
+  justify-content: space-between;
   padding-bottom: var(--spacing-xs);
   border-bottom: 1px solid var(--border-color);
+  margin-bottom: var(--spacing-xs);
 }
 
 .table-title {
   display: flex;
   align-items: center;
-  gap: 6px;
-
-  .el-icon {
-    color: var(--accent-primary);
-    font-size: 14px;
-  }
+  gap: var(--spacing-xs);
 
   h3 {
-    color: var(--text-primary);
-    margin: 0;
     font-size: 14px;
     font-weight: 600;
+    color: var(--text-primary);
+    margin: 0;
   }
 }
 
 .record-count {
   color: var(--text-muted);
-  font-size: 11px;
-  margin-left: 4px;
+  font-size: 12px;
 }
 
 .table-actions {
   display: flex;
-  align-items: center;
   gap: var(--spacing-xs);
 }
 
 .action-btn {
-  height: 28px;
+  height: 26px;
   padding: 0 10px;
-  border: 1px solid var(--border-color-strong);
   border-radius: var(--radius-sm);
-  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color-strong);
+  background: var(--bg-secondary);
   color: var(--text-secondary);
   cursor: pointer;
   display: inline-flex;
@@ -254,145 +303,171 @@ const tableRows = computed<DisplayRow[]>(() => {
   font-size: 12px;
 
   &:disabled {
-    opacity: 0.4;
+    opacity: 0.45;
     cursor: not-allowed;
   }
 }
 
 .table-scroll {
+  overflow-x: auto;
+  overflow-y: auto;
   flex: 1;
-  min-height: 0;
-  overflow: auto;
+
+  &::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  &::-webkit-scrollbar-thumb {
+    background: var(--border-color-strong);
+    border-radius: 4px;
+  }
 }
 
 .data-table {
-  width: max-content;
-  min-width: 100%;
+  width: 100%;
   border-collapse: collapse;
-
-  th,
-  td {
-    border: 1px solid var(--border-color-strong);
-    text-align: center;
-    white-space: nowrap;
-  }
+  font-size: 12px;
 
   th {
-    background: var(--bg-quaternary);
-    color: var(--text-secondary);
-    font-size: 11px;
-    font-weight: 600;
-    padding: 4px 6px;
+    white-space: nowrap;
+    padding: 6px 8px;
+    text-align: center;
+    background: var(--bg-tertiary);
+    color: var(--text-muted);
+    font-weight: 500;
+    border-bottom: 1px solid var(--border-color);
+    position: sticky;
+    top: 0;
+    z-index: 1;
   }
 
   td {
-    background: var(--bg-tertiary);
-    color: var(--text-primary);
-    font-size: 11px;
-    padding: 3px 4px;
-    font-family: 'Consolas', monospace;
-    line-height: 1.1;
+    padding: 4px 8px;
+    text-align: center;
+    border-bottom: 1px solid var(--border-color);
+    color: var(--text-secondary);
   }
 }
 
-.col-index,
-.col-status,
-.col-target,
-.col-pressure {
-  width: 72px;
+.col-index { width: 44px; min-width: 44px; }
+.col-status { width: 72px; min-width: 72px; }
+.col-target { width: 80px; min-width: 80px; }
+.col-channel { width: 60px; min-width: 60px; }
+.col-time { width: 80px; min-width: 80px; }
+
+.index-cell-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
 }
 
-.col-time {
-  width: 110px;
-}
+.trip-badge {
+  font-size: 10px;
+  padding: 0 4px;
+  border-radius: 3px;
+  font-weight: 600;
 
-.col-channel {
-  width: 58px;
+  &.forward {
+    background: var(--status-info-bg, #e3f2fd);
+    color: var(--status-info, #1976d2);
+  }
+
+  &.backward {
+    background: var(--status-warning-bg, #fff3e0);
+    color: var(--status-warning, #f57c00);
+  }
 }
 
 .status-tag {
   display: inline-flex;
   align-items: center;
-  justify-content: center;
-  min-width: 52px;
-  height: 20px;
-  border-radius: 999px;
-  font-size: 10px;
-  font-weight: 600;
+  gap: 4px;
+  font-size: 12px;
+  white-space: nowrap;
 }
 
-.status-tag.pending {
-  background: color-mix(in srgb, var(--text-muted) 18%, transparent);
-  color: var(--text-muted);
+.status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+
+  &.pending { background: var(--text-muted, #9e9e9e); }
+  &.processing { background: var(--status-info, #1976d2); }
+  &.completed { background: var(--status-success, #388e3c); }
+  &.error { background: var(--status-error, #d32f2f); }
 }
 
-.status-tag.running {
-  background: var(--status-info-bg);
-  color: var(--status-info);
+.target-input {
+  width: 70px;
+  text-align: center;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  padding: 2px 4px;
+  font-size: 12px;
+
+  &:focus {
+    outline: none;
+    border-color: var(--accent-primary);
+  }
 }
 
-.status-tag.paused {
-  background: var(--status-warning-bg);
-  color: var(--status-warning);
+.channel-value {
+  font-variant-numeric: tabular-nums;
+  font-size: 12px;
+
+  &.empty {
+    color: var(--text-muted);
+  }
 }
 
-.status-tag.completed {
-  background: var(--status-success-bg);
-  color: var(--status-success);
+.time-display {
+  font-size: 12px;
+
+  &.empty {
+    color: var(--text-muted);
+  }
 }
 
-.status-tag.error {
-  background: var(--status-error-bg);
-  color: var(--status-error);
-}
-
-.channel-value.type-good {
-  color: var(--status-success);
-}
-
-.channel-value.type-warn {
-  color: var(--status-warning);
-}
-
-.channel-value.type-error {
-  color: var(--status-error);
-}
-
-.row-running td {
-  background: color-mix(in srgb, var(--status-info) 10%, var(--bg-tertiary));
-}
-
-.row-completed td {
-  background: color-mix(in srgb, var(--status-success) 10%, var(--bg-tertiary));
-}
-
-.row-error td {
-  background: color-mix(in srgb, var(--status-error) 10%, var(--bg-tertiary));
+.row-completed {
+  background: rgba(56, 142, 60, 0.05);
 }
 
 .empty-state {
-  flex: 1;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: var(--spacing-sm);
-  padding: var(--spacing-xl);
+  padding: var(--spacing-xl) 0;
   color: var(--text-muted);
 
-  .empty-icon {
-    font-size: 48px;
-    color: var(--bg-quaternary);
-  }
-
   p {
-    font-size: 13px;
-    margin: 0;
+    margin: var(--spacing-xs) 0;
+    font-size: 14px;
   }
 }
 
 .empty-hint {
+  font-size: 12px;
   color: var(--text-muted);
-  opacity: 0.85;
+}
+
+.cell-pressure {
+  font-variant-numeric: tabular-nums;
+}
+
+.col-pressure {
+  width: 72px;
+  min-width: 72px;
+}
+
+@media (max-width: 768px) {
+  .table-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--spacing-xs);
+  }
 }
 </style>
