@@ -75,6 +75,16 @@
       >{{ stableSeconds.toFixed(1) }}s</span>
     </div>
 
+    <div class="param-group channel-group">
+      <span class="param-label">采集通道</span>
+      <button class="channel-select-btn" @click="channelDialogVisible = true">
+        <el-icon><Grid /></el-icon>
+        {{ measurementStore.channels.length }}/16
+      </button>
+    </div>
+
+    <div class="divider" />
+
     <div class="param-group alarm-group">
       <span class="param-label">报警设置</span>
       <label class="inline-check">
@@ -171,13 +181,20 @@
         导出报告
       </button>
     </div>
+
+    <ChannelSelectDialog
+      v-model:visible="channelDialogVisible"
+      :selected-channels="measurementStore.channels"
+      @confirm="handleChannelConfirm"
+    />
   </section>
 </template>
 
 <script setup lang="ts">
-import { computed, type PropType } from 'vue'
-import { VideoPlay, VideoPause, CloseBold, Download } from '@element-plus/icons-vue'
+import { computed, ref, type PropType } from 'vue'
+import { VideoPlay, VideoPause, CloseBold, Download, Grid } from '@element-plus/icons-vue'
 import { useMeasurementStore } from '@/stores/measurement'
+import ChannelSelectDialog from '@/components/common/ChannelSelectDialog.vue'
 
 const props = defineProps({
   channels: {
@@ -215,6 +232,12 @@ defineEmits<{
 }>()
 
 const measurementStore = useMeasurementStore()
+
+const channelDialogVisible = ref(false)
+
+const handleChannelConfirm = (channels: number[]) => {
+  measurementStore.channels = channels
+}
 
 const completedCount = computed(() =>
   measurementStore.currentPointIndex
@@ -434,7 +457,15 @@ const stableSeconds = computed(() => {
   background: var(--bg-secondary);
   color: var(--text-secondary);
   font-size: 12px;
-  cursor: default;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+
+  &:hover {
+    border-color: var(--accent-primary);
+    color: var(--accent-primary);
+  }
 }
 
 .channel-count {

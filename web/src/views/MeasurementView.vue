@@ -20,7 +20,6 @@
         ref="sidebarRef"
         :collapsed="sidebarCollapsed"
         @toggle="sidebarCollapsed = !sidebarCollapsed"
-        @channels-change="handleChannelsChange"
       />
 
       <main class="workbench-main">
@@ -129,7 +128,6 @@ const stateClass = computed(() => {
 })
 
 function goBack() { router.push('/') }
-function handleChannelsChange(channels: number[]) { console.log('Channels:', channels) }
 
 // ── 采集控制 ──
 
@@ -215,74 +213,75 @@ async function handleExport(path: string) {
   justify-content: space-between;
   align-items: flex-end;
   flex-shrink: 0;
-  padding-bottom: 16px;
-  border-bottom: 1px solid var(--border-color-light);
+  padding-bottom: $spacing-4;
+  border-bottom: 1px solid $border-color-light;
 }
 
 .header-left {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: $spacing-4;
 }
 
 .back-btn {
   width: 40px;
   height: 40px;
-  background: rgba(30, 30, 30, 0.6);
-  border: 1px solid var(--border-color);
-  border-radius: 8px;
-  color: var(--text-secondary);
+  background: rgba($neutral-800, 0.6);
+  border: 1px solid $border-color;
+  border-radius: $radius-md;
+  color: $text-secondary;
   cursor: pointer;
+  transition: all $transition-fast;
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 18px;
 
   &:hover {
-    background: rgba(50, 50, 50, 0.8);
-    color: var(--text-primary);
-    border-color: var(--border-color-strong);
+    background: rgba($neutral-700, 0.8);
+    color: $text-primary;
+    border-color: $border-color-strong;
   }
 }
 
 .header-title {
   h1 {
     font-size: 28px;
-    font-weight: 700;
-    color: var(--text-primary);
-    margin: 0 0 4px;
+    font-weight: $font-weight-bold;
+    color: $text-primary;
+    margin: 0 0 $spacing-1;
     letter-spacing: -0.02em;
   }
   p {
-    font-size: 13px;
-    color: var(--text-secondary);
+    font-size: $font-size-sm;
+    color: $text-secondary;
     margin: 0;
   }
 }
 
 .header-actions {
   display: flex;
-  gap: 12px;
+  gap: $spacing-3;
 }
 
 .state-badge {
-  padding: 8px 16px;
-  border-radius: 8px;
-  font-size: 13px;
-  font-weight: 500;
+  padding: $spacing-2 $spacing-4;
+  border-radius: $radius-md;
+  font-size: $font-size-sm;
+  font-weight: $font-weight-medium;
 }
 
-.state-idle { background: rgba(100,100,100,0.3); color: var(--text-secondary); }
-.state-preparing, .state-measuring { background: rgba(64,158,255,0.2); color: #409eff; }
-.state-paused { background: rgba(230,162,60,0.2); color: #e6a23c; }
-.state-completed { background: rgba(103,194,58,0.2); color: #67c23a; }
-.state-error { background: rgba(245,108,108,0.2); color: #f56c6c; }
+.state-idle { background: rgba($neutral-700, 0.5); color: $text-secondary; }
+.state-preparing, .state-measuring { background: rgba($info-500, 0.2); color: $info-400; }
+.state-paused { background: rgba($warning-500, 0.2); color: $warning-400; }
+.state-completed { background: rgba($success-500, 0.2); color: $success-400; }
+.state-error { background: rgba($danger-500, 0.2); color: $danger-400; }
 
 .workbench-content {
   flex: 1;
   min-height: 0;
   display: flex;
-  gap: 24px;
+  gap: $spacing-6;
   overflow: hidden;
 }
 
@@ -291,7 +290,7 @@ async function handleExport(path: string) {
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 24px;
+  gap: $spacing-4;
   overflow-y: auto;
 }
 

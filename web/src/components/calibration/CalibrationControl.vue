@@ -11,6 +11,14 @@
         </div>
       </div>
 
+      <div class="channel-select-group">
+        <span class="channel-label">采集通道</span>
+        <el-button size="small" @click="channelDialogVisible = true">
+          <el-icon><Grid /></el-icon>
+          {{ calibrationStore.selectedChannels.length }}/16
+        </el-button>
+      </div>
+
       <div
         v-if="calibrationStore.pressurePoints.length > 0"
         class="progress-section"
@@ -106,11 +114,17 @@
         </template>
       </div>
     </div>
+
+    <ChannelSelectDialog
+      v-model:visible="channelDialogVisible"
+      :selected-channels="calibrationStore.selectedChannels"
+      @confirm="calibrationStore.setSelectedChannels"
+    />
   </section>
 </template>
 
 <script setup lang="ts">
-import { computed, inject } from 'vue'
+import { computed, inject, ref } from 'vue'
 import {
   VideoPlay,
   VideoPause,
@@ -118,15 +132,18 @@ import {
   CloseBold,
   DataAnalysis,
   CircleClose,
-  CircleCheck
+  CircleCheck,
+  Grid
 } from '@element-plus/icons-vue'
 import type { SessionState } from '@/types/calibration'
 import { useCalibrationStore } from '@/stores/calibration'
 import ManualControlPanel from './ManualControlPanel.vue'
+import ChannelSelectDialog from '@/components/common/ChannelSelectDialog.vue'
 import { stabilityStatusKey } from '@/composables/useCalibrationSync'
 
 const calibrationStore = useCalibrationStore()
 const stabilityStatus = inject(stabilityStatusKey)!
+const channelDialogVisible = ref(false)
 
 const controlMode = computed<'auto' | 'manual'>({
   get: () => calibrationStore.controlMode,
@@ -200,6 +217,18 @@ function handleManualCollect(data: number[]) {
 .mode-switches {
   display: flex;
   gap: var(--spacing-lg);
+}
+
+.channel-select-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+
+  .channel-label {
+    color: var(--text-muted);
+    font-size: 11px;
+    font-weight: 500;
+  }
 }
 
 .switch-group {

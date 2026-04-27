@@ -45,19 +45,6 @@
         />
       </div>
 
-      <!-- 通道选择 -->
-      <div class="sidebar-section">
-        <h3 class="sidebar-title">
-          <el-icon><Grid /></el-icon>
-          通道选择
-          <span class="channel-count">{{ calibrationStore.selectedChannels.length }}/16</span>
-        </h3>
-        <ChannelMatrix
-          :selected-channels="calibrationStore.selectedChannels"
-          @update:selected-channels="calibrationStore.setSelectedChannels"
-        />
-      </div>
-
       <!-- 校准前置条件 -->
       <div class="sidebar-section">
         <h3 class="sidebar-title">
@@ -90,7 +77,6 @@ import { computed } from 'vue'
 import {
   ArrowLeft,
   ArrowRight,
-  Grid,
   Monitor,
   FirstAidKit,
   CircleCheckFilled,
@@ -99,7 +85,6 @@ import {
 
 import Device1604Panel from '@/components/common/Device1604Panel.vue'
 import PressDevicePanel from '@/components/common/PressDevicePanel.vue'
-import ChannelMatrix from '@/components/common/ChannelMatrix.vue'
 import { useCalibrationStore } from '@/stores/calibration'
 
 defineProps<{
@@ -196,15 +181,6 @@ const prerequisites = computed(() => [
     color: var(--accent-primary);
     font-size: 13px;
   }
-}
-
-.channel-count {
-  margin-left: auto;
-  color: var(--text-muted);
-  font-weight: 400;
-  text-transform: none;
-  letter-spacing: 0;
-  font-size: 11px;
 }
 
 .prerequisites-list {

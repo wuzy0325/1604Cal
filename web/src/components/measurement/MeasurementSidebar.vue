@@ -64,17 +64,6 @@
       </div>
       <div class="sidebar-section">
         <h3 class="sidebar-title">
-          <el-icon><Grid /></el-icon>
-          通道选择
-          <span class="channel-count">{{ selectedChannels.length }}/16</span>
-        </h3>
-        <ChannelMatrix
-          :selected-channels="selectedChannels"
-          @update:selected-channels="handleSelectedChannelsChange"
-        />
-      </div>
-      <div class="sidebar-section">
-        <h3 class="sidebar-title">
           <el-icon><CircleCheckFilled /></el-icon>
           启动条件
         </h3>
@@ -95,11 +84,10 @@
 import { ref, computed, onMounted } from 'vue'
 import {
   ArrowLeft, ArrowRight, CircleCheckFilled, CircleCloseFilled,
-  Warning, Grid, Monitor, FirstAidKit, ScaleToOriginal
+  Warning, Monitor, FirstAidKit, ScaleToOriginal
 } from '@element-plus/icons-vue'
 import MeasurementDevicePanel from '@/components/measurement/MeasurementDevicePanel.vue'
 import PressDevicePanel from '@/components/common/PressDevicePanel.vue'
-import ChannelMatrix from '@/components/common/ChannelMatrix.vue'
 import { fetchUnitConsistency } from "@/api/device"
 import { useMeasurementStore } from '@/stores/measurement'
 import { useMeasurementDeviceStore } from '@/stores/measurement/deviceStore'
@@ -113,14 +101,12 @@ interface UnitCheckPayload {
 defineProps<{ collapsed: boolean }>()
 const emit = defineEmits<{
   toggle: []
-  channelsChange: [channels: number[]]
   unitCheck: [payload: UnitCheckPayload]
 }>()
 
 const measurementStore = useMeasurementStore()
 const deviceStore = useMeasurementDeviceStore()
 const moduleDeviceStore = useDeviceStore()
-const selectedChannels = ref<number[]>([])
 const unitConsistent = ref(true)
 const unitConflicts = ref<string[]>([])
 
@@ -141,11 +127,6 @@ const emitUnitCheck = () => {
     consistent: unitConsistent.value,
     conflicts: [...unitConflicts.value]
   })
-}
-
-const handleSelectedChannelsChange = (channels: number[]) => {
-  selectedChannels.value = channels
-  emit('channelsChange', [...channels])
 }
 
 const checkUnitConsistency = async () => {
@@ -239,20 +220,15 @@ const handleSetPressure = async (_deviceId: string, pressure: number) => {
 const prerequisites = computed(() => [
   { label: '设备已选择', satisfied: measurementStore.deviceBound },
   { label: '打压设备已连接', satisfied: hasConnectedPressureDevice.value },
-  { label: '已选择采集通道', satisfied: selectedChannels.value.length > 0 },
+  { label: '已选择采集通道', satisfied: measurementStore.channels.length > 0 },
   { label: '单位一致', satisfied: unitCheckSatisfied.value }
 ])
 
 onMounted(() => {
-  if (measurementStore.channels.length > 0) {
-    selectedChannels.value = [...measurementStore.channels]
-    emit('channelsChange', [...measurementStore.channels])
-  }
-
   emitUnitCheck()
 })
 
-defineExpose({ checkUnitConsistency, selectedChannels })
+defineExpose({ checkUnitConsistency })
 </script>
 
 <style scoped lang="scss">
@@ -307,7 +283,6 @@ defineExpose({ checkUnitConsistency, selectedChannels })
   letter-spacing: 0.06em;
   .el-icon { color: var(--accent-primary); font-size: 13px; }
 }
-.channel-count { margin-left: auto; color: var(--text-muted); font-weight: 400; text-transform: none; letter-spacing: 0; font-size: 11px; }
 .unit-check-result {
   display: flex; align-items: center; gap: var(--spacing-xs); font-size: 12px;
   padding: var(--spacing-xs) var(--spacing-sm); border-radius: var(--radius-sm);
