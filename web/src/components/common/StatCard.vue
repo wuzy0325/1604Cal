@@ -21,7 +21,6 @@ defineProps<{
 </script>
 
 <style scoped lang="scss">
-@import '@/styles/variables.scss';
 
 .stat-card {
   background: $bg-card;

@@ -15,7 +15,6 @@ import Sidebar from './Sidebar.vue'
 </script>
 
 <style scoped lang="scss">
-@import '@/styles/variables.scss';
 
 .page-layout {
   display: flex;

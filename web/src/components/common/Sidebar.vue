@@ -69,7 +69,6 @@ function handleNavigate(path: string): void {
 </script>
 
 <style scoped lang="scss">
-@import '@/styles/variables.scss';
 
 .sidebar {
   width: $sidebar-width;

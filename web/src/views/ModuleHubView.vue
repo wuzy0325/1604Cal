@@ -150,7 +150,6 @@ function navigateTo(path: string): void {
 </template>
 
 <style scoped lang="scss">
-@import '@/styles/variables.scss';
 
 // 页面头部
 .page-header {

@@ -76,7 +76,6 @@ onUnmounted(() => {
 </script>
 
 <style scoped lang="scss">
-@import '@/styles/variables.scss';
 
 .page-header {
   display: flex;
