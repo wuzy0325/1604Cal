@@ -37,11 +37,11 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, provide } from 'vue'
 import { useRouter } from 'vue-router'
 import { ArrowLeft, DocumentChecked } from '@element-plus/icons-vue'
 import { useCalibrationStore } from '@/stores/calibration'
-import { useCalibrationSync } from '@/composables/useCalibrationSync'
+import { useCalibrationSync, stabilityStatusKey } from '@/composables/useCalibrationSync'
 import { useConfigPersistence } from '@/composables/useConfigPersistence'
 import PageLayout from '@/components/common/PageLayout.vue'
 import CalibrationSidebar from '@/components/calibration/CalibrationSidebar.vue'
@@ -56,7 +56,8 @@ const calibrationStore = useCalibrationStore()
 const sidebarCollapsed = ref(false)
 const dialogsRef = ref<InstanceType<typeof CalibrationDialogs>>()
 
-useCalibrationSync()
+const { stabilityStatus } = useCalibrationSync()
+provide(stabilityStatusKey, stabilityStatus)
 useConfigPersistence()
 
 function goBack(): void {

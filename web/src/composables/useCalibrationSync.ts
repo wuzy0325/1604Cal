@@ -1,4 +1,4 @@
-import { onMounted, onUnmounted, ref } from 'vue'
+import { onMounted, onUnmounted, ref, type Ref, type InjectionKey } from 'vue'
 import { createEventStream } from '@/api/client'
 import { connectDevice } from '@/api/device'
 import { bindMeasureDevice } from '@/api/session'
@@ -27,6 +27,9 @@ export interface AlarmEventData {
   maxDeviation: number
   channelDetails: Record<string, number>
 }
+
+// 稳定性状态的 provide/inject key，供 CalibrationControl 获取
+export const stabilityStatusKey: InjectionKey<Ref<StabilityEventData | null>> = Symbol('stabilityStatus')
 
 /**
  * Composable that manages SSE event stream and polling for calibration view.
@@ -88,14 +91,10 @@ export function useCalibrationSync() {
             // 静默修复失败，不弹窗；等待下一轮刷新重试
           }
 
-          await deviceStore.loadDevices(true)
-          try {
-            await bindMeasureDevice(connectedMeasure.id)
-          } catch {
-            // 忽略，交给后续 refreshDeviceInfo 判断
-          }
-
-          loaded = await calibrationStore.refreshDeviceInfo({ retries: 3, retryDelayMs: 500 })
+          await Promise.all([
+            deviceStore.loadDevices(true).then(() => bindMeasureDevice(connectedMeasure.id).catch(() => {})),
+            calibrationStore.refreshDeviceInfo({ retries: 3, retryDelayMs: 500 }).then(r => { loaded = r })
+          ])
         }
       }
 
@@ -161,8 +160,10 @@ export function useCalibrationSync() {
   }
 
   onMounted(async () => {
-    await deviceStore.loadDevices()
-    await calibrationStore.fetchCurrentSessionState()
+    await Promise.all([
+      deviceStore.loadDevices(),
+      calibrationStore.fetchCurrentSessionState()
+    ])
 
     await bindConnectedMeasureDevice()
 

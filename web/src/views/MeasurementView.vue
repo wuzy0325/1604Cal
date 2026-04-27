@@ -100,9 +100,11 @@ const reportTemplateName = computed(() => {
   return `${count}${mode === 'single' ? 's' : 'm'}.xlsx`
 })
 
-onMounted(() => {
-  deviceStore.loadDevices()
-  measurementStore.loadAlarmConfig()
+onMounted(async () => {
+  await Promise.all([
+    deviceStore.loadDevices(),
+    measurementStore.loadAlarmConfig()
+  ])
   measurementStore.setupSSE()
 })
 

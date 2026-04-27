@@ -110,7 +110,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, inject } from 'vue'
 import {
   VideoPlay,
   VideoPause,
@@ -123,10 +123,10 @@ import {
 import type { SessionState } from '@/types/calibration'
 import { useCalibrationStore } from '@/stores/calibration'
 import ManualControlPanel from './ManualControlPanel.vue'
-import { useCalibrationSync } from '@/composables/useCalibrationSync'
+import { stabilityStatusKey } from '@/composables/useCalibrationSync'
 
 const calibrationStore = useCalibrationStore()
-const { stabilityStatus } = useCalibrationSync()
+const stabilityStatus = inject(stabilityStatusKey)!
 
 const controlMode = computed<'auto' | 'manual'>({
   get: () => calibrationStore.controlMode,
