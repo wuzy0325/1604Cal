@@ -1,85 +1,87 @@
 <template>
-  <section class="workbench-section params-section">
-    <div class="section-body">
-      <div class="params-row">
-        <div class="control-group">
-          <label>最小值</label>
-          <el-input-number
-            v-model="calibrationStore.calibrationParams.minValue"
-            :precision="2"
-            :step="0.1"
-            size="small"
-          />
-        </div>
-        <div class="control-group">
-          <label>最大值</label>
-          <el-input-number
-            v-model="calibrationStore.calibrationParams.maxValue"
-            :precision="2"
-            :step="0.1"
-            size="small"
-          />
-        </div>
-        <div class="control-group">
-          <label>测点数</label>
-          <el-input-number
-            v-model="calibrationStore.calibrationParams.points"
-            :min="2"
-            :max="6"
-            size="small"
-          />
-        </div>
-        <div class="control-group">
-          <label>精度</label>
-          <el-input-number
-            v-model="calibrationStore.calibrationParams.precision"
-            :min="0"
-            :max="4"
-            size="small"
-          />
-        </div>
-        <div class="control-group">
-          <label>采样数</label>
-          <el-input-number
-            v-model="calibrationStore.calibrationParams.averageCount"
-            :min="1"
-            :max="100"
-            size="small"
-          />
-        </div>
-        <div class="control-group">
-          <label>稳定时间</label>
-          <el-select
-            v-model="calibrationStore.calibrationParams.stableTime"
-            size="small"
-          >
-            <el-option label="1s" :value="1" />
-            <el-option label="3s" :value="3" />
-            <el-option label="5s" :value="5" />
-            <el-option label="10s" :value="10" />
-          </el-select>
-        </div>
-        <div class="control-group">
-          <label>精度等级</label>
-          <el-select
-            v-model="calibrationStore.calibrationParams.precisionLevel"
-            size="small"
-          >
-            <el-option label="0.01%" value="0.01" />
-            <el-option label="0.05%" value="0.05" />
-            <el-option label="0.1%" value="0.1" />
-            <el-option label="0.2%" value="0.2" />
-          </el-select>
-        </div>
-        <div class="control-group">
-          <label>打压模式</label>
-          <el-radio-group
-            v-model="calibrationStore.calibrationParams.pressureMode"
-            size="small"
-          >
-            <el-radio-button value="single">单程</el-radio-button>
-            <el-radio-button value="roundTrip">回程</el-radio-button>
-          </el-radio-group>
+  <section class="params-card">
+    <div class="params-row">
+      <div class="control-group">
+        <label>最小:</label>
+        <input
+          v-model.number="calibrationStore.calibrationParams.minValue"
+          type="number"
+          step="0.1"
+          class="compact-input"
+        />
+      </div>
+      <div class="control-group">
+        <label>最大:</label>
+        <input
+          v-model.number="calibrationStore.calibrationParams.maxValue"
+          type="number"
+          step="0.1"
+          class="compact-input"
+        />
+      </div>
+      <div class="control-group">
+        <label>点数:</label>
+        <input
+          v-model.number="calibrationStore.calibrationParams.points"
+          type="number"
+          min="2"
+          max="6"
+          class="compact-input narrow"
+        />
+      </div>
+      <div class="control-group">
+        <label>精度:</label>
+        <input
+          v-model.number="calibrationStore.calibrationParams.precision"
+          type="number"
+          min="0"
+          max="4"
+          class="compact-input narrow"
+        />
+      </div>
+      <div class="control-group">
+        <label>平均:</label>
+        <input
+          v-model.number="calibrationStore.calibrationParams.averageCount"
+          type="number"
+          min="1"
+          max="100"
+          class="compact-input narrow"
+        />
+      </div>
+      <div class="control-group">
+        <label>稳定:</label>
+        <select v-model.number="calibrationStore.calibrationParams.stableTime" class="compact-select">
+          <option :value="1">1s</option>
+          <option :value="3">3s</option>
+          <option :value="5">5s</option>
+          <option :value="10">10s</option>
+        </select>
+      </div>
+      <div class="control-group">
+        <label>精度等级</label>
+        <select v-model="calibrationStore.calibrationParams.precisionLevel" class="compact-select wide">
+          <option value="0.01">0.01%</option>
+          <option value="0.05">0.05%</option>
+          <option value="0.1">0.1%</option>
+          <option value="0.2">0.2%</option>
+        </select>
+      </div>
+      <div class="control-group">
+        <label>打压</label>
+        <div class="segment-control">
+          <button
+            type="button"
+            class="segment-btn"
+            :class="{ active: calibrationStore.calibrationParams.pressureMode === 'single' }"
+            @click="calibrationStore.calibrationParams.pressureMode = 'single'"
+          >单程</button>
+          <button
+            type="button"
+            class="segment-btn"
+            :class="{ active: calibrationStore.calibrationParams.pressureMode === 'roundTrip' }"
+            @click="calibrationStore.calibrationParams.pressureMode = 'roundTrip'"
+          >回程</button>
         </div>
       </div>
     </div>
@@ -97,7 +99,6 @@ let debounceTimer: ReturnType<typeof setTimeout> | null = null
 watch(
   () => calibrationStore.calibrationParams,
   (_, oldValue) => {
-    // immediate 触发（启动时 oldValue === undefined）且已有保存的压力点时，跳过
     if (oldValue === undefined && calibrationStore.pressurePoints.length > 0) return
     if (debounceTimer) clearTimeout(debounceTimer)
     debounceTimer = setTimeout(() => {
@@ -109,7 +110,6 @@ watch(
 </script>
 
 <style scoped lang="scss">
-/* ── 设计系统令牌 ── */
 $font-sans: 'Inter', 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
 $font-mono: 'JetBrains Mono', 'Fira Code', 'SF Mono', Consolas, monospace;
 $mint: #10b981;
@@ -125,91 +125,146 @@ $slate-600: #4b5563;
 $slate-700: #374151;
 $slate-800: #1f2937;
 
-.workbench-section {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  flex-shrink: 0;
-}
-
-.params-section {
+.params-card {
   background: #ffffff;
   border-radius: 12px;
-  border: 1px solid $slate-200;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  border: 1px solid $slate-200;
   padding: 12px;
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
   font-family: $font-sans;
   transition: box-shadow 0.2s ease, border-color 0.2s ease;
 
   &:hover {
     box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.07), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
   }
+}
 
-  .section-body {
-    display: flex;
-    align-items: flex-end;
-    gap: 12px;
-    flex-wrap: wrap;
-  }
-
-  .params-row {
-    display: flex;
-    align-items: flex-end;
-    gap: 12px;
-    flex-wrap: wrap;
-    flex: 1;
-  }
+.params-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 12px;
 }
 
 .control-group {
   display: flex;
-  flex-direction: column;
+  align-items: center;
   gap: 6px;
 
   label {
-    color: $slate-500;
     font-size: 12px;
+    color: $slate-500;
     font-weight: 500;
     letter-spacing: 0.05em;
     white-space: nowrap;
     font-family: $font-sans;
   }
+}
 
-  :deep(.el-input-number) {
-    width: 90px;
+.compact-input {
+  height: 32px;
+  font-size: 13px;
+  border: 1px solid $slate-300;
+  border-radius: 8px;
+  padding: 0 8px;
+  width: 56px;
+  text-align: center;
+  color: $slate-800;
+  background: #fff;
+  outline: none;
+  font-variant-numeric: tabular-nums;
+  font-family: $font-mono;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+
+  &:focus {
+    border-color: $mint;
+    box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.15);
   }
 
-  :deep(.el-select) {
-    width: 85px;
+  &.narrow {
+    width: 40px;
   }
 
-  :deep(.el-input-number__decrease),
-  :deep(.el-input-number__increase) {
-    border-color: $slate-200;
-    color: $slate-400;
-    &:hover { color: $slate-600; }
-  }
-
-  :deep(.el-input__wrapper) {
-    box-shadow: 0 0 0 1px $slate-300 inset;
-    &:focus-within {
-      box-shadow: 0 0 0 1px $mint inset, 0 0 0 3px rgba(16, 185, 129, 0.15);
-    }
+  &.wide {
+    width: 80px;
   }
 }
 
-@media (max-width: 1400px) {
-  .params-section .section-body {
-    flex-direction: column;
-    align-items: stretch;
+.compact-input::-webkit-inner-spin-button,
+.compact-input::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.compact-input {
+  -moz-appearance: textfield;
+}
+
+.compact-select {
+  height: 32px;
+  font-size: 13px;
+  border: 1px solid $slate-300;
+  border-radius: 8px;
+  padding: 0 24px 0 10px;
+  color: $slate-700;
+  background: #fff;
+  outline: none;
+  cursor: pointer;
+  min-width: 52px;
+  appearance: none;
+  font-family: $font-sans;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%239ca3af' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 8px center;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+
+  &:focus {
+    border-color: $mint;
+    box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.15);
+  }
+
+  &.wide {
+    min-width: 80px;
   }
 }
 
-@media (max-width: 1200px) {
-  .control-group {
-    :deep(.el-input-number) {
-      width: 80px;
-    }
+.segment-control {
+  display: flex;
+  padding: 2px;
+  background: $slate-100;
+  border-radius: 8px;
+  border: 1px solid $slate-200;
+}
+
+.segment-btn {
+  padding: 4px 14px;
+  font-size: 12px;
+  font-weight: 500;
+  border: none;
+  background: transparent;
+  color: $slate-500;
+  cursor: pointer;
+  border-radius: 6px;
+  transition: all 0.15s ease;
+  font-family: $font-sans;
+
+  &:hover {
+    color: $slate-700;
+  }
+
+  &.active {
+    background: linear-gradient(135deg, $mint, $mint-dark);
+    color: #fff;
+    box-shadow: 0 1px 3px rgba(16, 185, 129, 0.25);
+  }
+}
+
+@media (max-width: 900px) {
+  .params-row {
+    align-items: flex-start;
   }
 }
 </style>

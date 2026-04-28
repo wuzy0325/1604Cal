@@ -1,31 +1,40 @@
 <template>
-  <section class="workbench-section control-section">
-    <div class="control-row">
-      <div class="mode-switches">
-        <div class="switch-group">
-          <span>控制模式</span>
-          <el-radio-group v-model="controlMode" size="small">
-            <el-radio-button label="auto">自动</el-radio-button>
-            <el-radio-button label="manual">手动</el-radio-button>
-          </el-radio-group>
+  <section class="control-card">
+    <div class="control-row-top">
+      <div class="mode-group">
+        <div class="mode-item">
+          <span class="mode-label">控制模式</span>
+          <div class="segment-control">
+            <button
+              type="button"
+              class="segment-btn"
+              :class="{ active: controlMode === 'auto' }"
+              @click="controlMode = 'auto'"
+            >自动</button>
+            <button
+              type="button"
+              class="segment-btn"
+              :class="{ active: controlMode === 'manual' }"
+              @click="controlMode = 'manual'"
+            >手动</button>
+          </div>
         </div>
       </div>
 
-      <div class="channel-select-group">
-        <span class="channel-label">采集通道</span>
-        <el-button size="small" @click="channelDialogVisible = true">
+      <div class="channel-item">
+        <span class="mode-label">采集通道</span>
+        <button class="channel-select-btn" @click="channelDialogVisible = true">
           <el-icon><Grid /></el-icon>
-          {{ calibrationStore.selectedChannels.length }}/16
-        </el-button>
+          <span>{{ calibrationStore.selectedChannels.length }}/16</span>
+        </button>
       </div>
 
-      <div
-        v-if="calibrationStore.pressurePoints.length > 0"
-        class="progress-section"
-      >
-        <div class="progress-info">
-          <span>进度 {{ completedCount }}/{{ calibrationStore.pressurePoints.length }}</span>
-          <el-progress :percentage="progressPercent" :stroke-width="8" />
+      <div v-if="calibrationStore.pressurePoints.length > 0" class="progress-group">
+        <div class="progress-labels">
+          <span class="progress-text">进度 {{ completedCount }}/{{ calibrationStore.pressurePoints.length }}</span>
+        </div>
+        <div class="progress-track">
+          <div class="progress-fill" :style="{ width: progressPercent + '%' }" />
         </div>
         <div class="stable-status">
           <span>{{ calibrationStore.isStable ? '已稳定' : '稳定中' }}</span>
@@ -41,78 +50,91 @@
           阀门未切换到校准状态
         </span>
       </div>
+    </div>
 
-      <div v-if="controlMode === 'manual' && isRunning" class="manual-controls">
-        <ManualControlPanel
-          :max-pressure="calibrationParams.maxValue"
-          :stability-status="stabilityStatus"
-          @collected="handleManualCollect"
-        />
-      </div>
+    <div v-if="controlMode === 'manual' && isRunning" class="manual-controls">
+      <ManualControlPanel
+        :max-pressure="calibrationParams.maxValue"
+        :stability-status="stabilityStatus"
+        @collected="handleManualCollect"
+      />
+    </div>
 
-      <div v-else class="action-buttons">
-        <template v-if="sessionState === 'await_alarm_resolution'">
-          <el-button
-            type="warning"
-            @click="calibrationStore.resolveAlarm('continue')"
-          >
-            <el-icon><CircleCheck /></el-icon>
-            报警确认继续
-          </el-button>
-          <el-button
-            type="danger"
-            @click="calibrationStore.resolveAlarm('recollect')"
-          >
-            <el-icon><RefreshRight /></el-icon>
-            报警重采
-          </el-button>
-        </template>
-        <template v-else>
-          <el-button
-            type="success"
-            :disabled="calibrationStore.isRunning"
-            @click="calibrationStore.startCalibration()"
-          >
-            <el-icon><VideoPlay /></el-icon>
-            开始
-          </el-button>
-          <el-button
-            :disabled="!calibrationStore.isRunning"
-            @click="calibrationStore.pauseCalibration()"
-          >
-            <el-icon><VideoPause /></el-icon>
-            暂停
-          </el-button>
-          <el-button
-            :disabled="sessionState !== 'paused'"
-            @click="calibrationStore.resumeCalibration()"
-          >
-            <el-icon><RefreshRight /></el-icon>
-            继续
-          </el-button>
-          <el-button
-            type="danger"
-            :disabled="sessionState === 'idle' || sessionState === 'stopped'"
-            @click="calibrationStore.stopCalibration()"
-          >
-            <el-icon><CloseBold /></el-icon>
-            停止
-          </el-button>
-          <div class="action-divider" />
-          <el-button
-            type="primary"
-            :disabled="!calibrationStore.hasCollectedData"
-            @click="calibrationStore.fitData()"
-          >
-            <el-icon><DataAnalysis /></el-icon>
-            拟合
-          </el-button>
-          <el-button @click="calibrationStore.endCalibration()">
-            <el-icon><CircleClose /></el-icon>
-            结束
-          </el-button>
-        </template>
-      </div>
+    <div v-else class="control-row-bottom">
+      <template v-if="sessionState === 'await_alarm_resolution'">
+        <button
+          type="button"
+          class="ctrl-btn btn-warning"
+          @click="calibrationStore.resolveAlarm('continue')"
+        >
+          <el-icon><CircleCheck /></el-icon>
+          报警确认继续
+        </button>
+        <button
+          type="button"
+          class="ctrl-btn btn-stop"
+          @click="calibrationStore.resolveAlarm('recollect')"
+        >
+          <el-icon><RefreshRight /></el-icon>
+          报警重采
+        </button>
+      </template>
+      <template v-else>
+        <button
+          type="button"
+          class="ctrl-btn btn-start"
+          :disabled="calibrationStore.isRunning"
+          @click="calibrationStore.startCalibration()"
+        >
+          <el-icon><VideoPlay /></el-icon>
+          开始
+        </button>
+        <button
+          type="button"
+          class="ctrl-btn btn-pause"
+          :disabled="!calibrationStore.isRunning"
+          @click="calibrationStore.pauseCalibration()"
+        >
+          <el-icon><VideoPause /></el-icon>
+          暂停
+        </button>
+        <button
+          type="button"
+          class="ctrl-btn btn-resume"
+          :disabled="sessionState !== 'paused'"
+          @click="calibrationStore.resumeCalibration()"
+        >
+          <el-icon><RefreshRight /></el-icon>
+          继续
+        </button>
+        <button
+          type="button"
+          class="ctrl-btn btn-stop"
+          :disabled="sessionState === 'idle' || sessionState === 'stopped'"
+          @click="calibrationStore.stopCalibration()"
+        >
+          <el-icon><CloseBold /></el-icon>
+          停止
+        </button>
+        <div class="action-divider" />
+        <button
+          type="button"
+          class="ctrl-btn btn-fit"
+          :disabled="!calibrationStore.hasCollectedData"
+          @click="calibrationStore.fitData()"
+        >
+          <el-icon><DataAnalysis /></el-icon>
+          拟合
+        </button>
+        <button
+          type="button"
+          class="ctrl-btn btn-end"
+          @click="calibrationStore.endCalibration()"
+        >
+          <el-icon><CircleClose /></el-icon>
+          结束
+        </button>
+      </template>
     </div>
 
     <ChannelSelectDialog
@@ -187,13 +209,11 @@ const progressPercent = computed(() => {
 const calibrationParams = computed(() => calibrationStore.calibrationParams)
 
 function handleManualCollect(data: number[]) {
-  // Data already stored via the manual-collect API response
   console.log('Manual collection complete:', data.length, 'channels')
 }
 </script>
 
 <style scoped lang="scss">
-/* ── 设计系统令牌 ── */
 $font-sans: 'Inter', 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
 $font-mono: 'JetBrains Mono', 'Fira Code', 'SF Mono', Consolas, monospace;
 $mint: #10b981;
@@ -213,98 +233,161 @@ $red: #ef4444;
 $blue: #3b82f6;
 $amber: #f59e0b;
 
-.workbench-section {
+.control-card {
+  background: #ffffff;
+  border-radius: 12px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  border: 1px solid $slate-200;
+  padding: 16px;
   display: flex;
   flex-direction: column;
   gap: 12px;
-  flex-shrink: 0;
-}
-
-.control-section {
-  background: #ffffff;
-  border-radius: 12px;
-  border: 1px solid $slate-200;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
-  padding: 16px;
   font-family: $font-sans;
   transition: box-shadow 0.2s ease, border-color 0.2s ease;
 
   &:hover {
     box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.07), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
   }
-
-  .control-row {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    flex-wrap: wrap;
-    gap: 16px;
-  }
 }
 
-.mode-switches {
+.control-row-top {
   display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 16px 24px;
+}
+
+.mode-group {
+  display: flex;
+  align-items: center;
   gap: 20px;
 }
 
-.channel-select-group {
+.mode-item {
   display: flex;
   align-items: center;
   gap: 8px;
+}
 
-  .channel-label {
-    color: $slate-500;
-    font-size: 12px;
-    font-weight: 500;
-    letter-spacing: 0.05em;
+.mode-label {
+  font-size: 12px;
+  color: $slate-500;
+  font-weight: 500;
+  letter-spacing: 0.05em;
+  white-space: nowrap;
+  font-family: $font-sans;
+}
+
+.segment-control {
+  display: flex;
+  padding: 2px;
+  background: $slate-100;
+  border-radius: 8px;
+  border: 1px solid $slate-200;
+}
+
+.segment-btn {
+  padding: 4px 14px;
+  font-size: 12px;
+  font-weight: 500;
+  border: none;
+  background: transparent;
+  color: $slate-500;
+  cursor: pointer;
+  border-radius: 6px;
+  transition: all 0.15s ease;
+  font-family: $font-sans;
+
+  &:hover {
+    color: $slate-700;
+  }
+
+  &.active {
+    background: linear-gradient(135deg, $mint, $mint-dark);
+    color: #fff;
+    box-shadow: 0 1px 3px rgba(16, 185, 129, 0.25);
   }
 }
 
-.switch-group {
+.channel-item {
   display: flex;
-  flex-direction: column;
-  gap: 6px;
+  align-items: center;
+  gap: 8px;
+}
 
-  > span {
-    color: $slate-500;
+.channel-select-btn {
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid $slate-200;
+  border-radius: 8px;
+  background: $slate-50;
+  color: $blue;
+  font-size: 12px;
+  font-family: $font-mono;
+  font-weight: 500;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  transition: all 0.15s ease;
+
+  &:hover {
+    background: $slate-100;
+    border-color: $slate-300;
+  }
+
+  .el-icon {
     font-size: 12px;
-    font-weight: 500;
-    letter-spacing: 0.05em;
+    color: $slate-400;
   }
 }
 
-.progress-section {
+.progress-group {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  min-width: 220px;
   flex: 1;
+  min-width: 160px;
   max-width: 400px;
+  gap: 6px;
+}
 
-  .progress-info {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    color: $slate-600;
-    font-size: 12px;
-    font-weight: 500;
+.progress-labels {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
 
-    .el-progress {
-      flex: 1;
-      min-width: 80px;
-    }
-  }
+.progress-text {
+  font-size: 12px;
+  color: $slate-500;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  font-family: $font-sans;
+}
 
-  .stable-status {
-    display: flex;
-    gap: 16px;
-    color: $slate-500;
-    font-size: 11px;
+.progress-track {
+  width: 100%;
+  height: 6px;
+  background: $slate-100;
+  border-radius: 999px;
+  overflow: hidden;
+}
 
-    .session-state {
-      color: $mint;
-      font-weight: 600;
-    }
+.progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, $mint, $mint-light);
+  transition: width 0.3s ease;
+}
+
+.stable-status {
+  display: flex;
+  gap: 16px;
+  color: $slate-500;
+  font-size: 11px;
+
+  .session-state {
+    color: $mint;
+    font-weight: 600;
   }
 }
 
@@ -324,7 +407,6 @@ $amber: #f59e0b;
   border-radius: 4px;
 }
 
-/* 状态徽章：按 Tags 规范 */
 .status-badge {
   display: inline-flex;
   align-items: center;
@@ -353,11 +435,113 @@ $amber: #f59e0b;
 .status-stopped { background: rgba(107, 114, 128, 0.12); border: 1px solid rgba(107, 114, 128, 0.25); color: $slate-500; }
 .status-error { background: rgba(239, 68, 68, 0.12); border: 1px solid rgba(239, 68, 68, 0.25); color: #dc2626; }
 
-.action-buttons {
+.control-row-bottom {
   display: flex;
-  gap: 8px;
   flex-wrap: wrap;
   align-items: center;
+  gap: 8px;
+}
+
+.ctrl-btn {
+  padding: 8px 16px;
+  border-radius: 8px;
+  border: none;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  transition: all 0.15s ease;
+  font-family: $font-sans;
+
+  &:active {
+    transform: translateY(1px);
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+}
+
+.btn-start {
+  background: linear-gradient(135deg, $mint, $mint-dark);
+  color: #fff;
+  box-shadow: 0 2px 8px rgba(16, 185, 129, 0.3);
+
+  &:hover:not(:disabled) {
+    background: linear-gradient(135deg, $mint-light, $mint);
+    box-shadow: 0 4px 12px rgba(16, 185, 129, 0.4);
+    transform: translateY(-1px);
+  }
+}
+
+.btn-pause {
+  background: rgba(55, 65, 81, 0.08);
+  color: $slate-400;
+  border: 1px solid $slate-200;
+
+  &:hover:not(:disabled) {
+    background: rgba(55, 65, 81, 0.14);
+    color: $slate-500;
+    border-color: $slate-300;
+  }
+}
+
+.btn-resume {
+  background: rgba(55, 65, 81, 0.08);
+  color: $slate-700;
+  border: 1px solid $slate-200;
+
+  &:hover:not(:disabled) {
+    background: rgba(55, 65, 81, 0.14);
+    border-color: $slate-300;
+  }
+}
+
+.btn-stop {
+  background: rgba(239, 68, 68, 0.1);
+  color: $red;
+  border: 1px solid rgba(239, 68, 68, 0.2);
+
+  &:hover:not(:disabled) {
+    background: rgba(239, 68, 68, 0.16);
+    border-color: rgba(239, 68, 68, 0.35);
+  }
+}
+
+.btn-fit {
+  background: rgba(59, 130, 246, 0.1);
+  color: $blue;
+  border: 1px solid rgba(59, 130, 246, 0.2);
+
+  &:hover:not(:disabled) {
+    background: rgba(59, 130, 246, 0.16);
+    border-color: rgba(59, 130, 246, 0.35);
+  }
+}
+
+.btn-end {
+  background: rgba(55, 65, 81, 0.08);
+  color: $slate-700;
+  border: 1px solid $slate-200;
+
+  &:hover:not(:disabled) {
+    background: rgba(55, 65, 81, 0.14);
+    border-color: $slate-300;
+  }
+}
+
+.btn-warning {
+  background: rgba(245, 158, 11, 0.1);
+  color: $amber;
+  border: 1px solid rgba(245, 158, 11, 0.2);
+
+  &:hover:not(:disabled) {
+    background: rgba(245, 158, 11, 0.16);
+    border-color: rgba(245, 158, 11, 0.35);
+  }
 }
 
 .action-divider {
@@ -374,23 +558,27 @@ $amber: #f59e0b;
 }
 
 @media (max-width: 1200px) {
-  .mode-switches {
+  .mode-group {
     gap: 16px;
   }
 
-  .control-row {
+  .control-row-top {
     gap: 12px;
   }
 }
 
 @media (max-width: 900px) {
-  .control-row {
+  .control-row-top {
     flex-direction: column;
-    align-items: stretch;
+    align-items: flex-start;
   }
 
-  .action-buttons {
-    justify-content: flex-start;
+  .progress-group {
+    width: 100%;
+  }
+
+  .control-row-bottom {
+    width: 100%;
   }
 }
 </style>
