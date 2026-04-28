@@ -32,10 +32,10 @@ describe('MeasurementControl', () => {
     setActivePinia(createPinia())
   })
 
-  it('shows pressuring state text and allows pause while running', () => {
+  it('shows pressurizing state text and allows pause while running', () => {
     const store = useMeasurementStore()
     store.measureDeviceId = 'measure-1'
-    store.syncState('pressuring')
+    store.syncState('pressurizing')
 
     const wrapper = mountControl()
 

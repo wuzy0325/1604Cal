@@ -1,111 +1,118 @@
 <template>
-  <section class="params-panel">
+  <section class="params-card">
     <div class="params-row">
+      <!-- 最小值 -->
       <div class="control-group">
-        <label>最小值(kPa)</label>
-        <el-input-number
+        <label>最小:</label>
+        <input
           v-model.number="measurementStore.measurementParams.minPressure"
-          :precision="2"
-          :step="0.1"
-          size="small"
+          type="number"
+          step="0.1"
+          class="compact-input"
         />
       </div>
 
+      <!-- 最大值 -->
       <div class="control-group">
-        <label>最大值(kPa)</label>
-        <el-input-number
+        <label>最大:</label>
+        <input
           v-model.number="measurementStore.measurementParams.maxPressure"
-          :precision="2"
-          :step="0.1"
-          size="small"
+          type="number"
+          step="0.1"
+          class="compact-input"
         />
       </div>
 
+      <!-- 测点数 -->
       <div class="control-group">
-        <label>测点数</label>
-        <el-input-number
+        <label>点数:</label>
+        <input
           v-model.number="measurementStore.measurementParams.pointCount"
-          :min="2"
-          :max="11"
-          size="small"
+          type="number"
+          min="2"
+          max="11"
+          class="compact-input narrow"
         />
       </div>
 
+      <!-- 精度 -->
       <div class="control-group">
-        <label>精度</label>
-        <el-input-number
+        <label>精度:</label>
+        <input
           v-model.number="measurementStore.measurementParams.precision"
-          :min="0"
-          :max="6"
-          size="small"
+          type="number"
+          min="0"
+          max="6"
+          class="compact-input narrow"
         />
       </div>
 
+      <!-- 平均次数 -->
       <div class="control-group">
-        <label>平均次数</label>
-        <el-input-number
+        <label>平均:</label>
+        <input
           v-model.number="measurementStore.measurementParams.averageCount"
-          :min="1"
-          :max="20"
-          size="small"
+          type="number"
+          min="1"
+          max="20"
+          class="compact-input narrow"
         />
       </div>
 
+      <!-- 稳定时间 -->
       <div class="control-group">
-        <label>稳定时间</label>
-        <el-select
-          v-model.number="measurementStore.measurementParams.stableWaitS"
-          size="small"
-        >
-          <el-option label="1s" :value="1" />
-          <el-option label="3s" :value="3" />
-          <el-option label="5s" :value="5" />
-          <el-option label="10s" :value="10" />
-        </el-select>
+        <label>稳定:</label>
+        <select v-model.number="measurementStore.measurementParams.stableWaitS" class="compact-select">
+          <option :value="1">1s</option>
+          <option :value="3">3s</option>
+          <option :value="5">5s</option>
+          <option :value="10">10s</option>
+        </select>
       </div>
 
+      <!-- 精度 Level -->
       <div class="control-group precision-level-group">
         <label>精度 Level</label>
         <div class="precision-level-controls">
-          <el-select
+          <select
             v-if="!useCustomPrecision"
             v-model.number="storePrecisionLevel"
-            size="small"
+            class="compact-select wide"
           >
-            <el-option
+            <option
               v-for="item in precisionLevelOptions"
               :key="item"
-              :label="`${(item * 100).toFixed(2)}%`"
               :value="item"
-            />
-          </el-select>
-
-          <el-input-number
+            >
+              {{ (item * 100).toFixed(2) }}%
+            </option>
+          </select>
+          <input
             v-else
             v-model.number="customPrecisionValue"
-            :min="0.0001"
-            :max="5"
-            :step="0.0001"
-            :precision="4"
-            size="small"
+            type="number"
+            step="0.0001"
+            min="0.0001"
+            max="5"
+            class="compact-input wide"
           />
-
-          <el-checkbox v-model="useCustomPrecision">
-            自定义
-          </el-checkbox>
+          <label class="inline-check">
+            <input v-model="useCustomPrecision" type="checkbox" />
+            <span>自定义</span>
+          </label>
         </div>
       </div>
 
-      <div class="flex-spacer" />
+      <div class="divider" />
 
-      <el-button
-        type="primary"
-        size="small"
+      <button
+        type="button"
+        class="generate-btn"
         :disabled="!isParamValid"
         @click="onGenerateClick"
       >
         生成压力表
-      </el-button>
+      </button>
     </div>
   </section>
 </template>
@@ -170,80 +177,201 @@ async function onGenerateClick() {
 </script>
 
 <style scoped lang="scss">
-.params-panel {
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-md);
-  padding: var(--spacing-sm) var(--spacing-md);
+/* ── 设计系统令牌 ── */
+$font-sans: 'Inter', 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+$font-mono: 'JetBrains Mono', 'Fira Code', 'SF Mono', Consolas, monospace;
+$mint: #10b981;
+$mint-light: #34d399;
+$mint-dark: #059669;
+$slate-50: #f9fafb;
+$slate-100: #f3f4f6;
+$slate-200: #e5e7eb;
+$slate-300: #d1d5db;
+$slate-400: #9ca3af;
+$slate-500: #6b7280;
+$slate-600: #4b5563;
+$slate-700: #374151;
+$slate-800: #1f2937;
+
+.params-card {
+  background: #ffffff;
+  border-radius: 12px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  border: 1px solid $slate-200;
+  padding: 12px;
   display: flex;
   flex-direction: column;
-  gap: var(--spacing-xs);
   flex-shrink: 0;
+  font-family: $font-sans;
+  transition: box-shadow 0.2s ease, border-color 0.2s ease;
+
+  &:hover {
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.07), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
+  }
 }
 
 .params-row {
   display: flex;
-  align-items: flex-end;
+  align-items: center;
   flex-wrap: wrap;
-  gap: var(--spacing-sm) var(--spacing-md);
+  gap: 8px 12px;
 }
 
 .control-group {
   display: flex;
-  flex-direction: column;
-  gap: 4px;
+  align-items: center;
+  gap: 6px;
 
   label {
-    color: var(--text-muted);
-    font-size: 11px;
+    font-size: 12px;
+    color: $slate-500;
     font-weight: 500;
+    letter-spacing: 0.05em;
     white-space: nowrap;
+    font-family: $font-sans;
+  }
+}
+
+.compact-input {
+  height: 32px;
+  font-size: 13px;
+  border: 1px solid $slate-300;
+  border-radius: 8px;
+  padding: 0 8px;
+  width: 56px;
+  text-align: center;
+  color: $slate-800;
+  background: #fff;
+  outline: none;
+  font-variant-numeric: tabular-nums;
+  font-family: $font-mono;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+
+  &:focus {
+    border-color: $mint;
+    box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.15);
   }
 
-  :deep(.el-input-number) {
-    width: 96px;
+  &.narrow {
+    width: 40px;
   }
 
-  :deep(.el-select) {
-    width: 96px;
+  &.wide {
+    width: 80px;
+  }
+}
+
+.compact-input::-webkit-inner-spin-button,
+.compact-input::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.compact-input {
+  -moz-appearance: textfield;
+}
+
+.compact-select {
+  height: 32px;
+  font-size: 13px;
+  border: 1px solid $slate-300;
+  border-radius: 8px;
+  padding: 0 24px 0 10px;
+  color: $slate-700;
+  background: #fff;
+  outline: none;
+  cursor: pointer;
+  min-width: 52px;
+  appearance: none;
+  font-family: $font-sans;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%239ca3af' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 8px center;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+
+  &:focus {
+    border-color: $mint;
+    box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.15);
+  }
+
+  &.wide {
+    min-width: 80px;
   }
 }
 
 .precision-level-group {
-  :deep(.el-input-number) {
-    width: 106px;
-  }
-
-  :deep(.el-select) {
-    width: 106px;
+  .compact-select,
+  .compact-input {
+    min-width: 80px;
   }
 }
 
 .precision-level-controls {
   display: flex;
   align-items: center;
-  gap: var(--spacing-xs);
+  gap: 8px;
+}
 
-  :deep(.el-checkbox) {
-    margin-right: 0;
+.inline-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: $slate-600;
+  font-size: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+  font-family: $font-sans;
+
+  input[type="checkbox"] {
+    width: 14px;
+    height: 14px;
+    accent-color: $mint;
+    border: 1px solid $slate-300;
+    border-radius: 3px;
+    cursor: pointer;
+  }
+
+  &:hover span {
+    color: $slate-800;
   }
 }
 
-.flex-spacer {
-  flex: 1;
+.divider {
+  width: 1px;
+  height: 20px;
+  background: $slate-200;
+  margin: 0 4px;
+}
+
+.generate-btn {
+  height: 32px;
+  padding: 0 16px;
+  background: linear-gradient(135deg, $mint, $mint-dark);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  font-family: $font-sans;
+  box-shadow: 0 2px 8px rgba(16, 185, 129, 0.25);
+
+  &:hover:not(:disabled) {
+    background: linear-gradient(135deg, $mint-light, $mint);
+    box-shadow: 0 4px 12px rgba(16, 185, 129, 0.35);
+    transform: translateY(-1px);
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
 }
 
 @media (max-width: 900px) {
-  .params-panel {
-    padding: var(--spacing-md);
-  }
-
   .params-row {
     align-items: flex-start;
-  }
-
-  .flex-spacer {
-    display: none;
   }
 }
 </style>

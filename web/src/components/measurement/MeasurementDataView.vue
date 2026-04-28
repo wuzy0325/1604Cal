@@ -2,14 +2,24 @@
   <div class="data-table-wrapper">
     <!-- 压力点表 -->
     <div v-if="points.length > 0" class="points-section">
-      <div class="table-header">
-        <div class="table-title">
-          <el-icon><Aim /></el-icon>
-          <h3>目标压力表与数据采集</h3>
-          <span class="record-count">{{ points.length }} 个测点</span>
+      <div class="table-toolbar">
+        <div class="toolbar-title">
+          <el-icon class="toolbar-icon"><Aim /></el-icon>
+          <h3>目标压力表数据清单</h3>
+          <span class="record-badge">{{ points.length }} 个测点</span>
+        </div>
+        <div class="toolbar-legend">
+          <span class="legend-item">
+            <span class="legend-dot pending" />
+            待采集
+          </span>
+          <span class="legend-item">
+            <span class="legend-dot completed" />
+            已采集
+          </span>
         </div>
       </div>
-      <div class="table-scroll">
+      <div class="table-scroll custom-scroll">
         <table class="data-table">
           <thead>
             <tr>
@@ -17,7 +27,7 @@
               <th class="col-status">状态</th>
               <th class="col-target">目标值</th>
               <th v-for="ch in channelCount" :key="ch" class="col-channel">{{ ch }}</th>
-              <th class="col-time">时间</th>
+              <th class="col-time">采集时间</th>
             </tr>
           </thead>
           <tbody>
@@ -25,6 +35,7 @@
               v-for="pt in points"
               :key="pt.id"
               :class="getRowClass(pt)"
+              class="data-row"
             >
               <td class="cell-index">
                 <div class="index-cell-wrap">
@@ -76,13 +87,13 @@
 
     <!-- 实时采样数据 -->
     <div v-if="tableRows.length > 0" class="sample-section">
-      <div class="table-header">
-        <div class="table-title">
-          <el-icon><DataLine /></el-icon>
+      <div class="table-toolbar">
+        <div class="toolbar-title">
+          <el-icon class="toolbar-icon"><DataLine /></el-icon>
           <h3>实时采样数据</h3>
-          <span class="record-count">{{ rows.length }} 条采样</span>
+          <span class="record-badge">{{ rows.length }} 条采样</span>
         </div>
-        <div class="table-actions">
+        <div class="toolbar-actions">
           <button
             type="button"
             class="action-btn"
@@ -94,7 +105,7 @@
           </button>
         </div>
       </div>
-      <div class="table-scroll">
+      <div class="table-scroll custom-scroll">
         <table class="data-table">
           <thead>
             <tr>
@@ -105,7 +116,7 @@
             </tr>
           </thead>
           <tbody>
-            <tr v-for="row in tableRows" :key="row.index">
+            <tr v-for="row in tableRows" :key="row.index" class="data-row">
               <td class="cell-index">{{ row.index }}</td>
               <td class="cell-pressure">{{ row.actualPressure }}</td>
               <td v-for="ch in visibleChannels" :key="`${row.index}-${ch}`" class="cell-channel">
@@ -122,7 +133,7 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
-import { DataLine, Download, SetUp, Aim } from '@element-plus/icons-vue'
+import { DataLine, Download, Aim } from '@element-plus/icons-vue'
 import { useMeasurementStore } from '@/stores/measurement'
 import type { CollectedRow } from '@/stores/measurement'
 import type { MeasurementPoint } from '@/api/measurement'
@@ -132,7 +143,7 @@ const props = defineProps<{
   channels?: number[]
 }>()
 
-const emit = defineEmits<{ 'export-csv': [] }>()
+defineEmits<{ 'export-csv': [] }>()
 
 const measurementStore = useMeasurementStore()
 
@@ -143,11 +154,15 @@ const points = computed<MeasurementPoint[]>(() => measurementStore.points)
 const isRoundTrip = computed(() => measurementStore.measurementParams.pressureMode === 'roundTrip')
 const precisionForDisplay = computed(() => measurementStore.measurementParams.precision)
 const channelCount = 16
+const currentPointIndex = computed(() => measurementStore.currentPointIndex)
 
 const precisionStep = computed(() => Math.pow(10, -(measurementStore.measurementParams.precision || 2)))
 
 function getRowClass(pt: MeasurementPoint): string {
-  return pt.status === 'completed' ? 'row-completed' : ''
+  const classes: string[] = []
+  if (pt.status === 'completed') classes.push('row-completed')
+  if (currentPointIndex.value === pt.index) classes.push('row-current')
+  return classes.join(' ')
 }
 
 function getStatusType(status: string): string {
@@ -240,11 +255,32 @@ const tableRows = computed<DisplayRow[]>(() => {
 </script>
 
 <style scoped lang="scss">
+/* ── 设计系统令牌 ── */
+$font-sans: 'Inter', 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+$font-mono: 'JetBrains Mono', 'Fira Code', 'SF Mono', Consolas, monospace;
+$mint: #10b981;
+$mint-light: #34d399;
+$mint-dark: #059669;
+$slate-50: #f9fafb;
+$slate-100: #f3f4f6;
+$slate-200: #e5e7eb;
+$slate-300: #d1d5db;
+$slate-400: #9ca3af;
+$slate-500: #6b7280;
+$slate-600: #4b5563;
+$slate-700: #374151;
+$slate-800: #1f2937;
+$green: #22c55e;
+$red: #ef4444;
+$blue: #3b82f6;
+$amber: #f59e0b;
+
 .data-table-wrapper {
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  gap: var(--spacing-sm);
+  gap: 12px;
+  font-family: $font-sans;
 }
 
 .points-section,
@@ -253,6 +289,16 @@ const tableRows = computed<DisplayRow[]>(() => {
   flex-direction: column;
   min-height: 0;
   overflow: hidden;
+  background: #ffffff;
+  border-radius: 12px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  border: 1px solid $slate-200;
+  transition: box-shadow 0.2s ease, border-color 0.2s ease;
+
+  &:hover {
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.07), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
+    border-color: rgba(16, 185, 129, 0.3);
+  }
 }
 
 .points-section {
@@ -263,54 +309,101 @@ const tableRows = computed<DisplayRow[]>(() => {
   flex: 1;
 }
 
-.table-header {
+.table-toolbar {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding-bottom: var(--spacing-xs);
-  border-bottom: 1px solid var(--border-color);
-  margin-bottom: var(--spacing-xs);
+  padding: 12px 20px;
+  border-bottom: 1px solid $slate-100;
+  background: rgba(249, 250, 251, 0.5);
+  flex-shrink: 0;
 }
 
-.table-title {
+.toolbar-title {
   display: flex;
   align-items: center;
-  gap: var(--spacing-xs);
+  gap: 8px;
 
   h3 {
     font-size: 14px;
     font-weight: 600;
-    color: var(--text-primary);
+    color: $slate-700;
     margin: 0;
+    font-family: $font-sans;
   }
 }
 
-.record-count {
-  color: var(--text-muted);
-  font-size: 12px;
+.toolbar-icon {
+  font-size: 16px;
+  color: $mint;
 }
 
-.table-actions {
+/* 记录徽章：按 Tags 规范 */
+.record-badge {
+  padding: 2px 8px;
+  background: rgba(107, 114, 128, 0.12);
+  border: 1px solid rgba(107, 114, 128, 0.25);
+  color: $slate-500;
+  font-size: 11px;
+  font-weight: 500;
+  border-radius: 4px;
+  margin-left: 4px;
+}
+
+.toolbar-legend {
   display: flex;
-  gap: var(--spacing-xs);
+  align-items: center;
+  gap: 16px;
+}
+
+.legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: $slate-500;
+  font-family: $font-sans;
+}
+
+.legend-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+
+  &.pending { background: $slate-300; }
+  &.completed { background: $mint; }
+}
+
+.toolbar-actions {
+  display: flex;
+  gap: 8px;
 }
 
 .action-btn {
-  height: 26px;
-  padding: 0 10px;
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--border-color-strong);
-  background: var(--bg-secondary);
-  color: var(--text-secondary);
+  height: 28px;
+  padding: 0 12px;
+  border-radius: 8px;
+  border: 1px solid $slate-200;
+  background: #fff;
+  color: $slate-600;
   cursor: pointer;
   display: inline-flex;
   align-items: center;
   gap: 4px;
   font-size: 12px;
+  font-weight: 500;
+  transition: all 0.15s ease;
+  font-family: $font-sans;
 
   &:disabled {
     opacity: 0.45;
     cursor: not-allowed;
+  }
+
+  &:hover:not(:disabled) {
+    background: $slate-50;
+    border-color: $slate-300;
   }
 }
 
@@ -318,49 +411,123 @@ const tableRows = computed<DisplayRow[]>(() => {
   overflow-x: auto;
   overflow-y: auto;
   flex: 1;
+}
 
-  &::-webkit-scrollbar {
-    width: 8px;
-    height: 8px;
-  }
+.custom-scroll::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
 
-  &::-webkit-scrollbar-thumb {
-    background: var(--border-color-strong);
-    border-radius: 4px;
-  }
+.custom-scroll::-webkit-scrollbar-track {
+  background: $slate-100;
+}
+
+.custom-scroll::-webkit-scrollbar-thumb {
+  background: $slate-300;
+  border-radius: 10px;
 }
 
 .data-table {
   width: 100%;
   border-collapse: collapse;
   font-size: 12px;
+  white-space: nowrap;
 
-  th {
-    white-space: nowrap;
-    padding: 6px 8px;
-    text-align: center;
-    background: var(--bg-tertiary);
-    color: var(--text-muted);
-    font-weight: 500;
-    border-bottom: 1px solid var(--border-color);
+  thead {
     position: sticky;
     top: 0;
-    z-index: 1;
+    z-index: 10;
+    background: #fff;
+    border-bottom: 1px solid $slate-200;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+    color: $slate-400;
+    text-transform: uppercase;
+  }
+
+  th {
+    padding: 8px 12px;
+    text-align: center;
+    font-weight: 600;
+    font-size: 12px;
+    letter-spacing: 0.05em;
+    font-family: $font-sans;
   }
 
   td {
-    padding: 4px 8px;
+    padding: 6px 12px;
     text-align: center;
-    border-bottom: 1px solid var(--border-color);
-    color: var(--text-secondary);
+    color: $slate-600;
+  }
+
+  tbody {
+    color: $slate-600;
   }
 }
 
-.col-index { width: 44px; min-width: 44px; }
-.col-status { width: 72px; min-width: 72px; }
-.col-target { width: 80px; min-width: 80px; }
-.col-channel { width: 60px; min-width: 60px; }
-.col-time { width: 80px; min-width: 80px; }
+.data-row {
+  height: 40px;
+  transition: background 0.15s ease;
+  border-bottom: 1px solid $slate-50;
+
+  &:hover {
+    background: $slate-50;
+  }
+}
+
+.col-index {
+  width: 72px;
+  min-width: 72px;
+  text-align: left;
+}
+
+.col-status {
+  width: 100px;
+  min-width: 100px;
+  text-align: left;
+}
+
+.col-target {
+  width: 80px;
+  min-width: 80px;
+}
+
+.col-channel {
+  min-width: 52px;
+  text-align: center;
+  font-family: $font-mono;
+  font-size: 11px;
+}
+
+.col-time {
+  text-align: right;
+  padding-right: 24px;
+}
+
+.cell-index {
+  color: $slate-400;
+  font-weight: 600;
+  text-align: left;
+  font-family: $font-mono;
+}
+
+.cell-status {
+  text-align: left;
+}
+
+.cell-target {
+  font-family: $font-mono;
+  font-size: 13px;
+  font-weight: 700;
+  color: $slate-700;
+}
+
+.cell-time {
+  text-align: right;
+  padding-right: 24px;
+  font-family: $font-mono;
+  font-size: 11px;
+  color: $slate-400;
+}
 
 .index-cell-wrap {
   display: inline-flex;
@@ -368,112 +535,161 @@ const tableRows = computed<DisplayRow[]>(() => {
   gap: 4px;
 }
 
+/* 正/回标签 */
 .trip-badge {
   font-size: 10px;
-  padding: 0 4px;
-  border-radius: 3px;
+  padding: 1px 5px;
+  border-radius: 4px;
   font-weight: 600;
 
   &.forward {
-    background: var(--status-info-bg, #e3f2fd);
-    color: var(--status-info, #1976d2);
+    background: rgba(59, 130, 246, 0.12);
+    border: 1px solid rgba(59, 130, 246, 0.25);
+    color: $blue;
   }
 
   &.backward {
-    background: var(--status-warning-bg, #fff3e0);
-    color: var(--status-warning, #f57c00);
+    background: rgba(245, 158, 11, 0.12);
+    border: 1px solid rgba(245, 158, 11, 0.25);
+    color: #d97706;
   }
 }
 
+/* 状态标签：按 Tags 规范 */
 .status-tag {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: 6px;
   font-size: 12px;
   white-space: nowrap;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-weight: 500;
+  font-family: $font-sans;
 }
 
 .status-dot {
   width: 6px;
   height: 6px;
   border-radius: 50%;
-
-  &.pending { background: var(--text-muted, #9e9e9e); }
-  &.processing { background: var(--status-info, #1976d2); }
-  &.completed { background: var(--status-success, #388e3c); }
-  &.error { background: var(--status-error, #d32f2f); }
+  flex-shrink: 0;
 }
 
+/* pending: gray */
+.status-tag.pending {
+  background: rgba(107, 114, 128, 0.1);
+  border: 1px solid rgba(107, 114, 128, 0.2);
+  color: $slate-500;
+}
+.status-dot.pending { background: $slate-300; }
+
+/* processing: blue */
+.status-tag.processing {
+  background: rgba(59, 130, 246, 0.1);
+  border: 1px solid rgba(59, 130, 246, 0.2);
+  color: $blue;
+}
+.status-dot.processing { background: $blue; }
+
+/* completed: green */
+.status-tag.completed {
+  background: rgba(16, 185, 129, 0.1);
+  border: 1px solid rgba(16, 185, 129, 0.2);
+  color: $mint-dark;
+}
+.status-dot.completed { background: $mint; }
+
+/* error: red */
+.status-tag.error {
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  color: $red;
+}
+.status-dot.error { background: $red; }
+
 .target-input {
-  width: 70px;
+  width: 52px;
   text-align: center;
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-sm);
-  background: var(--bg-primary);
-  color: var(--text-primary);
-  padding: 2px 4px;
-  font-size: 12px;
+  border: 1px solid $slate-200;
+  border-radius: 8px;
+  background: #fff;
+  color: $slate-700;
+  padding: 4px 6px;
+  font-size: 13px;
+  font-weight: 600;
+  outline: none;
+  font-variant-numeric: tabular-nums;
+  font-family: $font-mono;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
 
   &:focus {
-    outline: none;
-    border-color: var(--accent-primary);
+    border-color: $mint;
+    box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.15);
   }
 }
 
 .channel-value {
   font-variant-numeric: tabular-nums;
-  font-size: 12px;
+  font-family: $font-mono;
+  font-size: 11px;
 
   &.empty {
-    color: var(--text-muted);
+    color: $slate-300;
   }
 }
 
 .time-display {
-  font-size: 12px;
+  font-size: 11px;
+  color: $slate-400;
 
   &.empty {
-    color: var(--text-muted);
+    color: $slate-300;
   }
 }
 
 .row-completed {
-  background: rgba(56, 142, 60, 0.05);
+  background: rgba(16, 185, 129, 0.04);
 }
 
-.empty-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: var(--spacing-xl) 0;
-  color: var(--text-muted);
+.row-current {
+  background: rgba(16, 185, 129, 0.06);
+  border-left: 2px solid $mint;
+}
 
-  p {
-    margin: var(--spacing-xs) 0;
-    font-size: 14px;
-  }
+.empty-table-state {
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  border: 1px solid $slate-200;
+  padding: 40px 0;
 }
 
 .empty-hint {
   font-size: 12px;
-  color: var(--text-muted);
+  color: $slate-400;
+  margin-top: 8px;
+  font-family: $font-sans;
 }
 
 .cell-pressure {
   font-variant-numeric: tabular-nums;
+  font-family: $font-mono;
 }
 
 .col-pressure {
-  width: 72px;
-  min-width: 72px;
+  width: 80px;
+  min-width: 80px;
 }
 
 @media (max-width: 768px) {
-  .table-header {
+  .table-toolbar {
     flex-direction: column;
     align-items: flex-start;
-    gap: var(--spacing-xs);
+    gap: 8px;
+  }
+
+  .toolbar-legend {
+    width: 100%;
   }
 }
 </style>

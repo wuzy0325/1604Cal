@@ -1,36 +1,36 @@
 /**
  * 设计系统变量定义
- * @description 现代科技感工业计量系统配色方案
- * @version 2.0.0
+ * @description 清爽薄荷绿白风工业计量系统配色方案
+ * @version 2.1.0
  */
 
 // ============================================
-// 主色调系统 - 紫色霓虹渐变
+// 主色调系统 - 薄荷绿
 // ============================================
 
-// 主色 - 紫色霓虹 (符合WCAG 2.1 AA级对比度)
-$primary-50: #f3e8ff;
-$primary-100: #e9d5ff;
-$primary-200: #d8b4fe;
-$primary-300: #c084fc;
-$primary-400: #a855f7;
-$primary-500: #9333ea;
-$primary-600: #7e22ce;
-$primary-700: #6b21a8;
-$primary-800: #581c87;
-$primary-900: #3b0764;
+// 主色 - 薄荷绿
+$primary-50: #ecfdf5;
+$primary-100: #d1fae5;
+$primary-200: #a7f3d0;
+$primary-300: #6ee7b7;
+$primary-400: #34d399;
+$primary-500: #10b981;
+$primary-600: #059669;
+$primary-700: #047857;
+$primary-800: #065f46;
+$primary-900: #064e3b;
 
-// 辅助色 - 紫罗兰 (状态指示)
-$accent-50: #ede9fe;
-$accent-100: #ddd6fe;
-$accent-200: #c4b5fd;
-$accent-300: #a78bfa;
-$accent-400: #8b5cf6;
-$accent-500: #7c3aed;
-$accent-600: #6d28d9;
-$accent-700: #5b21b6;
-$accent-800: #4c1d95;
-$accent-900: #2e1065;
+// 辅助色 - 青绿 teal
+$accent-50: #f0fdfa;
+$accent-100: #ccfbf1;
+$accent-200: #99f6e4;
+$accent-300: #5eead4;
+$accent-400: #2dd4bf;
+$accent-500: #14b8a6;
+$accent-600: #0d9488;
+$accent-700: #0f766e;
+$accent-800: #115e59;
+$accent-900: #134e4a;
 
 // ============================================
 // 语义化颜色
@@ -72,34 +72,34 @@ $danger-700: #b91c1c;
 $danger-800: #991b1b;
 $danger-900: #7f1d1d;
 
-// 信息色 - 紫罗兰
-$info-50: #ede9fe;
-$info-100: #ddd6fe;
-$info-200: #c4b5fd;
-$info-300: #a78bfa;
-$info-400: #8b5cf6;
-$info-500: #7c3aed;
-$info-600: #6d28d9;
-$info-700: #5b21b6;
-$info-800: #4c1d95;
-$info-900: #2e1065;
+// 信息色 - 青蓝
+$info-50: #eff6ff;
+$info-100: #dbeafe;
+$info-200: #bfdbfe;
+$info-300: #93c5fd;
+$info-400: #60a5fa;
+$info-500: #3b82f6;
+$info-600: #2563eb;
+$info-700: #1d4ed8;
+$info-800: #1e40af;
+$info-900: #1e3a8a;
 
 // ============================================
-// 中性色系统 - 深空灰
+// 中性色系统 - 柔和灰
 // ============================================
 
-// 深色主题背景 - 匹配 pencil 设计系统
-$neutral-950: #16171B;
-$neutral-900: #1E2026;
-$neutral-800: #2A2B30;
-$neutral-700: #3F3F46;
-$neutral-600: #52525B;
-$neutral-500: #71717A;
-$neutral-400: #A1A1AA;
-$neutral-300: #D4D4D8;
-$neutral-200: #E4E4E7;
-$neutral-100: #F4F4F5;
-$neutral-50: #FAFAFA;
+// 浅色主题背景
+$neutral-950: #030712;
+$neutral-900: #111827;
+$neutral-800: #1f2937;
+$neutral-700: #374151;
+$neutral-600: #4b5563;
+$neutral-500: #6b7280;
+$neutral-400: #9ca3af;
+$neutral-300: #d1d5db;
+$neutral-200: #e5e7eb;
+$neutral-100: #f3f4f6;
+$neutral-50: #f9fafb;
 
 // ============================================
 // 主题变量映射
@@ -120,56 +120,56 @@ $info-color: $info-500;
 // 文字颜色系统
 // ============================================
 
-// 深色背景上的文字 - 匹配 pencil 设计
-$text-primary: #F9FAFB;
-$text-secondary: #D1D5DB;
-$text-tertiary: #71717A;
-$text-muted: #52525B;
-$text-disabled: #52525B;
-$text-placeholder: #3F3F46;
+// 浅色背景上的文字 - 清爽薄荷绿白风
+$text-primary: #1f2937;
+$text-secondary: #6b7280;
+$text-tertiary: #9ca3af;
+$text-muted: #9ca3af;
+$text-disabled: #d1d5db;
+$text-placeholder: #9ca3af;
 $text-inverse: #ffffff;
 
-// 浅色背景上的文字（用于卡片/弹窗）
-$text-on-light: #1E2026;
-$text-on-light-secondary: #3F3F46;
-$text-on-light-tertiary: #71717A;
+// 深色背景上的文字（用于按钮/强调背景）
+$text-on-light: #1f2937;
+$text-on-light-secondary: #4b5563;
+$text-on-light-tertiary: #6b7280;
 
 // ============================================
 // 背景颜色系统
 // ============================================
 
 // 页面背景
-$bg-page: #16171B;
-$bg-page-gradient: linear-gradient(135deg, #16171B 0%, #1E2026 50%, #2A2B30 100%);
+$bg-page: #ffffff;
+$bg-page-gradient: linear-gradient(135deg, #ffffff 0%, #f6f7f6 50%, #f0f4f1 100%);
 
 // 卡片背景
-$bg-card: rgba(42, 43, 48, 0.8);
-$bg-card-hover: rgba(63, 63, 70, 0.9);
-$bg-card-active: rgba(82, 82, 91, 0.95);
+$bg-card: #ffffff;
+$bg-card-hover: #f9fafb;
+$bg-card-active: #f3f4f6;
 
 // 表面背景
-$bg-surface: rgba(30, 32, 38, 0.6);
-$bg-surface-elevated: rgba(42, 43, 48, 0.95);
+$bg-surface: #f6f7f6;
+$bg-surface-elevated: #ffffff;
 
 // 输入框背景
-$bg-input: rgba(30, 32, 38, 0.6);
+$bg-input: #ffffff;
 
 // 侧边栏背景
-$sidebar-bg: #16171B;
-$sidebar-bg-gradient: linear-gradient(180deg, #16171B 0%, #1E2026 100%);
+$sidebar-bg: #f6f7f6;
+$sidebar-bg-gradient: linear-gradient(180deg, #f6f7f6 0%, #f0f4f1 100%);
 
 // ============================================
 // 边框颜色系统
 // ============================================
 
-$border-color: rgba(63, 63, 70, 0.5);
-$border-color-light: rgba(82, 82, 91, 0.3);
-$border-color-strong: rgba(161, 161, 170, 0.5);
-$border-color-primary: rgba(147, 51, 234, 0.5);
+$border-color: #e5e7eb;
+$border-color-light: #f3f4f6;
+$border-color-strong: #d1d5db;
+$border-color-primary: rgba(16, 185, 129, 0.5);
 
 // 边框快捷引用
-$border-primary: rgba(63, 63, 70, 0.5);
-$border-secondary: rgba(147, 51, 234, 0.4);
+$border-primary: #e5e7eb;
+$border-secondary: rgba(16, 185, 129, 0.4);
 
 // ============================================
 // 间距系统 - 8px基准
@@ -221,31 +221,29 @@ $border-radius-full: $radius-full;
 // 阴影系统 - 科技感光晕
 // ============================================
 
-// 基础阴影
-$shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
-$shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.4), 0 2px 4px -2px rgba(0, 0, 0, 0.3);
-$shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.5), 0 4px 6px -4px rgba(0, 0, 0, 0.4);
-$shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.4);
+// 基础阴影 - 柔和浅阴影
+$shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
+$shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.07), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
+$shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.08), 0 4px 6px -4px rgba(0, 0, 0, 0.05);
+$shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.08), 0 8px 10px -6px rgba(0, 0, 0, 0.05);
 
-// 光晕阴影 - 紫色霓虹
-$shadow-glow-sm: 0 0 8px rgba(147, 51, 234, 0.3);
-$shadow-glow-md: 0 0 16px rgba(147, 51, 234, 0.4);
-$shadow-glow-lg: 0 0 24px rgba(147, 51, 234, 0.5);
-$shadow-glow-success: 0 0 12px rgba(0, 195, 105, 0.4);
-$shadow-glow-warning: 0 0 12px rgba(255, 185, 0, 0.4);
-$shadow-glow-danger: 0 0 12px rgba(255, 0, 0, 0.4);
+// 光晕阴影 - 薄荷绿
+$shadow-glow-sm: 0 0 8px rgba(16, 185, 129, 0.25);
+$shadow-glow-md: 0 0 16px rgba(16, 185, 129, 0.3);
+$shadow-glow-lg: 0 0 24px rgba(16, 185, 129, 0.35);
+$shadow-glow-success: 0 0 12px rgba(34, 197, 94, 0.3);
+$shadow-glow-warning: 0 0 12px rgba(245, 158, 11, 0.3);
+$shadow-glow-danger: 0 0 12px rgba(239, 68, 68, 0.3);
 
 // 卡片阴影
 $shadow-card: 
-    0 4px 6px -1px rgba(0, 0, 0, 0.3),
-    0 2px 4px -2px rgba(0, 0, 0, 0.2),
-    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+    0 1px 3px rgba(0, 0, 0, 0.07),
+    0 1px 2px rgba(0, 0, 0, 0.05);
 
 $shadow-card-hover:
-    0 10px 15px -3px rgba(0, 0, 0, 0.4),
-    0 4px 6px -4px rgba(0, 0, 0, 0.3),
-    0 0 20px rgba(147, 51, 234, 0.15),
-    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+    0 10px 15px -3px rgba(0, 0, 0, 0.08),
+    0 4px 6px -4px rgba(0, 0, 0, 0.05),
+    0 0 20px rgba(16, 185, 129, 0.1);
 
 // ============================================
 // 尺寸系统
@@ -323,9 +321,9 @@ $z-toast: 1080;
 // 玻璃拟态效果
 // ============================================
 
-$glass-bg: rgba(31, 41, 55, 0.7);
-$glass-bg-light: rgba(255, 255, 255, 0.05);
-$glass-border: rgba(255, 255, 255, 0.1);
+$glass-bg: rgba(255, 255, 255, 0.8);
+$glass-bg-light: rgba(255, 255, 255, 0.5);
+$glass-border: rgba(0, 0, 0, 0.05);
 $glass-backdrop: blur(12px);
 
 // 快捷引用

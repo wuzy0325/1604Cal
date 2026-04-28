@@ -770,56 +770,78 @@ onUnmounted(() => {
 </script>
 
 <style scoped lang="scss">
+/* ── 设计系统令牌 ── */
+$font-sans: 'Inter', 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+$font-mono: 'JetBrains Mono', 'Fira Code', 'SF Mono', Consolas, monospace;
+$mint: #10b981;
+$mint-dark: #059669;
+$slate-50: #f9fafb;
+$slate-100: #f3f4f6;
+$slate-200: #e5e7eb;
+$slate-300: #d1d5db;
+$slate-400: #9ca3af;
+$slate-500: #6b7280;
+$slate-600: #4b5563;
+$slate-700: #374151;
+$slate-800: #1f2937;
+$green: #22c55e;
+$red: #ef4444;
+$blue: #3b82f6;
+$amber: #f59e0b;
+
 .device-panel {
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-color);
-  border-radius: 4px;
-  padding: var(--spacing-md);
+  background: #ffffff;
+  border: 1px solid $slate-200;
+  border-radius: 12px;
+  padding: 16px;
   height: 100%;
   min-height: 0;
   display: flex;
   flex-direction: column;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  font-family: $font-sans;
 }
 
 .panel-header {
   align-items: flex-start;
   display: flex;
-  gap: var(--spacing-md);
+  gap: 12px;
   justify-content: space-between;
-  margin-bottom: var(--spacing-lg);
+  margin-bottom: 16px;
   flex-shrink: 0;
 }
 
 .panel-header h2 {
-  color: var(--text-primary);
+  color: $slate-800;
   margin: 0;
-  font-size: 18px;
+  font-size: 16px;
   font-weight: 600;
 }
 
 .panel-header p {
-  color: var(--text-secondary);
-  margin: var(--spacing-xs) 0 0;
-  font-size: 13px;
+  color: $slate-500;
+  margin: 4px 0 0;
+  font-size: 12px;
 }
 
 .header-actions {
   display: flex;
-  gap: var(--spacing-xs);
+  gap: 8px;
 }
 
 .btn {
   display: inline-flex;
   align-items: center;
-  gap: var(--spacing-xs);
-  padding: 5px 12px;
-  border: 1px solid var(--border-color-strong);
-  border-radius: 3px;
+  gap: 6px;
+  padding: 6px 14px;
+  border: 1px solid $slate-200;
+  border-radius: 8px;
   font-size: 12px;
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: all 0.2s ease;
   background: transparent;
+  font-family: $font-sans;
 
   .el-icon {
     font-size: 14px;
@@ -827,94 +849,100 @@ onUnmounted(() => {
 }
 
 .btn-primary {
-  background: var(--accent-primary);
-  color: var(--bg-primary);
-  border-color: var(--accent-primary);
+  background: linear-gradient(135deg, $mint, $mint-dark);
+  color: #ffffff;
+  border-color: transparent;
 
   &:hover {
-    background: var(--accent-secondary);
+    background: linear-gradient(135deg, #34d399, $mint);
+    box-shadow: 0 4px 12px rgba(16, 185, 129, 0.25);
   }
 }
 
 .btn-success {
-  background: var(--status-success);
-  color: var(--bg-primary);
-  border-color: var(--status-success);
+  background: $green;
+  color: #ffffff;
+  border-color: $green;
 
   &:hover {
-    background: var(--secondary-accent-hover);
+    background: #16a34a;
   }
 }
 
 .btn-danger {
-  background: var(--status-error);
+  background: $red;
   color: #fff;
-  border-color: var(--status-error);
+  border-color: $red;
 
   &:hover {
-    background: var(--status-error);
+    background: #dc2626;
   }
 }
 
 .btn-ghost {
-  color: var(--text-secondary);
+  color: $slate-600;
+  background: $slate-50;
 
   &:hover {
-    background: var(--border-color);
-    color: var(--text-primary);
+    background: $slate-100;
+    color: $slate-800;
+    border-color: $slate-300;
   }
 }
 
 .metric-grid {
   display: grid;
-  gap: var(--spacing-sm);
+  gap: 10px;
   grid-template-columns: repeat(6, 1fr);
-  margin-bottom: var(--spacing-md);
+  margin-bottom: 12px;
   flex-shrink: 0;
 }
 
 .metric-card {
-  background: var(--bg-tertiary);
-  border: 1px solid var(--border-color);
-  border-radius: 3px;
-  padding: var(--spacing-sm) var(--spacing-md);
+  background: $slate-50;
+  border: 1px solid $slate-200;
+  border-radius: 8px;
+  padding: 10px 12px;
   text-align: center;
 }
 
 .metric-label {
-  color: var(--text-secondary);
+  color: $slate-500;
   font-size: 11px;
-  margin: 0 0 2px;
+  margin: 0 0 4px;
+  font-weight: 500;
+  letter-spacing: 0.05em;
 }
 
 .metric-value {
-  color: var(--text-primary);
+  color: $slate-800;
   display: block;
   font-size: 18px;
   font-weight: 600;
+  font-family: $font-mono;
 
   &.success {
-    color: var(--status-success);
+    color: $green;
   }
 
   &.danger {
-    color: var(--status-error);
+    color: $red;
   }
 
   &.warning {
-    color: var(--status-warning);
+    color: $amber;
   }
 }
 
 .policy-strip {
-  background: var(--bg-tertiary);
-  border: 1px solid var(--border-color);
-  border-radius: 3px;
+  background: $slate-50;
+  border: 1px solid $slate-200;
+  border-radius: 8px;
   display: flex;
   align-items: center;
-  gap: var(--spacing-md);
-  margin-bottom: var(--spacing-md);
-  padding: var(--spacing-sm) var(--spacing-md);
+  gap: 16px;
+  margin-bottom: 12px;
+  padding: 8px 12px;
   flex-wrap: wrap;
   flex-shrink: 0;
 }
@@ -922,12 +950,12 @@ onUnmounted(() => {
 .policy-item {
   display: flex;
   align-items: center;
-  gap: var(--spacing-xs);
-  color: var(--text-secondary);
+  gap: 6px;
+  color: $slate-500;
   font-size: 12px;
 
   .el-icon {
-    color: var(--accent-primary);
+    color: $mint;
     font-size: 13px;
   }
 }
@@ -935,38 +963,40 @@ onUnmounted(() => {
 .auto-refresh {
   display: flex;
   align-items: center;
-  gap: var(--spacing-xs);
-  color: var(--text-secondary);
+  gap: 6px;
+  color: $slate-500;
   font-size: 12px;
   margin-left: auto;
   cursor: pointer;
+  font-weight: 500;
 
   input[type="checkbox"] {
     width: 14px;
     height: 14px;
-    accent-color: var(--accent-primary);
+    accent-color: $mint;
   }
 }
 
 .filter-bar {
-  background: var(--bg-tertiary);
-  border: 1px solid var(--border-color);
-  border-radius: 3px;
+  background: $slate-50;
+  border: 1px solid $slate-200;
+  border-radius: 8px;
   display: flex;
   align-items: flex-end;
-  gap: var(--spacing-md);
-  margin-bottom: var(--spacing-md);
-  padding: var(--spacing-sm) var(--spacing-md);
+  gap: 12px;
+  margin-bottom: 12px;
+  padding: 10px 12px;
   flex-shrink: 0;
 }
 
 .filter-bar label {
-  color: var(--text-secondary);
+  color: $slate-500;
   display: flex;
   flex-direction: column;
   font-size: 12px;
-  gap: var(--spacing-xs);
+  gap: 4px;
   flex: 1;
+  font-weight: 500;
 }
 
 .keyword-field {
@@ -975,23 +1005,34 @@ onUnmounted(() => {
 
 .filter-bar select,
 .filter-bar input {
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-color-strong);
-  border-radius: 3px;
-  color: var(--text-primary);
-  padding: var(--spacing-sm);
+  background: #ffffff;
+  border: 1px solid $slate-300;
+  border-radius: 6px;
+  color: $slate-700;
+  padding: 6px 8px;
   font-size: 12px;
+  font-family: $font-sans;
+  outline: none;
+
+  &:focus {
+    border-color: $mint;
+    box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.12);
+  }
 }
 
 .device-board {
   display: grid;
-  gap: var(--spacing-sm);
+  gap: 10px;
   grid-template-columns: repeat(2, 1fr);
   flex: 1;
   min-height: 0;
   overflow: auto;
   align-content: start;
-  padding-right: var(--spacing-xs);
+  padding-right: 4px;
+
+  &::-webkit-scrollbar { width: 4px; }
+  &::-webkit-scrollbar-thumb { background: $slate-300; border-radius: 4px; }
+  &::-webkit-scrollbar-track { background: transparent; }
 }
 
 .empty {
@@ -999,9 +1040,9 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: var(--spacing-sm);
-  color: var(--text-muted);
-  padding: var(--spacing-xl);
+  gap: 8px;
+  color: $slate-400;
+  padding: 40px 0;
 
   .el-icon {
     font-size: 18px;
@@ -1009,52 +1050,64 @@ onUnmounted(() => {
 }
 
 .device-card {
-  background: var(--bg-tertiary);
-  border: 1px solid var(--border-color);
-  border-radius: 3px;
-  padding: var(--spacing-md);
+  background: #ffffff;
+  border: 1px solid $slate-200;
+  border-radius: 10px;
+  padding: 14px;
+  transition: all 0.2s ease;
+
+  &:hover {
+    border-color: $slate-300;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.07), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
+  }
 }
 
 .card-top {
   align-items: center;
   display: flex;
-  gap: var(--spacing-md);
+  gap: 12px;
   justify-content: space-between;
-  margin-bottom: var(--spacing-md);
+  margin-bottom: 12px;
 }
 
 .title-block {
   align-items: center;
   display: flex;
-  gap: var(--spacing-sm);
+  gap: 8px;
 }
 
 .title-block strong {
-  color: var(--text-primary);
+  color: $slate-800;
   font-size: 14px;
+  font-weight: 600;
 }
 
 .type-badge {
-  background: var(--bg-secondary);
+  background: $slate-50;
   border-radius: 999px;
   font-size: 10px;
   font-weight: 600;
-  padding: 2px 6px;
+  padding: 2px 8px;
+  border: 1px solid $slate-200;
 
   &.measure {
-    color: var(--status-info);
+    color: $blue;
+    background: rgba(59, 130, 246, 0.08);
+    border-color: rgba(59, 130, 246, 0.15);
   }
 
   &.pressure {
-    color: var(--status-warning);
+    color: $amber;
+    background: rgba(245, 158, 11, 0.08);
+    border-color: rgba(245, 158, 11, 0.15);
   }
 }
 
 .card-grid {
   display: grid;
-  gap: var(--spacing-sm);
+  gap: 10px;
   grid-template-columns: 1fr 1fr;
-  margin-bottom: var(--spacing-md);
+  margin-bottom: 12px;
 }
 
 .info-item {
@@ -1064,33 +1117,37 @@ onUnmounted(() => {
 }
 
 .info-label {
-  color: var(--text-muted);
+  color: $slate-400;
   font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.05em;
 }
 
 .info-value {
-  color: var(--text-secondary);
+  color: $slate-600;
   font-size: 12px;
+  font-weight: 500;
 }
 
 .error-section {
-  background: var(--status-error-bg-subtle);
-  border: 1px solid var(--status-error-bg-strong);
-  border-radius: 3px;
-  padding: var(--spacing-sm);
-  margin-bottom: var(--spacing-md);
+  background: rgba(239, 68, 68, 0.06);
+  border: 1px solid rgba(239, 68, 68, 0.15);
+  border-radius: 6px;
+  padding: 8px 10px;
+  margin-bottom: 12px;
 }
 
 .meta-error {
-  color: var(--status-error);
+  color: $red;
   font-size: 11px;
   margin: 0;
   display: flex;
   align-items: center;
-  gap: var(--spacing-xs);
+  gap: 4px;
+  font-weight: 500;
 
   & + .meta-error {
-    margin-top: var(--spacing-xs);
+    margin-top: 4px;
   }
 
   .el-icon {
@@ -1099,13 +1156,14 @@ onUnmounted(() => {
 }
 
 .status-badge {
-  border-radius: 3px;
+  border-radius: 4px;
   font-size: 11px;
-  font-weight: 600;
-  padding: 3px 6px;
+  font-weight: 500;
+  padding: 3px 8px;
   display: inline-flex;
   align-items: center;
-  gap: 3px;
+  gap: 4px;
+  line-height: 1.5;
 
   .el-icon {
     font-size: 10px;
@@ -1113,34 +1171,38 @@ onUnmounted(() => {
 }
 
 .status-connected {
-  background: var(--status-success-bg);
-  color: var(--status-success);
+  background: rgba(16, 185, 129, 0.12);
+  border: 1px solid rgba(16, 185, 129, 0.25);
+  color: #059669;
 }
 
 .status-connecting {
-  background: var(--status-warning-bg);
-  color: var(--status-warning);
+  background: rgba(245, 158, 11, 0.12);
+  border: 1px solid rgba(245, 158, 11, 0.25);
+  color: #d97706;
 }
 
 .status-disconnected {
-  background: var(--bg-secondary);
-  color: var(--text-muted);
+  background: rgba(107, 114, 128, 0.12);
+  border: 1px solid rgba(107, 114, 128, 0.25);
+  color: $slate-500;
 }
 
 .status-error {
-  background: var(--status-error-bg);
-  color: var(--status-error);
+  background: rgba(239, 68, 68, 0.12);
+  border: 1px solid rgba(239, 68, 68, 0.25);
+  color: #dc2626;
 }
 
 .card-actions {
   display: flex;
   justify-content: flex-end;
-  gap: var(--spacing-xs);
+  gap: 6px;
 }
 
 .form-grid {
   display: grid;
-  gap: var(--spacing-md);
+  gap: 12px;
   grid-template-columns: repeat(2, 1fr);
 }
 
@@ -1149,30 +1211,39 @@ onUnmounted(() => {
 }
 
 .form-grid label {
-  color: var(--text-secondary);
+  color: $slate-500;
   display: flex;
   flex-direction: column;
   font-size: 12px;
-  gap: var(--spacing-xs);
+  gap: 4px;
+  font-weight: 500;
 }
 
 .form-grid input,
 .form-grid select {
-  background: var(--bg-tertiary);
-  border: 1px solid var(--border-color-strong);
-  border-radius: 3px;
-  color: var(--text-primary);
-  padding: var(--spacing-sm);
+  background: #ffffff;
+  border: 1px solid $slate-300;
+  border-radius: 6px;
+  color: $slate-700;
+  padding: 6px 8px;
   font-size: 12px;
+  font-family: $font-sans;
+  outline: none;
+
+  &:focus {
+    border-color: $mint;
+    box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.12);
+  }
 }
 
 .form-error {
-  color: var(--status-error);
-  margin: var(--spacing-sm) 0 0;
+  color: $red;
+  margin: 8px 0 0;
   display: flex;
   align-items: center;
-  gap: var(--spacing-xs);
+  gap: 6px;
   font-size: 13px;
+  font-weight: 500;
 
   .el-icon {
     font-size: 14px;
@@ -1182,14 +1253,16 @@ onUnmounted(() => {
 .error-banner {
   display: flex;
   align-items: center;
-  gap: var(--spacing-sm);
-  color: var(--status-error);
-  background: var(--status-error-bg-subtle);
-  border: 1px solid var(--status-error-bg-strong);
-  border-radius: 3px;
-  padding: var(--spacing-md);
-  margin-top: var(--spacing-lg);
+  gap: 8px;
+  color: #dc2626;
+  background: rgba(239, 68, 68, 0.06);
+  border: 1px solid rgba(239, 68, 68, 0.15);
+  border-radius: 8px;
+  padding: 10px 14px;
+  margin-top: 12px;
   flex-shrink: 0;
+  font-weight: 500;
+  font-size: 13px;
 
   .el-icon {
     font-size: 18px;
@@ -1213,7 +1286,7 @@ onUnmounted(() => {
 
   .policy-strip {
     flex-wrap: wrap;
-    gap: var(--spacing-sm);
+    gap: 8px;
   }
 
   .filter-bar {

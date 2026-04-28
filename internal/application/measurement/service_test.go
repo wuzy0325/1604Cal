@@ -366,16 +366,16 @@ func TestSetStateTransitions(t *testing.T) {
 		to        measurement.State
 		wantError bool
 	}{
-		{name: "idle_to_pressuring", from: measurement.StateIdle, to: measurement.StatePressuring},
+		{name: "idle_to_pressurizing", from: measurement.StateIdle, to: measurement.StatePressurizing},
 		{name: "idle_to_collecting", from: measurement.StateIdle, to: measurement.StateCollecting},
-		{name: "pressuring_to_stabilizing", from: measurement.StatePressuring, to: measurement.StateStabilizing},
-		{name: "pressuring_to_paused", from: measurement.StatePressuring, to: measurement.StatePaused},
+		{name: "pressurizing_to_stabilizing", from: measurement.StatePressurizing, to: measurement.StateStabilizing},
+		{name: "pressurizing_to_paused", from: measurement.StatePressurizing, to: measurement.StatePaused},
 		{name: "stabilizing_to_collecting", from: measurement.StateStabilizing, to: measurement.StateCollecting},
 		{name: "collecting_to_completed", from: measurement.StateCollecting, to: measurement.StateCompleted},
 		{name: "completed_to_idle", from: measurement.StateCompleted, to: measurement.StateIdle},
 		{name: "error_to_idle", from: measurement.StateError, to: measurement.StateIdle},
 		{name: "paused_to_collecting", from: measurement.StatePaused, to: measurement.StateCollecting},
-		{name: "paused_to_pressuring", from: measurement.StatePaused, to: measurement.StatePressuring},
+		{name: "paused_to_pressurizing", from: measurement.StatePaused, to: measurement.StatePressurizing},
 		{name: "paused_to_idle", from: measurement.StatePaused, to: measurement.StateIdle},
 		{name: "collecting_to_idle_invalid", from: measurement.StateCollecting, to: measurement.StateIdle, wantError: true},
 	}
@@ -411,12 +411,12 @@ func reachState(t *testing.T, svc *measurement.Service, target measurement.State
 	}
 
 	steps := map[measurement.State][]measurement.State{
-		measurement.StatePressuring:  {measurement.StatePressuring},
-		measurement.StateStabilizing: {measurement.StatePressuring, measurement.StateStabilizing},
-		measurement.StateCollecting:  {measurement.StatePressuring, measurement.StateStabilizing, measurement.StateCollecting},
-		measurement.StateCompleted:   {measurement.StatePressuring, measurement.StateStabilizing, measurement.StateCollecting, measurement.StateCompleted},
-		measurement.StateError:       {measurement.StatePressuring, measurement.StateError},
-		measurement.StatePaused:      {measurement.StatePressuring, measurement.StatePaused},
+		measurement.StatePressurizing: {measurement.StatePressurizing},
+		measurement.StateStabilizing: {measurement.StatePressurizing, measurement.StateStabilizing},
+		measurement.StateCollecting:  {measurement.StatePressurizing, measurement.StateStabilizing, measurement.StateCollecting},
+		measurement.StateCompleted:   {measurement.StatePressurizing, measurement.StateStabilizing, measurement.StateCollecting, measurement.StateCompleted},
+		measurement.StateError:       {measurement.StatePressurizing, measurement.StateError},
+		measurement.StatePaused:      {measurement.StatePressurizing, measurement.StatePaused},
 	}
 
 	path, ok := steps[target]

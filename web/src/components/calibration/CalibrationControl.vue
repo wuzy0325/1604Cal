@@ -193,70 +193,101 @@ function handleManualCollect(data: number[]) {
 </script>
 
 <style scoped lang="scss">
+/* ── 设计系统令牌 ── */
+$font-sans: 'Inter', 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+$font-mono: 'JetBrains Mono', 'Fira Code', 'SF Mono', Consolas, monospace;
+$mint: #10b981;
+$mint-light: #34d399;
+$mint-dark: #059669;
+$slate-50: #f9fafb;
+$slate-100: #f3f4f6;
+$slate-200: #e5e7eb;
+$slate-300: #d1d5db;
+$slate-400: #9ca3af;
+$slate-500: #6b7280;
+$slate-600: #4b5563;
+$slate-700: #374151;
+$slate-800: #1f2937;
+$green: #22c55e;
+$red: #ef4444;
+$blue: #3b82f6;
+$amber: #f59e0b;
+
 .workbench-section {
   display: flex;
   flex-direction: column;
-  gap: var(--spacing-sm);
+  gap: 12px;
   flex-shrink: 0;
 }
 
 .control-section {
-  background: var(--bg-tertiary);
-  border-radius: var(--radius-md);
-  padding: var(--spacing-sm) var(--spacing-md);
+  background: #ffffff;
+  border-radius: 12px;
+  border: 1px solid $slate-200;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  padding: 16px;
+  font-family: $font-sans;
+  transition: box-shadow 0.2s ease, border-color 0.2s ease;
+
+  &:hover {
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.07), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
+  }
 
   .control-row {
     display: flex;
     align-items: center;
     justify-content: space-between;
     flex-wrap: wrap;
-    gap: var(--spacing-md);
+    gap: 16px;
   }
 }
 
 .mode-switches {
   display: flex;
-  gap: var(--spacing-lg);
+  gap: 20px;
 }
 
 .channel-select-group {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
 
   .channel-label {
-    color: var(--text-muted);
-    font-size: 11px;
+    color: $slate-500;
+    font-size: 12px;
     font-weight: 500;
+    letter-spacing: 0.05em;
   }
 }
 
 .switch-group {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 6px;
 
   > span {
-    color: var(--text-muted);
-    font-size: 11px;
+    color: $slate-500;
+    font-size: 12px;
     font-weight: 500;
+    letter-spacing: 0.05em;
   }
 }
 
 .progress-section {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 6px;
   min-width: 220px;
   flex: 1;
-  max-width: 320px;
+  max-width: 400px;
 
   .progress-info {
     display: flex;
     align-items: center;
-    gap: var(--spacing-sm);
-    color: var(--text-secondary);
-    font-size: 13px;
+    gap: 12px;
+    color: $slate-600;
+    font-size: 12px;
+    font-weight: 500;
 
     .el-progress {
       flex: 1;
@@ -266,13 +297,13 @@ function handleManualCollect(data: number[]) {
 
   .stable-status {
     display: flex;
-    gap: var(--spacing-md);
-    color: var(--text-muted);
+    gap: 16px;
+    color: $slate-500;
     font-size: 11px;
 
     .session-state {
-      color: var(--accent-primary);
-      font-weight: 500;
+      color: $mint;
+      font-weight: 600;
     }
   }
 }
@@ -280,26 +311,33 @@ function handleManualCollect(data: number[]) {
 .session-status-inline {
   display: flex;
   align-items: center;
-  gap: var(--spacing-sm);
+  gap: 10px;
 }
 
 .valve-warning {
-  color: var(--status-warning);
+  color: #d97706;
   font-size: 11px;
   font-weight: 500;
+  background: rgba(245, 158, 11, 0.1);
+  border: 1px solid rgba(245, 158, 11, 0.2);
+  padding: 2px 8px;
+  border-radius: 4px;
 }
 
+/* 状态徽章：按 Tags 规范 */
 .status-badge {
   display: inline-flex;
   align-items: center;
-  padding: 4px 12px;
-  border-radius: var(--radius-sm);
+  padding: 3px 10px;
+  border-radius: 4px;
   font-size: 12px;
-  font-weight: 600;
+  font-weight: 500;
+  line-height: 1.5;
+  letter-spacing: 0.02em;
 }
 
-.status-idle { background: var(--bg-quaternary); color: var(--text-secondary); }
-.status-ready { background: var(--status-info-bg); color: var(--status-info); }
+.status-idle { background: rgba(107, 114, 128, 0.12); border: 1px solid rgba(107, 114, 128, 0.25); color: $slate-500; }
+.status-ready { background: rgba(59, 130, 246, 0.12); border: 1px solid rgba(59, 130, 246, 0.25); color: #2563eb; }
 
 .status-pressurizing,
 .status-stabilizing,
@@ -308,16 +346,16 @@ function handleManualCollect(data: number[]) {
 .status-fitting,
 .status-await_manual_collect,
 .status-await_alarm_resolution,
-.status-recovering { background: var(--status-success-bg); color: var(--status-success); }
+.status-recovering { background: rgba(16, 185, 129, 0.12); border: 1px solid rgba(16, 185, 129, 0.25); color: #059669; }
 
-.status-paused { background: var(--status-warning-bg); color: var(--status-warning); }
-.status-completed { background: var(--status-success-bg); color: var(--status-success); }
-.status-stopped { background: var(--bg-quaternary); color: var(--text-secondary); }
-.status-error { background: var(--status-error-bg); color: var(--status-error); }
+.status-paused { background: rgba(245, 158, 11, 0.12); border: 1px solid rgba(245, 158, 11, 0.25); color: #d97706; }
+.status-completed { background: rgba(16, 185, 129, 0.12); border: 1px solid rgba(16, 185, 129, 0.25); color: #059669; }
+.status-stopped { background: rgba(107, 114, 128, 0.12); border: 1px solid rgba(107, 114, 128, 0.25); color: $slate-500; }
+.status-error { background: rgba(239, 68, 68, 0.12); border: 1px solid rgba(239, 68, 68, 0.25); color: #dc2626; }
 
 .action-buttons {
   display: flex;
-  gap: var(--spacing-xs);
+  gap: 8px;
   flex-wrap: wrap;
   align-items: center;
 }
@@ -325,8 +363,8 @@ function handleManualCollect(data: number[]) {
 .action-divider {
   width: 1px;
   height: 20px;
-  background: var(--border-color-strong);
-  margin: 0 var(--spacing-xs);
+  background: $slate-200;
+  margin: 0 4px;
 }
 
 .manual-controls {
@@ -337,11 +375,11 @@ function handleManualCollect(data: number[]) {
 
 @media (max-width: 1200px) {
   .mode-switches {
-    gap: var(--spacing-md);
+    gap: 16px;
   }
 
   .control-row {
-    gap: var(--spacing-sm);
+    gap: 12px;
   }
 }
 

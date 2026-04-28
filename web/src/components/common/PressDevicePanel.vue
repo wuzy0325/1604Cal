@@ -214,42 +214,74 @@ const setPressure = async () => {
 </script>
 
 <style scoped lang="scss">
+/* ── 设计系统令牌 ── */
+$font-sans: 'Inter', 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+$font-mono: 'JetBrains Mono', 'Fira Code', 'SF Mono', Consolas, monospace;
+$mint: #10b981;
+$mint-dark: #059669;
+$slate-50: #f9fafb;
+$slate-100: #f3f4f6;
+$slate-200: #e5e7eb;
+$slate-300: #d1d5db;
+$slate-400: #9ca3af;
+$slate-500: #6b7280;
+$slate-600: #4b5563;
+$slate-700: #374151;
+$slate-800: #1f2937;
+$green: #22c55e;
+$red: #ef4444;
+$blue: #3b82f6;
+$amber: #f59e0b;
+
 .device-panel {
   display: flex;
   flex-direction: column;
-  gap: var(--spacing-sm);
+  gap: 12px;
+  font-family: $font-sans;
 
+  /* 头部：设备信息 + 状态徽章 */
   .panel-header {
     display: flex;
     justify-content: space-between;
-    align-items: center;
+    align-items: flex-start;
 
     .device-info {
       display: flex;
       align-items: center;
-      gap: var(--spacing-sm);
+      gap: 10px;
 
       .device-icon {
-        font-size: 18px;
-        color: var(--status-info);
+        font-size: 20px;
+        color: $blue;
+        background: rgba(59, 130, 246, 0.1);
+        width: 36px;
+        height: 36px;
+        border-radius: 8px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
       }
 
       .device-name {
-        color: var(--text-primary);
-        font-weight: 500;
-        font-size: 13px;
+        color: $slate-800;
+        font-weight: 600;
+        font-size: 14px;
+        line-height: 1.3;
       }
 
       .device-type {
-        color: var(--text-secondary);
-        font-size: 11px;
+        color: $slate-500;
+        font-size: 12px;
+        font-weight: 400;
+        line-height: 1.3;
       }
     }
   }
 
+  /* 连接控制区 */
   .selection-control {
     display: flex;
-    gap: var(--spacing-xs);
+    gap: 8px;
     align-items: center;
 
     .device-select {
@@ -257,58 +289,67 @@ const setPressure = async () => {
     }
   }
 
+  /* 下拉选项 */
   .device-option {
     display: flex;
     justify-content: space-between;
     align-items: center;
 
     .device-option-name {
-      color: var(--text-primary);
+      color: $slate-700;
       font-size: 13px;
     }
 
     .device-option-status {
       font-size: 10px;
       font-weight: 600;
-      padding: 1px 5px;
-      border-radius: 2px;
+      padding: 2px 6px;
+      border-radius: 4px;
+      letter-spacing: 0.02em;
     }
 
     .status-connected {
-      background: var(--status-success-bg);
-      color: var(--status-success);
+      background: rgba(34, 197, 94, 0.12);
+      border: 1px solid rgba(34, 197, 94, 0.25);
+      color: #16a34a;
     }
 
     .status-connecting {
-      background: var(--status-warning-bg);
-      color: var(--status-warning);
+      background: rgba(245, 158, 11, 0.12);
+      border: 1px solid rgba(245, 158, 11, 0.25);
+      color: #d97706;
     }
 
     .status-disconnected {
-      background: var(--bg-secondary);
-      color: var(--text-muted);
+      background: rgba(107, 114, 128, 0.08);
+      border: 1px solid rgba(107, 114, 128, 0.18);
+      color: $slate-500;
     }
 
     .status-error {
-      background: var(--status-error-bg);
-      color: var(--status-error);
+      background: rgba(239, 68, 68, 0.1);
+      border: 1px solid rgba(239, 68, 68, 0.2);
+      color: #dc2626;
     }
   }
 
   .empty-hint {
-    padding: var(--spacing-sm);
-    color: var(--text-muted);
+    padding: 12px;
+    color: $slate-400;
     font-size: 12px;
     text-align: center;
+    font-family: $font-sans;
   }
 
+  /* 压力控制区（连接后显示） */
   .pressure-control {
-    background: var(--bg-tertiary);
-    border-radius: var(--radius-sm);
-    padding: var(--spacing-sm);
+    background: $slate-50;
+    border-radius: 8px;
+    border: 1px solid $slate-100;
+    padding: 14px;
     display: flex;
     flex-direction: column;
-    gap: var(--spacing-sm);
+    gap: 12px;
 
     .current-pressure {
       display: flex;
@@ -316,21 +357,26 @@ const setPressure = async () => {
       align-items: baseline;
 
       .label {
-        color: var(--text-secondary);
-        font-size: 11px;
+        color: $slate-500;
+        font-size: 12px;
+        font-weight: 500;
+        letter-spacing: 0.02em;
       }
 
       .value {
-        color: var(--accent-primary);
-        font-size: 20px;
-        font-weight: 600;
+        color: $mint;
+        font-size: 24px;
+        font-weight: 700;
         font-variant-numeric: tabular-nums;
+        font-family: $font-mono;
+        line-height: 1;
 
         .unit {
-          font-size: 11px;
-          font-weight: 400;
-          color: var(--text-secondary);
-          margin-left: 2px;
+          font-size: 12px;
+          font-weight: 500;
+          color: $slate-500;
+          margin-left: 4px;
+          font-family: $font-sans;
         }
       }
     }
@@ -339,11 +385,13 @@ const setPressure = async () => {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      gap: var(--spacing-sm);
+      gap: 10px;
 
       .label {
-        color: var(--text-secondary);
-        font-size: 11px;
+        color: $slate-500;
+        font-size: 12px;
+        font-weight: 500;
+        letter-spacing: 0.02em;
         flex-shrink: 0;
       }
 
@@ -355,10 +403,19 @@ const setPressure = async () => {
     .pressure-actions {
       display: flex;
       align-items: center;
-      gap: var(--spacing-xs);
+      gap: 8px;
+      padding-top: 4px;
+      border-top: 1px solid $slate-200;
 
       .target-input {
         flex: 1;
+      }
+
+      .el-button {
+        height: 32px;
+        font-size: 12px;
+        font-weight: 600;
+        border-radius: 6px;
       }
     }
   }

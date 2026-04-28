@@ -1,62 +1,50 @@
 <template>
   <aside class="sidebar">
+    <!-- Logo: 仅图标 -->
     <div class="sidebar-header">
-      <div class="logo">
-        <div class="logo-icon">
-          <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <path d="M12 2L2 7L12 12L22 7L12 2Z" fill="currentColor" fill-opacity="0.2"/>
-            <path d="M2 17L12 22L22 17" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-            <path d="M2 12L12 17L22 12" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
-        </div>
-        <div class="logo-text">
-          <h1>1604系统</h1>
-          <span>融合平台</span>
-        </div>
+      <div class="logo-icon" title="1604系统">
+        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M12 2L2 7L12 12L22 7L12 2Z" fill="currentColor" fill-opacity="0.2"/>
+          <path d="M2 17L12 22L22 17" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M2 12L12 17L22 12" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
       </div>
     </div>
 
+    <!-- 主导航 -->
     <nav class="sidebar-nav">
       <div
         v-for="item in menuItems"
         :key="item.path"
         class="nav-item"
         :class="{ active: isActive(item.path) }"
+        :data-tooltip="item.title"
         @click="handleNavigate(item.path)"
       >
         <el-icon class="nav-icon">
           <component :is="item.icon" />
         </el-icon>
-        <div class="nav-content">
-          <span class="nav-title">{{ item.title }}</span>
-          <span class="nav-desc">{{ item.description }}</span>
-        </div>
       </div>
     </nav>
 
-    <div class="sidebar-footer">
-      <div class="system-status">
-        <div class="status-dot online"></div>
-        <span>系统运行正常</span>
-      </div>
-    </div>
   </aside>
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { House, Tools, DataLine, SetUp, Odometer } from '@element-plus/icons-vue'
+import {
+  House, Tools, DataLine, SetUp, Odometer
+} from '@element-plus/icons-vue'
 
 const router = useRouter()
 const route = useRoute()
 
 const menuItems = [
-  { path: '/', icon: House, title: '首页', description: '系统概览' },
-  { path: '/device-management', icon: Tools, title: '设备管理', description: '设备台账管理' },
-  { path: '/measurement', icon: DataLine, title: '计量模块', description: '计量数据采集' },
-  { path: '/calibration', icon: SetUp, title: '标定工作台', description: '设备标定校准' },
-  { path: '/multi-pressure', icon: Odometer, title: '多设备打压', description: '多设备并行控制' }
+  { path: '/', icon: House, title: '首页' },
+  { path: '/device-management', icon: Tools, title: '设备管理' },
+  { path: '/measurement', icon: DataLine, title: '计量模块' },
+  { path: '/calibration', icon: SetUp, title: '标定工作台' },
+  { path: '/multi-pressure', icon: Odometer, title: '多设备打压' }
 ]
 
 function isActive(path: string): boolean {
@@ -66,202 +54,131 @@ function isActive(path: string): boolean {
 function handleNavigate(path: string): void {
   router.push(path)
 }
+
 </script>
 
 <style scoped lang="scss">
-
 .sidebar {
-  width: $sidebar-width;
+  width: 56px;
   height: 100%;
-  background: $sidebar-bg;
-  border-right: 1px solid $border-color;
+  background: #fff;
+  border-right: 1px solid #e5e7eb;
   display: flex;
   flex-direction: column;
+  align-items: center;
   flex-shrink: 0;
   position: relative;
   z-index: 10;
+  overflow: hidden;
 }
 
 .sidebar-header {
-  padding: $spacing-6;
-  border-bottom: 1px solid $border-color;
+  padding: 16px 0;
+  display: flex;
+  justify-content: center;
 }
 
-.logo {
+.logo-icon {
+  width: 32px;
+  height: 32px;
+  color: #10b981;
   display: flex;
   align-items: center;
-  gap: $spacing-3;
+  justify-content: center;
+  background: #ecfdf5;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
 
-  .logo-icon {
-    width: 40px;
-    height: 40px;
-    color: $primary-400;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: rgba($primary-500, 0.1);
-    border-radius: $radius-md;
-
-    svg {
-      width: 24px;
-      height: 24px;
-    }
+  &:hover {
+    background: #d1fae5;
   }
 
-  .logo-text {
-    display: flex;
-    flex-direction: column;
-
-    h1 {
-      font-size: $font-size-lg;
-      font-weight: $font-weight-bold;
-      color: $text-primary;
-      line-height: 1.2;
-      margin: 0;
-      letter-spacing: 0.5px;
-    }
-
-    span {
-      font-size: 10px;
-      color: $text-tertiary;
-      letter-spacing: 0.1em;
-      text-transform: uppercase;
-    }
+  svg {
+    width: 20px;
+    height: 20px;
   }
 }
 
-// 导航菜单
 .sidebar-nav {
   flex: 1;
-  padding: $spacing-4;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 0;
   overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: none;
+
+  &::-webkit-scrollbar {
+    display: none;
+  }
 }
 
 .nav-item {
+  width: 40px;
+  height: 40px;
   display: flex;
   align-items: center;
-  gap: $spacing-3;
-  padding: $spacing-3 $spacing-4;
-  margin-bottom: $spacing-1;
-  border-radius: $radius-md;
+  justify-content: center;
+  border-radius: 8px;
   cursor: pointer;
-  transition: all $transition-fast;
+  transition: all 0.2s ease;
   position: relative;
-  overflow: hidden;
+  color: #9ca3af;
 
   &:hover {
-    background: rgba($neutral-700, 0.5);
+    background: #f3f4f6;
+    color: #4b5563;
 
-    .nav-icon {
-      color: $text-primary;
-    }
-    
-    .nav-title {
-      color: $text-primary;
+    &::after {
+      opacity: 1;
     }
   }
 
   &.active {
-    background: rgba($primary-500, 0.15);
-    
+    background: #ecfdf5;
+    color: #10b981;
+
     &::before {
       content: '';
       position: absolute;
-      left: 0;
+      left: -10px;
       top: 50%;
       transform: translateY(-50%);
-      height: 20px;
       width: 3px;
-      background: $primary-500;
-      border-radius: 0 $radius-full $radius-full 0;
+      height: 20px;
+      background: #10b981;
+      border-radius: 0 3px 3px 0;
     }
+  }
 
-    .nav-icon {
-      color: $primary-400;
-    }
-
-    .nav-title {
-      color: $text-primary;
-      font-weight: $font-weight-medium;
-    }
+  // Tooltip
+  &::after {
+    content: attr(data-tooltip);
+    position: absolute;
+    left: calc(100% + 10px);
+    top: 50%;
+    transform: translateY(-50%);
+    background: #374151;
+    color: #fff;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    white-space: nowrap;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s;
+    z-index: 50;
   }
 }
 
 .nav-icon {
   font-size: 18px;
-  color: $text-tertiary;
-  transition: color $transition-fast;
-  flex-shrink: 0;
   display: flex;
   align-items: center;
-}
-
-.nav-content {
-  display: flex;
-  flex-direction: column;
-  gap: 0;
-  flex: 1;
-  min-width: 0;
-}
-
-.nav-title {
-  font-size: $font-size-base;
-  color: $text-secondary;
-  transition: color $transition-fast;
-}
-
-.nav-desc {
-  font-size: 11px;
-  color: $text-muted;
-  display: none; // 默认隐藏描述，保持侧边栏简洁
-}
-
-// 侧边栏底部
-.sidebar-footer {
-  padding: $spacing-4 $spacing-6;
-  border-top: 1px solid $border-color;
-  background: rgba($neutral-900, 0.3);
-}
-
-.system-status {
-  display: flex;
-  align-items: center;
-  gap: $spacing-2;
-  font-size: $font-size-xs;
-  color: $text-tertiary;
-
-  .status-dot {
-    width: 6px;
-    height: 6px;
-    border-radius: 50%;
-    position: relative;
-
-    &.online {
-      background: $success-500;
-      box-shadow: 0 0 6px rgba($success-500, 0.4);
-
-      &::after {
-        content: '';
-        position: absolute;
-        inset: -3px;
-        border-radius: 50%;
-        border: 1px solid $success-500;
-        opacity: 0.3;
-        animation: pulse 2s ease-in-out infinite;
-      }
-    }
-  }
-}
-
-@keyframes pulse {
-  0%, 100% {
-    transform: scale(1);
-    opacity: 0.3;
-  }
-  50% {
-    transform: scale(1.5);
-    opacity: 0;
-  }
+  justify-content: center;
 }
 
 // 响应式适配
@@ -270,51 +187,47 @@ function handleNavigate(path: string): void {
     width: 100%;
     height: auto;
     flex-direction: row;
-    padding: $spacing-3;
+    padding: 8px 12px;
     align-items: center;
     border-right: none;
-    border-bottom: 1px solid $border-color;
+    border-bottom: 1px solid #e5e7eb;
+  }
 
-    .sidebar-header,
-    .sidebar-footer {
-      display: none;
+  .sidebar-header {
+    padding: 0;
+    margin-right: 12px;
+  }
+
+  .logo-icon {
+    width: 28px;
+    height: 28px;
+
+    svg {
+      width: 18px;
+      height: 18px;
     }
   }
 
   .sidebar-nav {
-    display: flex;
-    gap: $spacing-2;
+    flex-direction: row;
+    gap: 4px;
     padding: 0;
+    flex: 1;
+    justify-content: flex-start;
     overflow-x: auto;
-    
-    &::-webkit-scrollbar {
-      display: none;
-    }
   }
 
   .nav-item {
-    flex-direction: column;
-    padding: $spacing-2;
-    margin: 0;
-    min-width: 60px;
-    text-align: center;
-    background: transparent;
+    width: 36px;
+    height: 36px;
 
-    &:hover {
-      background: rgba($neutral-700, 0.3);
+    &.active::before {
+      display: none;
     }
 
-    &.active {
-      background: rgba($primary-500, 0.1);
-      
-      &::before {
-        display: none;
-      }
+    &::after {
+      display: none;
     }
-  }
-  
-  .nav-title {
-    font-size: 10px;
   }
 }
 </style>

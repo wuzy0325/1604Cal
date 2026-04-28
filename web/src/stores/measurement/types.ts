@@ -2,7 +2,7 @@
 export type MeasurementState =
   | 'idle'
   | 'ready'
-  | 'pressuring'
+  | 'pressurizing'
   | 'stabilizing'
   | 'collecting'
   | 'completed'

@@ -94,24 +94,24 @@ async function handleRegister(deviceId: string): Promise<void> {
   await store.registerDevice(deviceId)
 }
 
-async function handleSetPressure(payload: { deviceId: string; pressure: number }): Promise<void> {
-  await store.setPressure(payload.deviceId, payload.pressure)
+async function handleSetPressure(deviceId: string, pressure: number): Promise<void> {
+  await store.setPressure(deviceId, pressure)
 }
 
 async function handleStop(deviceId: string): Promise<void> {
-  await store.stopPressurizing(deviceId)
+  await store.stopDevice(deviceId)
 }
 
 async function handleExhaust(deviceId: string): Promise<void> {
-  await store.exhaust(deviceId)
+  await store.exhaustDevice(deviceId)
 }
 
 async function handleUnregister(deviceId: string): Promise<void> {
   await store.unregisterDevice(deviceId)
 }
 
-async function handleSetUnit(payload: { deviceId: string; unit: string }): Promise<void> {
-  await store.setUnit(payload.deviceId, payload.unit)
+async function handleSetUnit(deviceId: string, unit: string): Promise<void> {
+  await store.setUnit(deviceId, unit)
 }
 
 async function handleStopAll(): Promise<void> {
@@ -128,84 +128,107 @@ onUnmounted(() => {
 </script>
 
 <style scoped lang="scss">
+/* ── 设计系统令牌 ── */
+$font-sans: 'Inter', 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+$font-mono: 'JetBrains Mono', 'Fira Code', 'SF Mono', Consolas, monospace;
+$mint: #10b981;
+$slate-50: #f9fafb;
+$slate-100: #f3f4f6;
+$slate-200: #e5e7eb;
+$slate-300: #d1d5db;
+$slate-400: #9ca3af;
+$slate-500: #6b7280;
+$slate-600: #4b5563;
+$slate-700: #374151;
+$slate-800: #1f2937;
 
 .page-header {
   display: flex;
   justify-content: space-between;
-  align-items: flex-end;
+  align-items: center;
   flex-shrink: 0;
-  padding-bottom: $spacing-4;
-  border-bottom: 1px solid $border-color-light;
+  height: 48px;
+  padding: 0 24px;
+  background: #ffffff;
+  border-bottom: 1px solid $slate-200;
+  font-family: $font-sans;
 }
 
 .header-left {
   display: flex;
   align-items: center;
-  gap: $spacing-4;
+  gap: 12px;
 }
 
 .back-btn {
-  width: 40px;
-  height: 40px;
-  background: rgba($neutral-800, 0.6);
-  border: 1px solid $border-color;
-  border-radius: $radius-md;
-  color: $text-secondary;
+  width: 28px;
+  height: 28px;
+  background: transparent;
+  border: 1px solid $slate-200;
+  border-radius: 8px;
+  color: $slate-400;
   cursor: pointer;
-  transition: all $transition-fast;
+  transition: all 0.2s ease;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 18px;
+  font-size: 16px;
 
   &:hover {
-    background: rgba($neutral-700, 0.8);
-    color: $text-primary;
-    border-color: $border-color-strong;
+    background: $slate-50;
+    color: $slate-600;
+    border-color: $slate-300;
   }
 }
 
 .header-title {
   h1 {
-    font-size: 28px;
-    font-weight: $font-weight-bold;
-    color: $text-primary;
-    margin: 0 0 $spacing-1;
-    letter-spacing: -0.02em;
+    font-size: 18px;
+    font-weight: 700;
+    color: $slate-800;
+    margin: 0;
+    letter-spacing: -0.01em;
   }
 
   p {
-    font-size: $font-size-sm;
-    color: $text-secondary;
-    margin: 0;
+    font-size: 12px;
+    color: $slate-500;
+    margin: 2px 0 0;
   }
 }
 
 .header-actions {
   display: flex;
-  gap: $spacing-3;
+  gap: 10px;
 }
 
 .stats-bar {
   display: flex;
-  gap: $spacing-4;
+  gap: 12px;
   flex-shrink: 0;
+  padding: 0 24px;
 }
 
 .section-title {
-  font-size: $font-size-lg;
-  font-weight: $font-weight-semibold;
-  color: $text-primary;
-  margin: 0 0 $spacing-4;
-  display: flex;
-  align-items: center;
-  gap: $spacing-2;
-  
+  font-size: 14px;
+  font-weight: 600;
+  color: $slate-700;
+  margin: 0 0 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid $slate-200;
+  font-family: $font-sans;
+  position: relative;
+  padding-left: 10px;
+
   &::before {
     content: '';
-    width: 4px;
-    height: 16px;
-    background: $primary-500;
+    position: absolute;
+    left: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 3px;
+    height: 14px;
+    background: linear-gradient(180deg, $mint, #059669);
     border-radius: 2px;
   }
 }
@@ -213,53 +236,55 @@ onUnmounted(() => {
 .available-section,
 .registered-section {
   flex-shrink: 0;
+  padding: 0 24px;
 }
 
 .available-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: $spacing-4;
+  gap: 12px;
 }
 
 .available-card {
-  background: $bg-card;
-  border: 1px solid $border-color;
-  border-radius: $radius-lg;
-  padding: $spacing-4;
+  background: #ffffff;
+  border: 1px solid $slate-200;
+  border-radius: 10px;
+  padding: 14px 16px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: $spacing-4;
-  transition: all $transition-fast;
+  gap: 12px;
+  transition: all 0.2s ease;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
 
   &:hover {
-    border-color: rgba($primary-500, 0.3);
-    box-shadow: $shadow-md;
+    border-color: rgba($mint, 0.3);
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.07), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
   }
 }
 
 .available-info {
   display: flex;
   flex-direction: column;
-  gap: $spacing-1;
+  gap: 4px;
 }
 
 .available-name {
-  font-size: $font-size-base;
-  font-weight: $font-weight-medium;
-  color: $text-primary;
+  font-size: 14px;
+  font-weight: 500;
+  color: $slate-700;
 }
 
 .available-detail {
-  font-size: $font-size-xs;
-  color: $text-tertiary;
-  font-family: $font-family-mono;
+  font-size: 11px;
+  color: $slate-400;
+  font-family: $font-mono;
 }
 
 .registered-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-  gap: $spacing-6;
+  gap: 16px;
 }
 
 .empty-state {
@@ -270,30 +295,30 @@ onUnmounted(() => {
 }
 
 .empty-text {
-  font-size: $font-size-lg;
-  color: $text-tertiary;
+  font-size: 14px;
+  color: $slate-400;
 }
 
 // 响应式适配
 @media (max-width: 768px) {
   .page-header {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: $spacing-4;
-  }
-
-  .header-left {
-    width: 100%;
+    padding: 0 16px;
   }
 
   .header-title h1 {
-    font-size: $font-size-xl;
+    font-size: 16px;
   }
-  
+
   .stats-bar {
     flex-direction: column;
+    padding: 0 16px;
   }
-  
+
+  .available-section,
+  .registered-section {
+    padding: 0 16px;
+  }
+
   .available-grid,
   .registered-grid {
     grid-template-columns: 1fr;

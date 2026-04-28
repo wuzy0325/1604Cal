@@ -62,7 +62,7 @@ func (s *Service) ManualPressurize(ctx context.Context, pointIndex int) error {
 	}
 
 	s.updatePointStatus(pointIndex, "pressurizing")
-	if err := s.transitionTo(StatePressuring); err != nil {
+	if err := s.transitionTo(StatePressurizing); err != nil {
 		return err
 	}
 

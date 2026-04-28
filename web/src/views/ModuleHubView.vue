@@ -11,480 +11,318 @@ import PageLayout from '@/components/common/PageLayout.vue'
 const router = useRouter()
 
 const featureCards = [
-    {
-        title: '设备管理模块',
-        description: '集中维护计量设备与打压设备连接状态，维护单位一致性检查与连接异常追踪',
-        icon: Tools,
-        path: '/device-management',
-        color: 'primary',
-        stats: '统一台账',
-        source: '融合能力'
-    },
-    {
-        title: '计量模块',
-        description: '统一设备台账、连接状态、单位门禁，适合作业准备、状态巡检与异常定位',
-        icon: DataLine,
-        path: '/measurement',
-        color: 'accent',
-        stats: '数据采集',
-        source: '1605MeassureApp'
-    },
-    {
-        title: '标定工作台',
-        description: '会话状态机驱动的流程控制，自动/手动动作与过程状态可视化',
-        icon: SetUp,
-        path: '/calibration',
-        color: 'success',
-        stats: '流程控制',
-        source: '1604标定软件'
-    },
-    {
-        title: '多设备打压控制',
-        description: '同时控制多台打压设备，实时压力监控与稳定检测',
-        icon: Odometer,
-        path: '/multi-pressure',
-        color: 'warning',
-        stats: '并发控制',
-        source: '独立模块'
-    }
+  {
+    title: '设备管理模块',
+    description: '集中维护计量设备与打压设备连接状态，维护单位一致性检查与连接异常追踪',
+    icon: Tools,
+    path: '/device-management',
+    color: 'primary',
+    stats: '统一台账',
+    source: '融合能力'
+  },
+  {
+    title: '计量模块',
+    description: '统一设备台账、连接状态、单位门禁，适合作业准备、状态巡检与异常定位',
+    icon: DataLine,
+    path: '/measurement',
+    color: 'accent',
+    stats: '数据采集',
+    source: '1605MeassureApp'
+  },
+  {
+    title: '标定工作台',
+    description: '会话状态机驱动的流程控制，自动/手动动作与过程状态可视化',
+    icon: SetUp,
+    path: '/calibration',
+    color: 'success',
+    stats: '流程控制',
+    source: '1604标定软件'
+  },
+  {
+    title: '多设备打压控制',
+    description: '同时控制多台打压设备，实时压力监控与稳定检测',
+    icon: Odometer,
+    path: '/multi-pressure',
+    color: 'warning',
+    stats: '并发控制',
+    source: '独立模块'
+  }
 ]
 
 function navigateTo(path: string): void {
-    router.push(path)
+  router.push(path)
 }
 </script>
 
 <template>
-    <PageLayout>
-        <!-- 顶部标题栏 -->
-        <header class="page-header">
-            <div class="header-title">
-                <h2>欢迎使用</h2>
-                <p>1604 设备管理 + 计量 + 标定融合系统</p>
-            </div>
-            <div class="header-meta">
-                <span class="version">v2.0.0</span>
-            </div>
-        </header>
+  <PageLayout>
+    <!-- 顶部标题栏 -->
+    <header class="page-header">
+      <h2>Cal1604</h2>
+      <span class="version">v2.0.0</span>
+    </header>
 
-        <!-- 欢迎区域 -->
-        <section class="welcome-section">
-            <div class="welcome-card">
-                <div class="welcome-content">
-                    <h3>专业计量标定解决方案</h3>
-                    <p>
-                        本系统融合两个历史程序能力，并把设备管理独立为统一模块，供计量与标定模块共享设备选择结果。
-                        采用现代化界面设计，提供流畅的操作体验。
-                    </p>
-                </div>
-                <div class="welcome-decoration">
-                    <div class="decoration-circle"></div>
-                    <div class="decoration-ring"></div>
-                </div>
+    <!-- 功能卡片区域 -->
+    <section class="features-section">
+      <div class="features-grid">
+        <div
+          v-for="card in featureCards"
+          :key="card.path"
+          class="feature-card"
+          :class="`color-${card.color}`"
+          @click="navigateTo(card.path)"
+        >
+          <div class="card-header">
+            <div class="card-icon">
+              <el-icon>
+                <component :is="card.icon" />
+              </el-icon>
             </div>
-        </section>
-
-        <!-- 功能卡片区域 -->
-        <section class="features-section">
-            <h3 class="section-title">功能入口</h3>
-            <div class="features-grid">
-                <div
-                    v-for="card in featureCards"
-                    :key="card.path"
-                    class="feature-card"
-                    :class="`color-${card.color}`"
-                    @click="navigateTo(card.path)"
-                >
-                    <div class="card-header">
-                        <div class="card-icon">
-                            <el-icon>
-                                <component :is="card.icon" />
-                            </el-icon>
-                        </div>
-                        <span class="card-stats">{{ card.stats }}</span>
-                    </div>
-                    <div class="card-body">
-                        <h4>{{ card.title }}</h4>
-                        <p class="card-source">{{ card.source }}</p>
-                        <p>{{ card.description }}</p>
-                    </div>
-                    <div class="card-footer">
-                        <span>进入功能</span>
-                        <el-icon><ArrowRight /></el-icon>
-                    </div>
-                </div>
-            </div>
-        </section>
-
-        <!-- 快捷操作区域 -->
-        <section class="quick-actions">
-            <h3 class="section-title">快捷操作</h3>
-            <div class="actions-grid">
-                <div class="action-item" @click="navigateTo('/device-management')">
-                    <div class="action-icon primary">
-                        <el-icon><Tools /></el-icon>
-                    </div>
-                    <span>设备管理</span>
-                </div>
-                <div class="action-item" @click="navigateTo('/measurement')">
-                    <div class="action-icon accent">
-                        <el-icon><DataLine /></el-icon>
-                    </div>
-                    <span>开始计量</span>
-                </div>
-                <div class="action-item" @click="navigateTo('/calibration')">
-                    <div class="action-icon success">
-                        <el-icon><SetUp /></el-icon>
-                    </div>
-                    <span>开始标定</span>
-                </div>
-                <div class="action-item" @click="navigateTo('/multi-pressure')">
-                    <div class="action-icon warning">
-                        <el-icon><Odometer /></el-icon>
-                    </div>
-                    <span>打压控制</span>
-                </div>
-            </div>
-        </section>
-    </PageLayout>
+            <span class="card-stats">{{ card.stats }}</span>
+          </div>
+          <div class="card-body">
+            <h4>{{ card.title }}</h4>
+            <p class="card-source">{{ card.source }}</p>
+            <p>{{ card.description }}</p>
+          </div>
+          <div class="card-footer">
+            <span>进入功能</span>
+            <el-icon><ArrowRight /></el-icon>
+          </div>
+        </div>
+      </div>
+    </section>
+  </PageLayout>
 </template>
 
 <style scoped lang="scss">
+/* ── 设计系统令牌 ── */
+$font-sans: 'Inter', 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+$font-mono: 'JetBrains Mono', 'Fira Code', 'SF Mono', Consolas, monospace;
+$mint: #10b981;
+$mint-light: #34d399;
+$mint-dark: #059669;
+$slate-50: #f9fafb;
+$slate-100: #f3f4f6;
+$slate-200: #e5e7eb;
+$slate-300: #d1d5db;
+$slate-400: #9ca3af;
+$slate-500: #6b7280;
+$slate-600: #4b5563;
+$slate-700: #374151;
+$slate-800: #1f2937;
+$green: #22c55e;
+$blue: #3b82f6;
+$amber: #f59e0b;
 
 // 页面头部
 .page-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-end;
-    flex-shrink: 0;
-    padding-bottom: $spacing-4;
-    border-bottom: 1px solid $border-color-light;
-    margin-bottom: $spacing-8;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-shrink: 0;
+  height: 48px;
+  padding: 0 24px;
+  background: #ffffff;
+  border-bottom: 1px solid $slate-200;
+  font-family: $font-sans;
 
-    .header-title {
-        h2 {
-            font-size: 28px;
-            font-weight: $font-weight-bold;
-            color: $text-primary;
-            margin: 0 0 $spacing-2;
-            letter-spacing: -0.02em;
-        }
+  h2 {
+    font-size: 18px;
+    font-weight: 700;
+    color: $slate-800;
+    margin: 0;
+    letter-spacing: -0.01em;
+  }
 
-        p {
-            font-size: $font-size-lg;
-            color: $text-secondary;
-            margin: 0;
-        }
-    }
-
-    .header-meta {
-        .version {
-            font-size: 11px;
-            color: $text-tertiary;
-            padding: 2px 8px;
-            background: rgba($neutral-800, 0.5);
-            border-radius: $radius-full;
-            border: 1px solid $border-color;
-            font-family: $font-family-mono;
-        }
-    }
-}
-
-// 欢迎区域
-.welcome-section {
-    flex-shrink: 0;
-    margin-bottom: $spacing-8;
-}
-
-.welcome-card {
-    position: relative;
-    background: linear-gradient(135deg, rgba($primary-900, 0.4) 0%, rgba($primary-800, 0.2) 100%);
-    border: 1px solid rgba($primary-500, 0.2);
-    border-radius: $radius-xl;
-    padding: $spacing-8;
-    overflow: hidden;
-
-    &::before {
-        content: '';
-        position: absolute;
-        top: 0;
-        right: 0;
-        width: 40%;
-        height: 100%;
-        background: radial-gradient(circle at top right, rgba($primary-500, 0.15), transparent 70%);
-        pointer-events: none;
-    }
-}
-
-.welcome-content {
-    position: relative;
-    z-index: 1;
-    max-width: 600px;
-
-    h3 {
-        font-size: $font-size-2xl;
-        font-weight: $font-weight-semibold;
-        color: $text-primary;
-        margin: 0 0 $spacing-3;
-    }
-
-    p {
-        font-size: $font-size-base;
-        color: $text-secondary;
-        line-height: $line-height-relaxed;
-        margin: 0;
-    }
+  .version {
+    font-size: 11px;
+    color: $slate-400;
+    padding: 2px 8px;
+    background: $slate-50;
+    border-radius: 999px;
+    border: 1px solid $slate-200;
+    font-family: $font-mono;
+    font-weight: 500;
+  }
 }
 
 // 功能区域
 .features-section {
-    flex-shrink: 0;
-    margin-bottom: $spacing-8;
-}
-
-.section-title {
-    font-size: $font-size-lg;
-    font-weight: $font-weight-semibold;
-    color: $text-primary;
-    margin: 0 0 $spacing-4;
-    display: flex;
-    align-items: center;
-    gap: $spacing-2;
-    
-    &::before {
-        content: '';
-        width: 4px;
-        height: 16px;
-        background: $primary-500;
-        border-radius: 2px;
-    }
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding: 16px 24px;
 }
 
 .features-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-    gap: $spacing-6;
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  grid-template-rows: repeat(2, 1fr);
+  gap: 16px;
+  flex: 1;
+  min-height: 0;
 }
 
 .feature-card {
-    background: $bg-surface;
-    border: 1px solid $border-color;
-    border-radius: $radius-lg;
-    padding: $spacing-6;
-    cursor: pointer;
-    transition: all $transition-normal;
-    position: relative;
-    overflow: hidden;
+  background: #ffffff;
+  border: 1px solid $slate-200;
+  border-radius: 12px;
+  padding: 24px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  overflow: hidden;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  font-family: $font-sans;
 
-    &:hover {
-        transform: translateY(-4px);
-        background: rgba($neutral-800, 0.8);
-        border-color: $border-color-strong;
-        box-shadow: $shadow-lg;
+  &:hover {
+    border-color: rgba($mint, 0.3);
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.07), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
 
-        .card-footer {
-            color: $primary-400;
+    .card-footer {
+      color: $mint;
 
-            .el-icon {
-                transform: translateX(4px);
-            }
-        }
-        
-        .card-icon {
-            background: rgba($primary-500, 0.2);
-            color: $primary-400;
-        }
+      .el-icon {
+        transform: translateX(4px);
+      }
     }
-    
-    &.color-accent:hover {
-        .card-footer {
-            color: $accent-400;
-        }
-        
-        .card-icon {
-            background: rgba($accent-500, 0.2);
-            color: $accent-400;
-        }
+
+    .card-icon {
+      background: rgba($mint, 0.12);
+      color: $mint;
+      border-color: rgba($mint, 0.2);
     }
-    
-    &.color-success:hover {
-        .card-footer {
-            color: $success-400;
-        }
-        
-        .card-icon {
-            background: rgba($success-500, 0.2);
-            color: $success-400;
-        }
+  }
+
+  &.color-accent:hover {
+    border-color: rgba($blue, 0.3);
+
+    .card-footer {
+      color: $blue;
     }
-    
-    &.color-warning:hover {
-        .card-footer {
-            color: $warning-400;
-        }
-        
-        .card-icon {
-            background: rgba($warning-500, 0.2);
-            color: $warning-400;
-        }
+
+    .card-icon {
+      background: rgba($blue, 0.12);
+      color: $blue;
+      border-color: rgba($blue, 0.2);
     }
+  }
+
+  &.color-success:hover {
+    border-color: rgba($green, 0.3);
+
+    .card-footer {
+      color: $green;
+    }
+
+    .card-icon {
+      background: rgba($green, 0.12);
+      color: $green;
+      border-color: rgba($green, 0.2);
+    }
+  }
+
+  &.color-warning:hover {
+    border-color: rgba($amber, 0.3);
+
+    .card-footer {
+      color: $amber;
+    }
+
+    .card-icon {
+      background: rgba($amber, 0.12);
+      color: $amber;
+      border-color: rgba($amber, 0.2);
+    }
+  }
 }
 
 .card-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-start;
-    margin-bottom: $spacing-5;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
 }
 
 .card-icon {
-    width: 48px;
-    height: 48px;
-    background: rgba($neutral-800, 0.8);
-    border-radius: $radius-md;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: $text-tertiary;
-    font-size: 24px;
-    transition: all $transition-fast;
-    border: 1px solid rgba($border-color, 0.5);
+  width: 48px;
+  height: 48px;
+  background: $slate-50;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: $slate-400;
+  font-size: 24px;
+  transition: all 0.2s ease;
+  border: 1px solid $slate-200;
 }
 
 .card-stats {
-    font-size: 10px;
-    color: $text-tertiary;
-    padding: 2px 8px;
-    background: rgba($neutral-900, 0.5);
-    border-radius: $radius-full;
-    border: 1px solid $border-color-light;
-    font-weight: 500;
+  font-size: 11px;
+  color: $slate-500;
+  padding: 3px 10px;
+  background: $slate-50;
+  border-radius: 999px;
+  border: 1px solid $slate-200;
+  font-weight: 500;
+  letter-spacing: 0.02em;
 }
 
 .card-body {
-    margin-bottom: $spacing-6;
+  h4 {
+    font-size: 16px;
+    font-weight: 600;
+    color: $slate-800;
+    margin: 0 0 4px;
+  }
 
-    h4 {
-        font-size: $font-size-lg;
-        font-weight: $font-weight-semibold;
-        color: $text-primary;
-        margin: 0 0 $spacing-2;
-    }
+  .card-source {
+    font-size: 11px;
+    color: $slate-400;
+    margin: 0 0 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    font-weight: 500;
+  }
 
-    .card-source {
-        font-size: 11px;
-        color: $text-muted;
-        margin: 0 0 $spacing-2;
-        text-transform: uppercase;
-        letter-spacing: 0.05em;
-    }
-
-    p {
-        font-size: $font-size-sm;
-        color: $text-secondary;
-        line-height: $line-height-normal;
-        margin: 0;
-    }
+  p {
+    font-size: 13px;
+    color: $slate-500;
+    line-height: 1.6;
+    margin: 0;
+  }
 }
 
 .card-footer {
-    display: flex;
-    align-items: center;
-    gap: $spacing-2;
-    font-size: $font-size-sm;
-    color: $text-tertiary;
-    transition: color $transition-fast;
-    font-weight: $font-weight-medium;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: $slate-400;
+  transition: color 0.2s ease;
+  font-weight: 500;
+  margin-top: 12px;
 
-    .el-icon {
-        font-size: 14px;
-        transition: transform $transition-fast;
-    }
-}
-
-// 快捷操作
-.quick-actions {
-    flex-shrink: 0;
-}
-
-.actions-grid {
-    display: flex;
-    gap: $spacing-4;
-    flex-wrap: wrap;
-}
-
-.action-item {
-    display: flex;
-    align-items: center;
-    gap: $spacing-3;
-    padding: $spacing-4 $spacing-5;
-    background: $bg-surface;
-    border: 1px solid $border-color;
-    border-radius: $radius-md;
-    cursor: pointer;
-    transition: all $transition-fast;
-    min-width: 180px;
-
-    &:hover {
-        background: rgba($neutral-800, 0.8);
-        border-color: $border-color-strong;
-        transform: translateY(-2px);
-        box-shadow: $shadow-md;
-    }
-
-    span {
-        font-size: $font-size-sm;
-        color: $text-secondary;
-        font-weight: $font-weight-medium;
-    }
-}
-
-.action-icon {
-    width: 32px;
-    height: 32px;
-    border-radius: $radius-sm;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+  .el-icon {
     font-size: 16px;
-
-    &.primary {
-        background: rgba($primary-500, 0.1);
-        color: $primary-400;
-        border: 1px solid rgba($primary-500, 0.2);
-    }
-
-    &.success {
-        background: rgba($success-500, 0.1);
-        color: $success-400;
-        border: 1px solid rgba($success-500, 0.2);
-    }
-    
-    &.accent {
-        background: rgba($accent-500, 0.1);
-        color: $accent-400;
-        border: 1px solid rgba($accent-500, 0.2);
-    }
-    
-    &.warning {
-        background: rgba($warning-500, 0.1);
-        color: $warning-400;
-        border: 1px solid rgba($warning-500, 0.2);
-    }
+    transition: transform 0.2s ease;
+  }
 }
 
 // 响应式适配
 @media (max-width: 768px) {
-    .features-grid {
-        grid-template-columns: 1fr;
-    }
-    
-    .actions-grid {
-        flex-direction: column;
-    }
-    
-    .action-item {
-        min-width: 100%;
-    }
+  .features-grid {
+    grid-template-columns: 1fr;
+    grid-template-rows: none;
+    gap: 12px;
+  }
+
+  .feature-card {
+    padding: 16px;
+  }
 }
 </style>

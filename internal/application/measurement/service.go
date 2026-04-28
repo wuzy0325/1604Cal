@@ -17,7 +17,7 @@ type State string
 const (
 	StateIdle        State = "idle"
 	StateReady       State = "ready"
-	StatePressuring  State = "pressuring"
+	StatePressurizing State = "pressurizing"
 	StateStabilizing State = "stabilizing"
 	StateCollecting  State = "collecting"
 	StateCompleted   State = "completed"
@@ -28,14 +28,14 @@ const (
 
 // 获取状态迁移表。
 var transitions = map[State]map[State]struct{}{
-	StateIdle:        {StateReady: {}, StatePressuring: {}, StateCollecting: {}},
-	StateReady:       {StatePressuring: {}, StateCollecting: {}, StatePaused: {}, StateIdle: {}, StateError: {}},
-	StatePressuring:  {StateStabilizing: {}, StateError: {}, StatePaused: {}},
+	StateIdle:        {StateReady: {}, StatePressurizing: {}, StateCollecting: {}},
+	StateReady:       {StatePressurizing: {}, StateCollecting: {}, StatePaused: {}, StateIdle: {}, StateError: {}},
+	StatePressurizing: {StateStabilizing: {}, StateError: {}, StatePaused: {}},
 	StateStabilizing: {StateCollecting: {}, StateError: {}, StatePaused: {}},
 	StateCollecting:  {StateReady: {}, StateCompleted: {}, StateError: {}, StatePaused: {}},
 	StateCompleted:   {StateIdle: {}, StateCollecting: {}},
 	StateError:       {StateIdle: {}},
-	StatePaused:      {StatePressuring: {}, StateCollecting: {}, StateIdle: {}},
+	StatePaused:      {StatePressurizing: {}, StateCollecting: {}, StateIdle: {}},
 }
 
 // CollectedRow 单次采集的数据行。
@@ -191,7 +191,7 @@ func (s *Service) Stop() error {
 			return fmt.Errorf("stop measurement: %w", err)
 		}
 		stateChanges = append(stateChanges, StateIdle)
-	case StatePressuring, StateStabilizing:
+	case StatePressurizing, StateStabilizing:
 		if err := s.setStateLocked(StatePaused); err != nil {
 			s.mu.Unlock()
 			return fmt.Errorf("stop measurement: %w", err)

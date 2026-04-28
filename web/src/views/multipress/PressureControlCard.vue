@@ -131,30 +131,50 @@ function handleUnitChange(unit: string) {
 </script>
 
 <style scoped lang="scss">
+/* ── 设计系统令牌 ── */
+$font-sans: 'Inter', 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+$font-mono: 'JetBrains Mono', 'Fira Code', 'SF Mono', Consolas, monospace;
+$mint: #10b981;
+$slate-50: #f9fafb;
+$slate-100: #f3f4f6;
+$slate-200: #e5e7eb;
+$slate-300: #d1d5db;
+$slate-400: #9ca3af;
+$slate-500: #6b7280;
+$slate-600: #4b5563;
+$slate-700: #374151;
+$slate-800: #1f2937;
+$green: #22c55e;
+$red: #ef4444;
+$amber: #f59e0b;
+
 .pressure-card {
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-color);
-  border-radius: 4px;
-  padding: var(--spacing-md);
+  background: #ffffff;
+  border: 1px solid $slate-200;
+  border-radius: 12px;
+  padding: 16px;
   display: flex;
   flex-direction: column;
-  gap: var(--spacing-sm);
-  transition: border-color 0.15s;
+  gap: 10px;
+  transition: all 0.2s ease;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  font-family: $font-sans;
 
   &:hover {
-    border-color: var(--border-color-strong);
+    border-color: $slate-300;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.07), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
   }
 
   &.pressurizing {
-    border-left: 3px solid var(--accent-primary);
+    border-top: 3px solid $mint;
   }
 
   &.error {
-    border-left: 3px solid var(--status-error);
+    border-top: 3px solid $red;
   }
 
   &.exhausting {
-    border-left: 3px solid var(--status-warning);
+    border-top: 3px solid $amber;
   }
 }
 
@@ -171,13 +191,13 @@ function handleUnitChange(unit: string) {
 }
 
 .device-name {
-  color: var(--text-primary);
+  color: $slate-800;
   font-size: 14px;
   font-weight: 600;
 }
 
 .device-model {
-  color: var(--text-secondary);
+  color: $slate-400;
   font-size: 11px;
 }
 
@@ -191,63 +211,67 @@ function handleUnitChange(unit: string) {
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: var(--text-muted);
+  background: $slate-300;
 
   &.idle {
-    background: var(--text-secondary);
+    background: $slate-400;
   }
 
   &.pressurizing {
-    background: var(--accent-primary);
-    box-shadow: 0 0 6px rgba(255, 215, 0, 0.5);
+    background: $mint;
+    box-shadow: 0 0 6px rgba(16, 185, 129, 0.4);
   }
 
   &.exhausting {
-    background: var(--status-warning);
+    background: $amber;
   }
 
   &.error {
-    background: var(--status-error);
+    background: $red;
   }
 }
 
 .status-label {
-  color: var(--text-secondary);
+  color: $slate-500;
   font-size: 11px;
+  font-weight: 500;
 }
 
 .pressure-display {
   display: flex;
   align-items: baseline;
   gap: 6px;
-  padding: var(--spacing-sm) 0;
+  padding: 8px 0;
 }
 
 .pressure-value {
-  color: var(--accent-primary);
+  color: $mint;
   font-size: 28px;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
+  font-family: $font-mono;
 }
 
 .pressure-unit {
-  color: var(--text-secondary);
+  color: $slate-500;
   font-size: 13px;
+  font-weight: 500;
 }
 
 .stable-indicator {
   font-size: 11px;
-  color: var(--text-secondary);
+  color: $slate-400;
   margin-left: auto;
+  font-weight: 500;
 
   &.stable {
-    color: var(--status-success);
+    color: $green;
   }
 }
 
 .pressure-input-row {
   display: flex;
-  gap: var(--spacing-xs);
+  gap: 8px;
 
   .target-input {
     flex: 1;
@@ -260,24 +284,26 @@ function handleUnitChange(unit: string) {
 
 .action-row {
   display: flex;
-  gap: var(--spacing-xs);
+  gap: 6px;
 }
 
 .error-bar {
-  background: rgba(244, 71, 71, 0.1);
-  border: 1px solid rgba(244, 71, 71, 0.3);
-  border-radius: 3px;
-  padding: 4px 8px;
-  color: var(--status-error);
+  background: rgba(239, 68, 68, 0.08);
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  border-radius: 6px;
+  padding: 6px 10px;
+  color: #dc2626;
   font-size: 11px;
+  font-weight: 500;
 }
 
 .info-bar {
-  background: rgba(220, 220, 170, 0.1);
-  border: 1px solid rgba(220, 220, 170, 0.3);
-  border-radius: 3px;
-  padding: 4px 8px;
-  color: var(--status-warning);
+  background: rgba(245, 158, 11, 0.08);
+  border: 1px solid rgba(245, 158, 11, 0.2);
+  border-radius: 6px;
+  padding: 6px 10px;
+  color: #d97706;
   font-size: 11px;
+  font-weight: 500;
 }
 </style>

@@ -89,11 +89,11 @@
     // 将旧设计系统的变量名映射到新设计系统的对应值
     // ============================================
 
-    // 背景色兼容
-    --bg-primary: #{$neutral-950};
-    --bg-secondary: #{$neutral-900};
-    --bg-tertiary: #{$neutral-800};
-    --bg-quaternary: #{$neutral-700};
+    // 背景色兼容 - 浅色主题
+    --bg-primary: #ffffff;
+    --bg-secondary: #f6f7f6;
+    --bg-tertiary: #f0f4f1;
+    --bg-quaternary: #e5e7eb;
 
     // 强调色兼容 - 映射到紫色主色
     --accent-primary: #{$primary-500};
@@ -511,7 +511,7 @@ body {
 // 输入框样式覆盖
 .el-input {
     .el-input__wrapper {
-        background: rgba($neutral-800, 0.6);
+        background: $bg-input;
         border: 1px solid $border-color;
         border-radius: $radius-md;
         box-shadow: none !important;
@@ -540,7 +540,7 @@ body {
 // 下拉选择器覆盖
 .el-select {
     .el-input__wrapper {
-        background: rgba($neutral-800, 0.6);
+        background: $bg-input;
     }
 }
 
@@ -576,7 +576,7 @@ body {
     }
 
     th.el-table__cell {
-        background: rgba($neutral-800, 0.8);
+        background: $bg-surface;
         color: $text-secondary;
         font-weight: $font-weight-semibold;
         border-bottom: 1px solid $border-color;
@@ -678,21 +678,10 @@ body {
         }
 
         &.is-active {
-            background: rgba($primary-500, 0.2);
-            color: $primary-400;
+            background: rgba($primary-500, 0.12);
+            color: $primary-500;
             font-weight: $font-weight-medium;
-
-            &::before {
-                content: '';
-                position: absolute;
-                left: 0;
-                top: 50%;
-                transform: translateY(-50%);
-                width: 3px;
-                height: 20px;
-                background: $primary-500;
-                border-radius: 0 $radius-full $radius-full 0;
-            }
+            border-left: 1px solid $primary-500;
         }
     }
 }
@@ -705,7 +694,7 @@ body {
     }
 
     .el-pager li {
-        background: rgba($neutral-800, 0.6);
+        background: $bg-card;
         border: 1px solid $border-color;
         color: $text-secondary;
         border-radius: $radius-sm;
@@ -727,7 +716,7 @@ body {
 
     .btn-prev,
     .btn-next {
-        background: rgba($neutral-800, 0.6);
+        background: $bg-card;
         border: 1px solid $border-color;
         color: $text-secondary;
         border-radius: $radius-sm;
@@ -748,19 +737,19 @@ body {
     box-shadow: $shadow-lg;
 
     &--success {
-        border-left: 4px solid $success-500;
+        border-top: 3px solid $success-500;
     }
 
     &--warning {
-        border-left: 4px solid $warning-500;
+        border-top: 3px solid $warning-500;
     }
 
     &--error {
-        border-left: 4px solid $danger-500;
+        border-top: 3px solid $danger-500;
     }
 
     &--info {
-        border-left: 4px solid $info-500;
+        border-top: 3px solid $info-500;
     }
 }
 
@@ -785,8 +774,8 @@ body {
 // 开关样式覆盖
 .el-switch {
     .el-switch__core {
-        background: $neutral-700;
-        border-color: $neutral-700;
+        background: $neutral-300;
+        border-color: $neutral-300;
     }
 
     &.is-checked .el-switch__core {
@@ -798,7 +787,7 @@ body {
 // 滑块样式覆盖
 .el-slider {
     .el-slider__runway {
-        background: $neutral-700;
+        background: $neutral-200;
     }
 
     .el-slider__bar {
@@ -815,7 +804,7 @@ body {
 // 进度条样式覆盖
 .el-progress {
     .el-progress-bar__outer {
-        background: $neutral-700;
+        background: $neutral-200;
     }
 
     .el-progress-bar__inner {
@@ -1107,7 +1096,7 @@ body {
 // 上传组件样式覆盖
 .el-upload {
     .el-upload-dragger {
-        background: rgba($neutral-800, 0.4);
+        background: rgba($neutral-100, 0.6);
         border: 2px dashed $border-color;
         border-radius: $radius-lg;
 
@@ -1126,7 +1115,7 @@ body {
         border-radius: $radius-md;
 
         .el-transfer-panel__header {
-            background: rgba($neutral-800, 0.6);
+            background: $bg-surface;
             border-bottom-color: $border-color;
         }
 
@@ -1218,18 +1207,18 @@ body {
     }
 
     &.el-notification--success {
-        border-left: 4px solid $success-500;
+        border-top: 3px solid $success-500;
     }
 
     &.el-notification--warning {
-        border-left: 4px solid $warning-500;
+        border-top: 3px solid $warning-500;
     }
 
     &.el-notification--error {
-        border-left: 4px solid $danger-500;
+        border-top: 3px solid $danger-500;
     }
 
     &.el-notification--info {
-        border-left: 4px solid $info-500;
+        border-top: 3px solid $info-500;
     }
 }

@@ -109,29 +109,53 @@ watch(
 </script>
 
 <style scoped lang="scss">
+/* ── 设计系统令牌 ── */
+$font-sans: 'Inter', 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+$font-mono: 'JetBrains Mono', 'Fira Code', 'SF Mono', Consolas, monospace;
+$mint: #10b981;
+$mint-light: #34d399;
+$mint-dark: #059669;
+$slate-50: #f9fafb;
+$slate-100: #f3f4f6;
+$slate-200: #e5e7eb;
+$slate-300: #d1d5db;
+$slate-400: #9ca3af;
+$slate-500: #6b7280;
+$slate-600: #4b5563;
+$slate-700: #374151;
+$slate-800: #1f2937;
+
 .workbench-section {
   display: flex;
   flex-direction: column;
-  gap: var(--spacing-sm);
+  gap: 12px;
   flex-shrink: 0;
 }
 
 .params-section {
-  background: var(--bg-secondary);
-  border-radius: var(--radius-md);
-  padding: var(--spacing-md) var(--spacing-lg);
+  background: #ffffff;
+  border-radius: 12px;
+  border: 1px solid $slate-200;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  padding: 12px;
+  font-family: $font-sans;
+  transition: box-shadow 0.2s ease, border-color 0.2s ease;
+
+  &:hover {
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.07), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
+  }
 
   .section-body {
     display: flex;
     align-items: flex-end;
-    gap: var(--spacing-lg);
+    gap: 12px;
     flex-wrap: wrap;
   }
 
   .params-row {
     display: flex;
     align-items: flex-end;
-    gap: var(--spacing-md);
+    gap: 12px;
     flex-wrap: wrap;
     flex: 1;
   }
@@ -140,13 +164,15 @@ watch(
 .control-group {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 6px;
 
   label {
-    color: var(--text-muted);
-    font-size: 11px;
+    color: $slate-500;
+    font-size: 12px;
     font-weight: 500;
+    letter-spacing: 0.05em;
     white-space: nowrap;
+    font-family: $font-sans;
   }
 
   :deep(.el-input-number) {
@@ -155,6 +181,20 @@ watch(
 
   :deep(.el-select) {
     width: 85px;
+  }
+
+  :deep(.el-input-number__decrease),
+  :deep(.el-input-number__increase) {
+    border-color: $slate-200;
+    color: $slate-400;
+    &:hover { color: $slate-600; }
+  }
+
+  :deep(.el-input__wrapper) {
+    box-shadow: 0 0 0 1px $slate-300 inset;
+    &:focus-within {
+      box-shadow: 0 0 0 1px $mint inset, 0 0 0 3px rgba(16, 185, 129, 0.15);
+    }
   }
 }
 

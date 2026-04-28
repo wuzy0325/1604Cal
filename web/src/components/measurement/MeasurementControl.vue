@@ -1,185 +1,172 @@
 <template>
-  <section class="control-bar secondary">
-    <div class="param-group">
-      <span class="param-label">控制模式</span>
-      <div class="segment-group">
-        <button
-          type="button"
-          class="segment-btn"
-          :class="{ active: measurementStore.measurementParams.controlMode === 'auto' }"
-          @click="setControlMode('auto')"
-        >
-          自动
-        </button>
-        <button
-          type="button"
-          class="segment-btn"
-          :class="{ active: measurementStore.measurementParams.controlMode === 'manual' }"
-          @click="setControlMode('manual')"
-        >
-          手动
-        </button>
-      </div>
-    </div>
+  <section class="control-card">
+    <!-- 第一排：模式与进度 -->
+    <div class="control-row-top">
+      <div class="mode-group">
+        <div class="mode-item">
+          <span class="mode-label">模式</span>
+          <div class="segment-control">
+            <button
+              type="button"
+              class="segment-btn"
+              :class="{ active: measurementStore.measurementParams.controlMode === 'auto' }"
+              @click="setControlMode('auto')"
+            >
+              自动
+            </button>
+            <button
+              type="button"
+              class="segment-btn"
+              :class="{ active: measurementStore.measurementParams.controlMode === 'manual' }"
+              @click="setControlMode('manual')"
+            >
+              手动
+            </button>
+          </div>
+        </div>
 
-    <div class="param-group">
-      <span class="param-label">打压模式</span>
-      <div class="segment-group">
-        <button
-          type="button"
-          class="segment-btn"
-          :class="{ active: measurementStore.measurementParams.pressureMode === 'single' }"
-          @click="measurementStore.measurementParams.pressureMode = 'single'"
-        >
-          单程
-        </button>
-        <button
-          type="button"
-          class="segment-btn"
-          :class="{ active: measurementStore.measurementParams.pressureMode === 'roundTrip' }"
-          @click="measurementStore.measurementParams.pressureMode = 'roundTrip'"
-        >
-          回程
-        </button>
+        <div class="mode-item">
+          <span class="mode-label">打压</span>
+          <div class="segment-control">
+            <button
+              type="button"
+              class="segment-btn"
+              :class="{ active: measurementStore.measurementParams.pressureMode === 'single' }"
+              @click="measurementStore.measurementParams.pressureMode = 'single'"
+            >
+              单程
+            </button>
+            <button
+              type="button"
+              class="segment-btn pressure-active"
+              :class="{ active: measurementStore.measurementParams.pressureMode === 'roundTrip' }"
+              @click="measurementStore.measurementParams.pressureMode = 'roundTrip'"
+            >
+              回程
+            </button>
+          </div>
+        </div>
       </div>
-    </div>
 
-    <div class="param-group">
-      <span class="param-label">进度</span>
-      <div class="progress-container">
-        <div class="progress-text">
-          <span class="progress-count">{{ completedCount }}/{{ totalCount }}</span>
+      <!-- 进度条 -->
+      <div class="progress-group">
+        <div class="progress-labels">
+          <span class="progress-text">任务进度: {{ completedCount }}/{{ totalCount }}</span>
           <span class="progress-percent">{{ progressPercent }}%</span>
         </div>
-        <div class="progress-bar-bg">
-          <div class="progress-bar-fill" :style="{ width: progressPercent + '%' }" />
+        <div class="progress-track">
+          <div class="progress-fill" :style="{ width: progressPercent + '%' }" />
         </div>
+      </div>
+
+      <!-- 操作按钮组 -->
+      <div class="control-buttons">
+        <template v-if="measurementStore.measurementParams.controlMode === 'auto'">
+          <button
+            type="button"
+            class="ctrl-btn btn-start"
+            :disabled="!canStart"
+            @click="$emit('start')"
+          >
+            <el-icon><VideoPlay /></el-icon>
+            开始采集
+          </button>
+        </template>
+        <template v-else>
+          <button
+            type="button"
+            class="ctrl-btn btn-start"
+            :disabled="!canManualPressurize"
+            @click="$emit('manual-pressurize')"
+          >
+            手动打压
+          </button>
+          <button
+            type="button"
+            class="ctrl-btn btn-collect"
+            :disabled="!canManualCollect"
+            @click="$emit('manual-collect')"
+          >
+            采集
+          </button>
+        </template>
+        <button
+          type="button"
+          class="ctrl-btn btn-pause"
+          :disabled="!measurementStore.isRunning"
+          @click="$emit('pause')"
+        >
+          <el-icon><VideoPause /></el-icon>
+          暂停
+        </button>
+        <button
+          type="button"
+          class="ctrl-btn btn-resume"
+          :disabled="!measurementStore.isPaused"
+          @click="$emit('resume')"
+        >
+          恢复
+        </button>
+        <button
+          type="button"
+          class="ctrl-btn btn-stop"
+          :disabled="measurementStore.isIdle"
+          @click="$emit('stop')"
+        >
+          <el-icon><CloseBold /></el-icon>
+          停止
+        </button>
+        <button
+          v-if="hasCompletedPoints"
+          type="button"
+          class="ctrl-btn btn-reset"
+          @click="$emit('reset')"
+        >
+          重置
+        </button>
+        <button
+          v-if="measurementStore.totalRows > 0"
+          type="button"
+          class="ctrl-btn btn-export"
+          @click="$emit('export')"
+        >
+          <el-icon><Download /></el-icon>
+          导出报告
+        </button>
       </div>
     </div>
 
-    <div class="divider" />
+    <!-- 第二排：通道与报警 -->
+    <div class="control-row-bottom">
+      <div class="left-controls">
+        <div class="channel-item">
+          <span class="mode-label">采集通道</span>
+          <button class="channel-select-btn" @click="channelDialogVisible = true">
+            <el-icon><Grid /></el-icon>
+            <span>{{ measurementStore.channels.length }}/16</span>
+          </button>
+        </div>
 
-    <div class="param-group">
-      <span class="param-label">稳定</span>
-      <span
-        class="status-badge"
-        :class="isStable ? 'stable' : 'unstable'"
-      >{{ isStable ? '是' : '否' }}</span>
-    </div>
-
-    <div class="param-group">
-      <span class="param-label">时间</span>
-      <span
-        class="time-value"
-        :class="{ stable: isStable }"
-      >{{ stableSeconds.toFixed(1) }}s</span>
-    </div>
-
-    <div class="param-group channel-group">
-      <span class="param-label">采集通道</span>
-      <button class="channel-select-btn" @click="channelDialogVisible = true">
-        <el-icon><Grid /></el-icon>
-        {{ measurementStore.channels.length }}/16
-      </button>
-    </div>
-
-    <div class="divider" />
-
-    <div class="param-group alarm-group">
-      <span class="param-label">报警设置</span>
-      <label class="inline-check">
-        <input v-model="measurementStore.alarmConfig.enabled" type="checkbox" />
-        <span>启用</span>
-      </label>
-      <label class="inline-check">
-        <input v-model="measurementStore.alarmConfig.soundEnabled" type="checkbox" />
-        <span>声音</span>
-      </label>
-      <label class="inline-check">
-        <input v-model="measurementStore.alarmConfig.confirmOnAlarm" type="checkbox" />
-        <span>报警确认</span>
-      </label>
-      <button class="channel-select-btn" @click="$emit('select-channel')">
-        通道选择
-        <span class="channel-count">({{ enabledChannelsDesc }})</span>
-      </button>
-    </div>
-
-    <div class="flex-spacer" />
-
-    <div class="control-buttons">
-      <template v-if="measurementStore.measurementParams.controlMode === 'auto'">
-        <button
-          type="button"
-          class="ctrl-btn btn-start btn-primary-action"
-          :disabled="!canStart"
-          @click="$emit('start')"
-        >
-          <el-icon><VideoPlay /></el-icon>
-          开始采集
-        </button>
-      </template>
-      <template v-else>
-        <button
-          type="button"
-          class="ctrl-btn btn-start btn-primary-action"
-          :disabled="!canManualPressurize"
-          @click="$emit('manual-pressurize')"
-        >
-          手动打压
-        </button>
-        <button
-          type="button"
-          class="ctrl-btn btn-collect"
-          :disabled="!canManualCollect"
-          @click="$emit('manual-collect')"
-        >
-          采集
-        </button>
-      </template>
-      <button
-        type="button"
-        class="ctrl-btn btn-pause"
-        :disabled="!measurementStore.isRunning"
-        @click="$emit('pause')"
-      >
-        <el-icon><VideoPause /></el-icon>
-        暂停
-      </button>
-      <button
-        type="button"
-        class="ctrl-btn btn-resume"
-        :disabled="!measurementStore.isPaused"
-        @click="$emit('resume')"
-      >
-        恢复
-      </button>
-      <button
-        type="button"
-        class="ctrl-btn btn-stop btn-danger-action"
-        :disabled="measurementStore.isIdle"
-        @click="$emit('stop')"
-      >
-        <el-icon><CloseBold /></el-icon>
-        停止
-      </button>
-      <button
-        v-if="hasCompletedPoints"
-        type="button"
-        class="ctrl-btn btn-reset btn-danger-action"
-        @click="$emit('reset')"
-      >
-        重置
-      </button>
-      <button
-        v-if="measurementStore.totalRows > 0"
-        type="button"
-        class="ctrl-btn btn-export"
-        @click="$emit('export')"
-      >
-        <el-icon><Download /></el-icon>
-        导出报告
-      </button>
+        <div class="alarm-item">
+          <span class="mode-label">报警设置</span>
+          <label class="inline-check">
+            <input v-model="measurementStore.alarmConfig.enabled" type="checkbox" />
+            <span>启用</span>
+          </label>
+          <label class="inline-check">
+            <input v-model="measurementStore.alarmConfig.soundEnabled" type="checkbox" />
+            <span>声音</span>
+          </label>
+          <label class="inline-check">
+            <input v-model="measurementStore.alarmConfig.confirmOnAlarm" type="checkbox" />
+            <span>报警确认</span>
+          </label>
+          <button class="channel-select-btn" @click="$emit('select-channel')">
+            通道选择
+            <span class="channel-count">({{ enabledChannelsDesc }})</span>
+          </button>
+        </div>
+      </div>
     </div>
 
     <ChannelSelectDialog
@@ -299,259 +286,357 @@ const stableSeconds = computed(() => {
 </script>
 
 <style scoped lang="scss">
-.control-bar {
-  background: var(--bg-tertiary);
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-md);
-  padding: var(--spacing-sm) var(--spacing-md);
+/* ── 设计系统令牌 ── */
+$font-sans: 'Inter', 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+$font-mono: 'JetBrains Mono', 'Fira Code', 'SF Mono', Consolas, monospace;
+$mint: #10b981;
+$mint-light: #34d399;
+$mint-dark: #059669;
+$slate-50: #f9fafb;
+$slate-100: #f3f4f6;
+$slate-200: #e5e7eb;
+$slate-300: #d1d5db;
+$slate-400: #9ca3af;
+$slate-500: #6b7280;
+$slate-600: #4b5563;
+$slate-700: #374151;
+$slate-800: #1f2937;
+$green: #22c55e;
+$red: #ef4444;
+$blue: #3b82f6;
+$amber: #f59e0b;
+
+.control-card {
+  background: #ffffff;
+  border-radius: 12px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  border: 1px solid $slate-200;
+  padding: 16px;
   display: flex;
-  align-items: center;
-  gap: var(--spacing-md);
+  flex-direction: column;
+  gap: 12px;
+  font-family: $font-sans;
+  transition: box-shadow 0.2s ease, border-color 0.2s ease;
+
+  &:hover {
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.07), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
+  }
+}
+
+.control-row-top {
+  display: flex;
   flex-wrap: wrap;
+  align-items: center;
+  gap: 16px 24px;
 }
 
-.param-group {
+.mode-group {
   display: flex;
   align-items: center;
-  gap: var(--spacing-xs);
+  gap: 20px;
 }
 
-.param-label {
-  color: var(--text-muted);
-  font-size: 11px;
+.mode-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Label 规范：500, 12px, 1.5, 0.05em */
+.mode-label {
+  font-size: 12px;
+  color: $slate-500;
+  font-weight: 500;
+  letter-spacing: 0.05em;
   white-space: nowrap;
+  font-family: $font-sans;
 }
 
-.segment-group {
-  display: inline-flex;
-  border: 1px solid var(--border-color-strong);
-  border-radius: var(--radius-sm);
-  overflow: hidden;
+.segment-control {
+  display: flex;
+  padding: 2px;
+  background: $slate-100;
+  border-radius: 8px;
+  border: 1px solid $slate-200;
 }
 
 .segment-btn {
-  height: 26px;
-  min-width: 44px;
-  padding: 0 10px;
-  border: none;
-  border-right: 1px solid var(--border-color-strong);
-  background: var(--bg-secondary);
-  color: var(--text-secondary);
-  cursor: pointer;
+  padding: 4px 14px;
   font-size: 12px;
+  font-weight: 500;
+  border: none;
+  background: transparent;
+  color: $slate-500;
+  cursor: pointer;
+  border-radius: 6px;
+  transition: all 0.15s ease;
+  font-family: $font-sans;
 
-  &:last-child {
-    border-right: none;
+  &:hover {
+    color: $slate-700;
   }
 
   &.active {
-    background: var(--accent-primary);
-    color: var(--bg-primary);
-    font-weight: 600;
+    background: linear-gradient(135deg, $mint, $mint-dark);
+    color: #fff;
+    box-shadow: 0 1px 3px rgba(16, 185, 129, 0.25);
   }
-}
 
-.divider {
-  width: 1px;
-  height: 24px;
-  background: var(--border-color-strong);
+  &.pressure-active.active {
+    background: linear-gradient(135deg, $blue, #2563eb);
+    box-shadow: 0 1px 3px rgba(59, 130, 246, 0.25);
+  }
 }
 
 .progress-group {
-  min-width: 180px;
-}
-
-.progress-container {
-  min-width: 160px;
-}
-
-.progress-text {
   display: flex;
-  justify-content: space-between;
-  color: var(--text-secondary);
-  font-size: 12px;
-  margin-bottom: 3px;
-}
-
-.progress-count {
-  color: var(--text-secondary);
-}
-
-.progress-percent {
-  color: var(--accent-primary);
-  font-weight: 600;
-}
-
-.progress-bar-bg {
-  width: 100%;
-  height: 6px;
-  border-radius: 999px;
-  background: var(--bg-quaternary);
-  overflow: hidden;
-}
-
-.progress-bar-fill {
-  height: 100%;
-  background: var(--accent-primary);
-  transition: width 0.2s ease;
-}
-
-.status-badge {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 28px;
-  padding: 2px 8px;
-  border-radius: 999px;
-  font-size: 12px;
-  font-weight: 600;
-
-  &.stable {
-    background: var(--status-success-bg);
-    color: var(--status-success);
-  }
-
-  &.unstable {
-    background: var(--status-warning-bg);
-    color: var(--status-warning);
-  }
-}
-
-.time-value {
-  color: var(--text-secondary);
-  font-variant-numeric: tabular-nums;
-  font-size: 12px;
-
-  &.stable {
-    color: var(--status-success);
-  }
-}
-
-.flex-spacer {
+  flex-direction: column;
   flex: 1;
-}
-
-.alarm-group {
+  min-width: 160px;
+  max-width: 400px;
   gap: 6px;
 }
 
-.inline-check {
-  display: inline-flex;
+.progress-labels {
+  display: flex;
+  justify-content: space-between;
   align-items: center;
-  gap: 4px;
-  color: var(--text-secondary);
-  font-size: 12px;
-  white-space: nowrap;
-
-  input {
-    margin: 0;
-    accent-color: var(--accent-primary);
-  }
 }
 
-.channel-select-btn {
-  height: 26px;
-  padding: 0 10px;
-  border: 1px solid var(--border-color-strong);
-  border-radius: var(--radius-sm);
-  background: var(--bg-secondary);
-  color: var(--text-secondary);
+.progress-text {
   font-size: 12px;
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-
-  &:hover {
-    border-color: var(--accent-primary);
-    color: var(--accent-primary);
-  }
+  color: $slate-500;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  font-family: $font-sans;
 }
 
-.channel-count {
-  margin-left: 4px;
-  color: var(--text-muted);
+.progress-percent {
+  font-size: 12px;
+  font-weight: 700;
+  color: $mint-dark;
+  font-family: $font-sans;
+}
+
+.progress-track {
+  width: 100%;
+  height: 6px;
+  background: $slate-100;
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, $mint, $mint-light);
+  transition: width 0.3s ease;
 }
 
 .control-buttons {
   display: flex;
   align-items: center;
-  gap: var(--spacing-xs);
+  gap: 8px;
   flex-wrap: wrap;
+  margin-left: auto;
 }
 
+/* 按钮基础：8px radius，规范过渡 */
 .ctrl-btn {
-  height: 34px;
-  padding: 0 12px;
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--border-color-strong);
-  background: var(--bg-secondary);
-  color: var(--text-secondary);
+  padding: 8px 16px;
+  border-radius: 8px;
+  border: none;
   cursor: pointer;
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  font-size: 13px;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  transition: all 0.15s ease;
+  font-family: $font-sans;
+
+  &:active {
+    transform: translateY(1px);
+  }
 
   &:disabled {
-    opacity: 0.45;
+    opacity: 0.5;
     cursor: not-allowed;
   }
 }
 
+/* Primary：渐变 + 白色文字 + Mint 阴影 */
 .btn-start {
-  background: color-mix(in srgb, var(--status-success) 22%, var(--bg-secondary));
-  color: var(--status-success);
-  border-color: color-mix(in srgb, var(--status-success) 45%, var(--border-color-strong));
+  background: linear-gradient(135deg, $mint, $mint-dark);
+  color: #fff;
+  box-shadow: 0 2px 8px rgba(16, 185, 129, 0.3);
+
+  &:hover:not(:disabled) {
+    background: linear-gradient(135deg, $mint-light, $mint);
+    box-shadow: 0 4px 12px rgba(16, 185, 129, 0.4);
+    transform: translateY(-1px);
+  }
 }
 
+/* Default：半透明 slate */
+.btn-pause {
+  background: rgba(55, 65, 81, 0.08);
+  color: $slate-400;
+  border: 1px solid $slate-200;
+
+  &:hover:not(:disabled) {
+    background: rgba(55, 65, 81, 0.14);
+    color: $slate-500;
+    border-color: $slate-300;
+  }
+}
+
+.btn-resume {
+  background: rgba(55, 65, 81, 0.08);
+  color: $slate-700;
+  border: 1px solid $slate-200;
+
+  &:hover:not(:disabled) {
+    background: rgba(55, 65, 81, 0.14);
+    border-color: $slate-300;
+  }
+}
+
+/* Stop Red */
 .btn-stop {
-  background: color-mix(in srgb, var(--status-error) 16%, var(--bg-secondary));
-  color: var(--status-error);
-  border-color: color-mix(in srgb, var(--status-error) 45%, var(--border-color-strong));
+  background: rgba(239, 68, 68, 0.1);
+  color: $red;
+  border: 1px solid rgba(239, 68, 68, 0.2);
+
+  &:hover:not(:disabled) {
+    background: rgba(239, 68, 68, 0.16);
+    border-color: rgba(239, 68, 68, 0.35);
+  }
 }
 
+.btn-reset {
+  background: rgba(55, 65, 81, 0.08);
+  color: $slate-700;
+  border: 1px solid $slate-200;
+
+  &:hover:not(:disabled) {
+    background: rgba(55, 65, 81, 0.14);
+    border-color: $slate-300;
+  }
+}
+
+/* Info Blue */
 .btn-export {
-  background: color-mix(in srgb, var(--status-info) 15%, var(--bg-secondary));
-  color: var(--status-info);
+  background: rgba(59, 130, 246, 0.1);
+  color: $blue;
+  border: 1px solid rgba(59, 130, 246, 0.2);
+
+  &:hover:not(:disabled) {
+    background: rgba(59, 130, 246, 0.16);
+    border-color: rgba(59, 130, 246, 0.35);
+  }
 }
 
-.btn-primary-action {
-  background: var(--status-success) !important;
-  color: var(--bg-primary) !important;
-  border-color: var(--status-success) !important;
-  font-weight: 600;
+.btn-collect {
+  background: rgba(55, 65, 81, 0.08);
+  color: $slate-700;
+  border: 1px solid $slate-200;
+
+  &:hover:not(:disabled) {
+    background: rgba(55, 65, 81, 0.14);
+    border-color: $slate-300;
+  }
 }
 
-.btn-danger-action {
-  background: color-mix(in srgb, var(--status-error) 16%, var(--bg-secondary));
-  color: var(--status-error);
-  border-color: color-mix(in srgb, var(--status-error) 45%, var(--border-color-strong));
+.control-row-bottom {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 16px;
+  padding-top: 12px;
+  border-top: 1px solid $slate-100;
 }
 
-.state-text {
-  color: var(--text-muted);
+.left-controls {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+
+.channel-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.alarm-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.inline-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: $slate-600;
   font-size: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+  font-family: $font-sans;
+
+  input[type="checkbox"] {
+    width: 14px;
+    height: 14px;
+    accent-color: $mint;
+    border: 1px solid $slate-300;
+    border-radius: 3px;
+    cursor: pointer;
+  }
+
+  &:hover span {
+    color: $slate-800;
+  }
 }
 
-.row-count,
-.realtime-pressure {
-  color: var(--text-secondary);
+.channel-select-btn {
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid $slate-200;
+  border-radius: 8px;
+  background: $slate-50;
+  color: $blue;
   font-size: 12px;
+  font-family: $font-mono;
+  font-weight: 500;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  transition: all 0.15s ease;
+
+  &:hover {
+    background: $slate-100;
+    border-color: $slate-300;
+  }
+
+  .el-icon {
+    font-size: 12px;
+    color: $slate-400;
+  }
 }
 
-.realtime-pressure {
-  font-variant-numeric: tabular-nums;
+.channel-count {
+  margin-left: 2px;
+  color: $slate-400;
+  font-size: 11px;
 }
 
 @media (max-width: 900px) {
-  .control-bar {
+  .control-row-top {
+    flex-direction: column;
     align-items: flex-start;
-  }
-
-  .divider,
-  .flex-spacer {
-    display: none;
   }
 
   .progress-group {
@@ -560,6 +645,12 @@ const stableSeconds = computed(() => {
 
   .control-buttons {
     width: 100%;
+    margin-left: 0;
+  }
+
+  .control-row-bottom {
+    flex-direction: column;
+    align-items: flex-start;
   }
 }
 </style>

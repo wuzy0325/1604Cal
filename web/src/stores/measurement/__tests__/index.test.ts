@@ -75,10 +75,10 @@ describe('useMeasurementStore', () => {
   })
 
   describe('isRunning', () => {
-    it('is true for pressuring/stabilizing/collecting', () => {
+    it('is true for pressurizing/stabilizing/collecting', () => {
       const store = useMeasurementStore()
 
-      store.syncState('pressuring')
+      store.syncState('pressurizing')
       expect(store.isRunning).toBe(true)
 
       store.syncState('stabilizing')

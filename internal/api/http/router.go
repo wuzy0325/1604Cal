@@ -44,7 +44,7 @@ func (p chainActiveDriverProvider) GetActiveDriver(id string) device.ConnectionD
 
 // NewRouterWithDeviceManager 基于指定设备管理器创建路由。
 func NewRouterWithDeviceManager(deviceManager deviceManager) http.Handler {
-	return newRouter(deviceManager, nil, deviceconnect.DefaultConfig(), defaultCalibrationRuntimeConfig(), nil, "")
+	return newRouter(deviceManager, nil, deviceconnect.DefaultConfig(), defaultCalibrationRuntimeConfig(), nil, "", "templates/reports")
 }
 
 // NewRouterWithDependencies 基于指定依赖创建路由。
@@ -55,12 +55,12 @@ func (s *apiServer) publishEventAdapter(eventType string, data any) {
 // NewRouterWithDependencies 基于指定依赖创建路由。
 // 该方法用于生产注入与集成测试注入同一套 HTTP 处理逻辑。
 func NewRouterWithDependencies(deviceManager deviceManager, connector deviceConnector) http.Handler {
-	return newRouter(deviceManager, connector, deviceconnect.DefaultConfig(), defaultCalibrationRuntimeConfig(), nil, "")
+	return newRouter(deviceManager, connector, deviceconnect.DefaultConfig(), defaultCalibrationRuntimeConfig(), nil, "", "templates/reports")
 }
 
 // NewRouterWithConnectConfig 基于指定连接配置创建路由。
 func NewRouterWithConnectConfig(deviceManager deviceManager, connectConfig deviceconnect.Config) http.Handler {
-	return newRouter(deviceManager, nil, connectConfig, defaultCalibrationRuntimeConfig(), nil, "")
+	return newRouter(deviceManager, nil, connectConfig, defaultCalibrationRuntimeConfig(), nil, "", "templates/reports")
 }
 
 // NewRouterWithRuntimeConfig 基于连接配置、标定门禁配置和应用配置创建路由。
@@ -70,7 +70,8 @@ func NewRouterWithRuntimeConfig(deviceManager deviceManager, connectConfig devic
 	if len(appCfg) > 0 {
 		cfg = &appCfg[0]
 	}
-	return newRouter(deviceManager, nil, connectConfig, calibrationConfig, cfg, configPath)
+	// 使用相对于可执行文件的templates/reports目录
+	return newRouter(deviceManager, nil, connectConfig, calibrationConfig, cfg, configPath, "templates/reports")
 }
 
 func newRouter(
@@ -80,6 +81,7 @@ func newRouter(
 	calibrationConfig CalibrationRuntimeConfig,
 	appCfg *config.AppConfig,
 	configPath string,
+	templateDir string,
 ) http.Handler {
 	if deviceManager == nil {
 		deviceManager = manager.NewDeviceManager()
@@ -98,7 +100,7 @@ func newRouter(
 	}
 
 	// 报告服务（模板目录为空则使用无模板模式）
-	server.reportService = report.NewService("")
+	server.reportService = report.NewService(templateDir)
 
 	if connector == nil {
 		server.deviceConnector = deviceconnect.NewService(

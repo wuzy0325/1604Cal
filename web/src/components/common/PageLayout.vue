@@ -15,14 +15,13 @@ import Sidebar from './Sidebar.vue'
 </script>
 
 <style scoped lang="scss">
-
 .page-layout {
   display: flex;
   width: 100%;
-  height: 100vh;
-  background: $bg-page;
+  height: 100%;
+  background: #f6f7f6;
   overflow: hidden;
-  font-family: $font-family-base;
+  font-family: 'Inter', 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
 }
 
 .main-content {
@@ -30,20 +29,22 @@ import Sidebar from './Sidebar.vue'
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  padding: $spacing-8;
-  gap: $spacing-6;
+  padding: 20px;
+  gap: 16px;
+
+  // 仅在内容确实溢出时才显示滚动条
   overflow-y: auto;
-  
+
   // 滚动条样式
   &::-webkit-scrollbar {
-    width: 8px;
+    width: 6px;
   }
-  
+
   &::-webkit-scrollbar-thumb {
-    background: $neutral-700;
-    border-radius: 4px;
+    background: #d1d5db;
+    border-radius: 3px;
   }
-  
+
   &::-webkit-scrollbar-track {
     background: transparent;
   }
@@ -54,10 +55,10 @@ import Sidebar from './Sidebar.vue'
   .page-layout {
     flex-direction: column;
   }
-  
+
   .main-content {
-    padding: $spacing-4;
-    gap: $spacing-4;
+    padding: 16px;
+    gap: 16px;
   }
 }
 </style>

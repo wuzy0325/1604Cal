@@ -56,14 +56,29 @@ const steps = [
 </script>
 
 <style scoped lang="scss">
+/* ── 设计系统令牌 ── */
+$font-sans: 'Inter', 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+$mint: #10b981;
+$mint-light: #34d399;
+$mint-dark: #059669;
+$slate-100: #f3f4f6;
+$slate-200: #e5e7eb;
+$slate-300: #d1d5db;
+$slate-400: #9ca3af;
+$slate-500: #6b7280;
+$green: #22c55e;
+
 .progress-indicator {
   padding: 0;
+  font-family: $font-sans;
 
   .title {
-    color: var(--text-primary);
-    margin: 0 0 var(--spacing-xs) 0;
-    font-size: 12px;
-    font-weight: 500;
+    color: $slate-500;
+    margin: 0 0 6px 0;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
   }
 
   .steps {
@@ -85,8 +100,9 @@ const steps = [
         align-items: center;
         justify-content: center;
         font-size: 10px;
-        font-weight: bold;
+        font-weight: 700;
         z-index: 2;
+        transition: all 0.2s ease;
 
         .el-icon {
           font-size: 14px;
@@ -94,10 +110,11 @@ const steps = [
       }
 
       .step-label {
-        margin-top: 2px;
+        margin-top: 4px;
         font-size: 10px;
         text-align: center;
         white-space: nowrap;
+        font-weight: 500;
       }
 
       .step-line {
@@ -106,47 +123,48 @@ const steps = [
         left: 50%;
         width: 100%;
         height: 2px;
-        background: var(--border-color);
+        background: $slate-200;
         z-index: 1;
+        transition: background 0.3s ease;
       }
 
       &.completed {
         .step-marker {
-          background: var(--status-success);
-          color: var(--bg-primary);
+          background: $green;
+          color: #ffffff;
         }
 
         .step-label {
-          color: var(--status-success);
+          color: $green;
         }
 
         .step-line {
-          background: var(--status-success);
+          background: $green;
         }
       }
 
       &.active {
         .step-marker {
-          background: var(--accent-primary);
-          color: var(--bg-primary);
-          box-shadow: 0 0 0 4px rgba(255, 215, 0, 0.15);
+          background: $mint;
+          color: #ffffff;
+          box-shadow: 0 0 0 4px rgba(16, 185, 129, 0.15);
         }
 
         .step-label {
-          color: var(--accent-primary);
+          color: $mint-dark;
           font-weight: 600;
         }
       }
 
       &.pending {
         .step-marker {
-          background: var(--bg-tertiary);
-          color: var(--text-muted);
-          border: 1px solid var(--border-color-strong);
+          background: #ffffff;
+          color: $slate-400;
+          border: 1px solid $slate-300;
         }
 
         .step-label {
-          color: var(--text-muted);
+          color: $slate-400;
         }
       }
     }

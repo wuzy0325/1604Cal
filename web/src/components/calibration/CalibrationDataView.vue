@@ -390,22 +390,51 @@ const exportCSV = () => {
 </script>
 
 <style scoped lang="scss">
+/* ── 设计系统令牌 ── */
+$font-sans: 'Inter', 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+$font-mono: 'JetBrains Mono', 'Fira Code', 'SF Mono', Consolas, monospace;
+$mint: #10b981;
+$mint-light: #34d399;
+$mint-dark: #059669;
+$slate-50: #f9fafb;
+$slate-100: #f3f4f6;
+$slate-200: #e5e7eb;
+$slate-300: #d1d5db;
+$slate-400: #9ca3af;
+$slate-500: #6b7280;
+$slate-600: #4b5563;
+$slate-700: #374151;
+$slate-800: #1f2937;
+$green: #22c55e;
+$red: #ef4444;
+$blue: #3b82f6;
+$amber: #f59e0b;
+
 @use "@/styles/calibration-table" as *;
+
 .data-section {
   display: flex;
   flex-direction: column;
-  gap: var(--spacing-md);
+  gap: 12px;
   min-height: 0;
   flex: 1;
 }
 
 .table-panel {
-  background: var(--bg-secondary);
-  border-radius: var(--radius-md);
-  padding: var(--spacing-md) var(--spacing-lg) var(--spacing-lg);
+  background: #ffffff;
+  border-radius: 12px;
+  border: 1px solid $slate-200;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  padding: 12px 16px 16px;
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  font-family: $font-sans;
+  transition: box-shadow 0.2s ease, border-color 0.2s ease;
+
+  &:hover {
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.07), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
+  }
 }
 
 .panel-points {
@@ -418,32 +447,64 @@ const exportCSV = () => {
 }
 
 .table-header {
-  display: flex; justify-content: space-between; align-items: center;
-  margin-bottom: var(--spacing-sm); flex-shrink: 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+  flex-shrink: 0;
+  padding-bottom: 8px;
+  border-bottom: 1px solid $slate-100;
 }
 
 .table-title {
   display: flex;
   align-items: center;
-  gap: var(--spacing-sm);
+  gap: 8px;
 
   .el-icon {
-    color: var(--accent-primary);
+    color: $mint;
     font-size: 16px;
   }
 
   h3 {
-    color: var(--text-primary);
+    color: $slate-700;
     margin: 0;
     font-size: 14px;
     font-weight: 600;
   }
 }
 
-.record-count { color: var(--text-muted); font-size: 12px; margin-left: var(--spacing-xs); }
-.table-actions { display: flex; gap: var(--spacing-xs); }
+/* 记录徽章：按 Tags 规范 */
+.record-count {
+  padding: 1px 8px;
+  background: rgba(107, 114, 128, 0.12);
+  border: 1px solid rgba(107, 114, 128, 0.25);
+  color: $slate-500;
+  font-size: 11px;
+  font-weight: 500;
+  border-radius: 4px;
+  margin-left: 4px;
+}
 
-.table-body { flex: 1; min-height: 0; overflow: hidden; border-radius: var(--radius-sm); }
+.table-actions {
+  display: flex;
+  gap: 8px;
+
+  .el-button {
+    height: 28px;
+    padding: 0 12px;
+    font-size: 12px;
+    font-weight: 500;
+    border-radius: 8px;
+  }
+}
+
+.table-body {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  border-radius: 8px;
+}
 
 .point-table-body {
   max-height: 280px;
@@ -466,22 +527,22 @@ const exportCSV = () => {
   @include calibration-table-deep-styles;
 
   .channel-good, .channel-warning, .channel-error {
-    font-family: 'Consolas', monospace;
+    font-family: $font-mono;
   }
-  .channel-good { color: var(--status-success); }
-  .channel-warning { color: var(--status-warning); }
-  .channel-error { color: var(--status-error); }
+  .channel-good { color: $green; }
+  .channel-warning { color: $amber; }
+  .channel-error { color: $red; }
 }
 
-.row-actions { display: flex; gap: var(--spacing-xs); }
+.row-actions { display: flex; gap: 6px; }
 
 .row-btn {
   min-width: 56px;
 }
 
-.collecting-text { color: var(--text-muted); font-size: 12px; }
+.collecting-text { color: $slate-400; font-size: 12px; }
 
-.idle-text { color: var(--text-muted); font-size: 12px; }
+.idle-text { color: $slate-400; font-size: 12px; }
 
 .empty-state {
   flex: 1;
@@ -489,15 +550,15 @@ const exportCSV = () => {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: var(--spacing-sm);
-  padding: var(--spacing-xl);
-  color: var(--text-muted);
+  gap: 8px;
+  padding: 40px 0;
+  color: $slate-400;
 
   .empty-icon {
     font-size: 48px;
-    color: var(--bg-quaternary);
+    color: $slate-200;
   }
 
-  p { font-size: 13px; margin: 0; }
+  p { font-size: 13px; margin: 0; font-family: $font-sans; }
 }
 </style>

@@ -7,11 +7,25 @@
         </button>
         <div class="header-title">
           <h1>计量工作台</h1>
-          <p>设备计量数据采集与管理</p>
+          <span class="state-badge" :class="stateClass">{{ stateLabel }}</span>
         </div>
       </div>
-      <div class="header-actions">
-        <span class="state-badge" :class="stateClass">{{ stateLabel }}</span>
+      <div class="header-right">
+        <div class="status-info">
+          <span class="info-label">稳定:</span>
+          <span
+            class="info-value"
+            :class="measurementStore.isStable ? 'stable' : 'unstable'"
+          >
+            {{ measurementStore.isStable ? '是' : '否' }}
+          </span>
+        </div>
+        <div class="status-info">
+          <span class="info-label">实时时间:</span>
+          <span class="time-badge">
+            {{ (measurementStore.stabilityState.stableDurationMs / 1000).toFixed(1) }}<small>s</small>
+          </span>
+        </div>
       </div>
     </header>
 
@@ -211,77 +225,140 @@ async function handleExport(path: string) {
 .page-header {
   display: flex;
   justify-content: space-between;
-  align-items: flex-end;
+  align-items: center;
   flex-shrink: 0;
-  padding-bottom: $spacing-4;
-  border-bottom: 1px solid $border-color-light;
+  height: 48px;
+  padding: 0 24px;
+  background: #ffffff;
+  border-bottom: 1px solid #e5e7eb;
 }
 
 .header-left {
   display: flex;
   align-items: center;
-  gap: $spacing-4;
+  gap: 12px;
 }
 
 .back-btn {
-  width: 40px;
-  height: 40px;
-  background: rgba($neutral-800, 0.6);
-  border: 1px solid $border-color;
-  border-radius: $radius-md;
-  color: $text-secondary;
+  width: 28px;
+  height: 28px;
+  background: transparent;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  color: #9ca3af;
   cursor: pointer;
-  transition: all $transition-fast;
+  transition: all 0.15s ease;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 18px;
+  font-size: 16px;
 
   &:hover {
-    background: rgba($neutral-700, 0.8);
-    color: $text-primary;
-    border-color: $border-color-strong;
+    background: #f9fafb;
+    color: #4b5563;
+    border-color: #d1d5db;
   }
 }
 
 .header-title {
-  h1 {
-    font-size: 28px;
-    font-weight: $font-weight-bold;
-    color: $text-primary;
-    margin: 0 0 $spacing-1;
-    letter-spacing: -0.02em;
-  }
-  p {
-    font-size: $font-size-sm;
-    color: $text-secondary;
-    margin: 0;
-  }
-}
-
-.header-actions {
   display: flex;
-  gap: $spacing-3;
+  align-items: center;
+  gap: 10px;
+
+  h1 {
+    font-size: 18px;
+    font-weight: 700;
+    color: #1f2937;
+    margin: 0;
+    letter-spacing: -0.01em;
+    font-family: 'Inter', 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  }
 }
 
+/* 状态徽章：按 Tags 规范 — 15% 背景透明度，30% 边框透明度 */
 .state-badge {
-  padding: $spacing-2 $spacing-4;
-  border-radius: $radius-md;
-  font-size: $font-size-sm;
-  font-weight: $font-weight-medium;
+  padding: 3px 10px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.5;
+  letter-spacing: 0.02em;
 }
 
-.state-idle { background: rgba($neutral-700, 0.5); color: $text-secondary; }
-.state-preparing, .state-measuring { background: rgba($info-500, 0.2); color: $info-400; }
-.state-paused { background: rgba($warning-500, 0.2); color: $warning-400; }
-.state-completed { background: rgba($success-500, 0.2); color: $success-400; }
-.state-error { background: rgba($danger-500, 0.2); color: $danger-400; }
+.state-idle {
+  background: rgba(107, 114, 128, 0.12);
+  border: 1px solid rgba(107, 114, 128, 0.25);
+  color: #6b7280;
+}
+.state-preparing, .state-measuring {
+  background: rgba(59, 130, 246, 0.12);
+  border: 1px solid rgba(59, 130, 246, 0.25);
+  color: #2563eb;
+}
+.state-paused {
+  background: rgba(245, 158, 11, 0.12);
+  border: 1px solid rgba(245, 158, 11, 0.25);
+  color: #d97706;
+}
+.state-completed {
+  background: rgba(16, 185, 129, 0.12);
+  border: 1px solid rgba(16, 185, 129, 0.25);
+  color: #059669;
+}
+.state-error {
+  background: rgba(239, 68, 68, 0.12);
+  border: 1px solid rgba(239, 68, 68, 0.25);
+  color: #dc2626;
+}
+
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+}
+
+.status-info {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.info-label {
+  color: #9ca3af;
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.05em;
+}
+
+.info-value {
+  font-size: 13px;
+  font-weight: 600;
+
+  &.stable { color: #22c55e; }
+  &.unstable { color: #ef4444; }
+}
+
+.time-badge {
+  font-family: 'JetBrains Mono', 'Fira Code', 'SF Mono', Consolas, monospace;
+  background: #f3f4f6;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #374151;
+
+  small {
+    font-size: 10px;
+    margin-left: 2px;
+    color: #9ca3af;
+  }
+}
 
 .workbench-content {
   flex: 1;
   min-height: 0;
   display: flex;
-  gap: $spacing-6;
+  gap: 16px;
   overflow: hidden;
 }
 
@@ -290,14 +367,14 @@ async function handleExport(path: string) {
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: $spacing-4;
+  gap: 12px;
   overflow-y: auto;
+  padding-right: 4px;
 }
 
 @media (max-width: 768px) {
-  .page-header { flex-direction: column; align-items: flex-start; gap: 16px; }
-  .header-left { width: 100%; }
-  .header-title h1 { font-size: 20px; }
+  .page-header { padding: 0 16px; }
+  .header-right { display: none; }
   .workbench-content { flex-direction: column; }
 }
 </style>

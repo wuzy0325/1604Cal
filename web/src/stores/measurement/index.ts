@@ -46,7 +46,7 @@ export const useMeasurementStore = defineStore('measurement', () => {
   // ── 状态 ──
   const state = ref<MeasurementState>('idle')
   const rows = ref<CollectedRow[]>([])
-  const channels = ref<number[]>([])
+  const channels = ref<number[]>(Array.from({ length: 16 }, (_, i) => i + 1))
   const measureDeviceId = ref('')
   const pressureDeviceId = ref('')
 
@@ -100,7 +100,7 @@ export const useMeasurementStore = defineStore('measurement', () => {
   let eventSource: EventSource | null = null
 
   // ── 计算属性 ──
-  const runningStates: MeasurementState[] = ['pressuring', 'stabilizing', 'collecting']
+  const runningStates: MeasurementState[] = ['pressurizing', 'stabilizing', 'collecting']
   const startableStates: MeasurementState[] = ['idle', 'completed', 'error']
 
   const isCollecting = computed(() => state.value === 'collecting')

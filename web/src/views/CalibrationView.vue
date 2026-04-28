@@ -8,11 +8,25 @@
         </button>
         <div class="header-title">
           <h1>标定工作台</h1>
-          <p>设备标定校准与数据采集</p>
+          <span class="state-badge" :class="stateClass">{{ stateLabel }}</span>
         </div>
       </div>
-      <div class="header-actions">
-        <span class="state-badge" :class="stateClass">{{ stateLabel }}</span>
+      <div class="header-right">
+        <div class="status-info">
+          <span class="info-label">稳定:</span>
+          <span
+            class="info-value"
+            :class="calibrationStore.isStable ? 'stable' : 'unstable'"
+          >
+            {{ calibrationStore.isStable ? '是' : '否' }}
+          </span>
+        </div>
+        <div class="status-info">
+          <span class="info-label">实时时间:</span>
+          <span class="time-badge">
+            {{ stabilityStatus ? (stabilityStatus.stableDurationMs / 1000).toFixed(1) : '0.0' }}<small>s</small>
+          </span>
+        </div>
       </div>
     </header>
 
@@ -92,94 +106,155 @@ const stateClass = computed(() => {
 </script>
 
 <style scoped lang="scss">
+/* ── 设计系统令牌 ── */
+$font-sans: 'Inter', 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+$font-mono: 'JetBrains Mono', 'Fira Code', 'SF Mono', Consolas, monospace;
+$mint: #10b981;
+$mint-dark: #059669;
+$slate-50: #f9fafb;
+$slate-100: #f3f4f6;
+$slate-200: #e5e7eb;
+$slate-300: #d1d5db;
+$slate-400: #9ca3af;
+$slate-500: #6b7280;
+$slate-600: #4b5563;
+$slate-700: #374151;
+$slate-800: #1f2937;
+$green: #22c55e;
+$red: #ef4444;
+$blue: #3b82f6;
+$amber: #f59e0b;
 
 .page-header {
   display: flex;
   justify-content: space-between;
-  align-items: flex-end;
+  align-items: center;
   flex-shrink: 0;
-  padding-bottom: $spacing-4;
-  border-bottom: 1px solid $border-color-light;
+  height: 48px;
+  padding: 0 24px;
+  background: #ffffff;
+  border-bottom: 1px solid $slate-200;
+  font-family: $font-sans;
 }
 
 .header-left {
   display: flex;
   align-items: center;
-  gap: $spacing-4;
+  gap: 12px;
 }
 
 .back-btn {
-  width: 40px;
-  height: 40px;
-  background: rgba($neutral-800, 0.6);
-  border: 1px solid $border-color;
-  border-radius: $radius-md;
-  color: $text-secondary;
+  width: 28px;
+  height: 28px;
+  background: transparent;
+  border: 1px solid $slate-200;
+  border-radius: 8px;
+  color: $slate-400;
   cursor: pointer;
-  transition: all $transition-fast;
+  transition: all 0.2s ease;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 18px;
+  font-size: 16px;
 
   &:hover {
-    background: rgba($neutral-700, 0.8);
-    color: $text-primary;
-    border-color: $border-color-strong;
+    background: $slate-50;
+    color: $slate-600;
+    border-color: $slate-300;
   }
 }
 
 .header-title {
-  h1 {
-    font-size: 28px;
-    font-weight: $font-weight-bold;
-    color: $text-primary;
-    margin: 0 0 $spacing-1;
-    letter-spacing: -0.02em;
-  }
-
-  p {
-    font-size: $font-size-sm;
-    color: $text-secondary;
-    margin: 0;
-  }
-}
-
-.header-actions {
   display: flex;
-  gap: $spacing-3;
+  align-items: center;
+  gap: 10px;
+
+  h1 {
+    font-size: 18px;
+    font-weight: 700;
+    color: $slate-800;
+    margin: 0;
+    letter-spacing: -0.01em;
+    font-family: $font-sans;
+  }
 }
 
+/* 状态徽章：按 Tags 规范 */
 .state-badge {
-  padding: $spacing-2 $spacing-4;
-  border-radius: $radius-md;
-  font-size: $font-size-sm;
-  font-weight: $font-weight-medium;
-  
-  &.state-idle {
-    background: rgba($neutral-700, 0.5);
-    color: $text-secondary;
-  }
-  
-  &.state-preparing,
-  &.state-running {
-    background: rgba($primary-500, 0.2);
-    color: $primary-400;
-  }
-  
-  &.state-paused {
-    background: rgba($warning-500, 0.2);
-    color: $warning-400;
-  }
-  
-  &.state-completed {
-    background: rgba($success-500, 0.2);
-    color: $success-400;
-  }
-  
-  &.state-error {
-    background: rgba($danger-500, 0.2);
-    color: $danger-400;
+  padding: 3px 10px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.5;
+  letter-spacing: 0.02em;
+}
+
+.state-idle {
+  background: rgba(107, 114, 128, 0.12);
+  border: 1px solid rgba(107, 114, 128, 0.25);
+  color: $slate-500;
+}
+.state-preparing, .state-running {
+  background: rgba(59, 130, 246, 0.12);
+  border: 1px solid rgba(59, 130, 246, 0.25);
+  color: #2563eb;
+}
+.state-paused {
+  background: rgba(245, 158, 11, 0.12);
+  border: 1px solid rgba(245, 158, 11, 0.25);
+  color: #d97706;
+}
+.state-completed {
+  background: rgba(16, 185, 129, 0.12);
+  border: 1px solid rgba(16, 185, 129, 0.25);
+  color: #059669;
+}
+.state-error {
+  background: rgba(239, 68, 68, 0.12);
+  border: 1px solid rgba(239, 68, 68, 0.25);
+  color: #dc2626;
+}
+
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+}
+
+.status-info {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.info-label {
+  color: $slate-400;
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.05em;
+}
+
+.info-value {
+  font-size: 13px;
+  font-weight: 600;
+
+  &.stable { color: $green; }
+  &.unstable { color: $red; }
+}
+
+.time-badge {
+  font-family: $font-mono;
+  background: $slate-100;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 13px;
+  font-weight: 500;
+  color: $slate-700;
+
+  small {
+    font-size: 10px;
+    margin-left: 2px;
+    color: $slate-400;
   }
 }
 
@@ -187,7 +262,7 @@ const stateClass = computed(() => {
   flex: 1;
   min-height: 0;
   display: flex;
-  gap: $spacing-6;
+  gap: 16px;
   overflow: hidden;
 }
 
@@ -196,18 +271,19 @@ const stateClass = computed(() => {
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: $spacing-6;
+  gap: 12px;
   overflow-y: auto;
-  
+  padding-right: 4px;
+
   &::-webkit-scrollbar {
-    width: 8px;
+    width: 6px;
   }
-  
+
   &::-webkit-scrollbar-thumb {
-    background: $neutral-700;
-    border-radius: 4px;
+    background: $slate-300;
+    border-radius: 3px;
   }
-  
+
   &::-webkit-scrollbar-track {
     background: transparent;
   }
@@ -216,41 +292,26 @@ const stateClass = computed(() => {
 .template-result-bar {
   display: flex;
   align-items: center;
-  gap: $spacing-2;
-  padding: $spacing-3 $spacing-4;
-  background: rgba($success-500, 0.1);
-  border: 1px solid rgba($success-500, 0.3);
-  border-radius: $radius-md;
-  font-size: $font-size-sm;
+  gap: 8px;
+  padding: 8px 16px;
+  background: rgba(16, 185, 129, 0.08);
+  border: 1px solid rgba(16, 185, 129, 0.2);
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  color: $slate-600;
   flex-shrink: 0;
+  font-family: $font-sans;
 
   .el-icon {
-    color: $success-400;
-  }
-
-  span {
-    color: $text-secondary;
+    color: $mint;
   }
 }
 
 // 响应式适配
 @media (max-width: 768px) {
-  .page-header {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: $spacing-4;
-  }
-
-  .header-left {
-    width: 100%;
-  }
-
-  .header-title h1 {
-    font-size: $font-size-xl;
-  }
-  
-  .workbench-content {
-    flex-direction: column;
-  }
+  .page-header { padding: 0 16px; }
+  .header-right { display: none; }
+  .workbench-content { flex-direction: column; }
 }
 </style>

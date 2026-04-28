@@ -232,10 +232,27 @@ defineExpose({ checkUnitConsistency })
 </script>
 
 <style scoped lang="scss">
+/* ── 设计系统令牌 ── */
+$font-sans: 'Inter', 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+$font-mono: 'JetBrains Mono', 'Fira Code', 'SF Mono', Consolas, monospace;
+$mint: #10b981;
+$mint-dark: #059669;
+$slate-50: #f9fafb;
+$slate-100: #f3f4f6;
+$slate-200: #e5e7eb;
+$slate-300: #d1d5db;
+$slate-400: #9ca3af;
+$slate-500: #6b7280;
+$slate-600: #4b5563;
+$slate-700: #374151;
+$green: #22c55e;
+$red: #ef4444;
+$amber: #f59e0b;
+
 .sidebar {
   width: 280px;
-  background: var(--bg-secondary);
-  border-right: 1px solid var(--border-color);
+  background: #f6f7f6;
+  border-right: 1px solid $slate-200;
   position: relative;
   transition: width 0.25s ease;
   flex-shrink: 0;
@@ -250,80 +267,149 @@ defineExpose({ checkUnitConsistency })
   transform: translateY(-50%);
   width: 12px;
   height: 36px;
-  background: var(--bg-tertiary);
-  border: 1px solid var(--border-color);
+  background: #fff;
+  border: 1px solid $slate-200;
   border-left: none;
-  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  border-radius: 0 6px 6px 0;
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
   z-index: 10;
-  .el-icon { color: var(--text-secondary); font-size: 10px; }
-  &:hover { background: var(--bg-quaternary); .el-icon { color: var(--accent-primary); } }
+  .el-icon { color: $slate-400; font-size: 10px; }
+  &:hover { background: $slate-50; .el-icon { color: $mint; } }
 }
 .sidebar-content {
-  padding: var(--spacing-md);
+  padding: 16px;
   overflow-y: auto;
   flex: 1;
   display: flex;
   flex-direction: column;
-  gap: var(--spacing-xl);
+  gap: 16px;
+
+  &::-webkit-scrollbar { width: 4px; }
+  &::-webkit-scrollbar-thumb { background: $slate-300; border-radius: 4px; }
+  &::-webkit-scrollbar-track { background: transparent; }
 }
-.sidebar-section { display: flex; flex-direction: column; gap: var(--spacing-sm); }
+
+/* Section 卡片：白色背景 + 圆角 + 阴影 + 边框 */
+.sidebar-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  background: #ffffff;
+  border-radius: 12px;
+  border: 1px solid $slate-200;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  padding: 16px;
+  transition: box-shadow 0.2s ease, border-color 0.2s ease;
+
+  &:hover {
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.07), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
+  }
+}
+
+/* Section 标题：左侧 Mint 竖线 + 文字 */
 .sidebar-title {
-  color: var(--text-secondary);
-  font-size: 11px;
+  color: $slate-500;
+  font-size: 12px;
   font-weight: 600;
   margin: 0;
   display: flex;
   align-items: center;
-  gap: var(--spacing-xs);
+  gap: 8px;
+  letter-spacing: 0.05em;
   text-transform: uppercase;
-  letter-spacing: 0.06em;
-  .el-icon { color: var(--accent-primary); font-size: 13px; }
+  font-family: $font-sans;
+  position: relative;
+  padding-left: 10px;
+
+  &::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 3px;
+    height: 14px;
+    background: linear-gradient(180deg, $mint, $mint-dark);
+    border-radius: 2px;
+  }
+
+  .el-icon { color: $mint; font-size: 14px; }
 }
+
+/* 单位检查 */
 .unit-check-result {
-  display: flex; align-items: center; gap: var(--spacing-xs); font-size: 12px;
-  padding: var(--spacing-xs) var(--spacing-sm); border-radius: var(--radius-sm);
-  &.unit-ok { background: var(--status-success-bg); color: var(--status-success); }
-  &.unit-warn { background: var(--status-warning-bg); color: var(--status-warning); }
+  display: flex; align-items: center; gap: 8px; font-size: 13px;
+  padding: 10px 12px; border-radius: 8px; font-weight: 500;
+  font-family: $font-sans;
+  &.unit-ok { background: rgba(34, 197, 94, 0.1); border: 1px solid rgba(34, 197, 94, 0.2); color: #16a34a; }
+  &.unit-warn { background: rgba(245, 158, 11, 0.1); border: 1px solid rgba(245, 158, 11, 0.2); color: #d97706; }
 }
-.unit-conflicts { display: flex; flex-direction: column; gap: 2px; .conflict-item { color: var(--status-error); font-size: 11px; padding: 2px 0; } }
+.unit-conflicts {
+  display: flex; flex-direction: column; gap: 4px;
+  margin-top: 4px;
+  .conflict-item { color: $red; font-size: 11px; padding: 2px 0; font-family: $font-sans; }
+}
+
+/* 启动条件 */
 .prerequisites-list {
-  background: var(--bg-tertiary); border: 1px solid var(--border-color); border-radius: var(--radius-sm);
-  padding: var(--spacing-sm); display: flex; flex-direction: column; gap: 6px;
+  display: flex;
+  flex-direction: column;
+  background: #ffffff;
+  border-radius: 8px;
+  overflow: hidden;
+
   .prereq-item {
-    display: flex; align-items: center; gap: var(--spacing-xs); padding: 4px 0;
-    font-size: 12px;
-    .el-icon { font-size: 14px; }
-    .icon-satisfied { color: var(--status-success); }
-    .icon-unsatisfied { color: var(--status-error); }
-    .prereq-label { flex: 1; }
-    .prereq-status {
-      font-size: 10px;
-      padding: 1px 6px;
-      border-radius: 3px;
-      font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 0;
+    font-size: 13px;
+    font-family: $font-sans;
+    border-bottom: 1px solid $slate-100;
+
+    &:last-child { border-bottom: none; }
+
+    .el-icon { font-size: 16px; flex-shrink: 0; }
+    .icon-satisfied { color: $green; }
+    .icon-unsatisfied { color: $slate-300; }
+    .prereq-label {
+      flex: 1;
+      color: $slate-600;
+      font-weight: 500;
     }
+    .prereq-status {
+      font-size: 11px;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-weight: 600;
+      letter-spacing: 0.02em;
+      flex-shrink: 0;
+    }
+
     &.satisfied {
-      color: var(--text-primary);
+      .prereq-label { color: $slate-700; }
       .prereq-status {
-        background: var(--status-success-bg);
-        color: var(--status-success);
+        background: rgba(34, 197, 94, 0.12);
+        border: 1px solid rgba(34, 197, 94, 0.25);
+        color: #16a34a;
       }
     }
     &.unsatisfied {
-      color: var(--text-muted);
+      .prereq-label { color: $slate-400; }
       .prereq-status {
-        background: var(--status-error-bg);
-        color: var(--status-error);
+        background: rgba(239, 68, 68, 0.1);
+        border: 1px solid rgba(239, 68, 68, 0.2);
+        color: #dc2626;
       }
     }
   }
 }
+
 @media (max-width: 900px) {
-  .sidebar { width: 100% !important; border-right: none; border-bottom: 1px solid var(--border-color); .sidebar-toggle { display: none; } }
+  .sidebar { width: 100% !important; border-right: none; border-bottom: 1px solid $slate-200; .sidebar-toggle { display: none; } }
   .sidebar.collapsed { width: 100% !important; }
 }
 </style>
