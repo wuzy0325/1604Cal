@@ -78,6 +78,7 @@
 import { onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ArrowLeft } from '@element-plus/icons-vue'
+import { ElMessage } from 'element-plus'
 import { useMultiPressStore } from '@/stores/multipress'
 import PageLayout from '@/components/common/PageLayout.vue'
 import StatCard from '@/components/common/StatCard.vue'
@@ -111,7 +112,12 @@ async function handleUnregister(deviceId: string): Promise<void> {
 }
 
 async function handleSetUnit(deviceId: string, unit: string): Promise<void> {
-  await store.setUnit(deviceId, unit)
+  try {
+    await store.setUnit(deviceId, unit)
+    ElMessage.success(`打压单位已切换为 ${unit}`)
+  } catch {
+    ElMessage.error('设置打压单位失败')
+  }
 }
 
 async function handleStopAll(): Promise<void> {

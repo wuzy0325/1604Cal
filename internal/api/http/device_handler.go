@@ -4,16 +4,17 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"log"
 	"net"
 	"net/http"
 	"strings"
 
 	"cal1604/internal/application/calibration"
 	"cal1604/internal/application/deviceconnect"
-	"cal1604/internal/config"
 	"cal1604/internal/application/measurement"
 	"cal1604/internal/application/multipress"
 	"cal1604/internal/application/session"
+	"cal1604/internal/config"
 	"cal1604/internal/domain"
 	apperrors "cal1604/internal/errors"
 	"cal1604/internal/report"
@@ -77,6 +78,9 @@ func (s *apiServer) devicesHandler(w http.ResponseWriter, r *http.Request) {
 		devices := s.deviceManager.List()
 		if devices == nil {
 			devices = make([]domain.Device, 0)
+		}
+		for _, d := range devices {
+			log.Printf("[API devices] %s status=%q unit=%q", d.ID, d.Status, d.Unit)
 		}
 		writeSuccess(w, http.StatusOK, devices)
 	case http.MethodPost:

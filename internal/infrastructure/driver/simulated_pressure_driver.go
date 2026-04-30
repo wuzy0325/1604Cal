@@ -104,7 +104,7 @@ func (d *SimulatedPressureDriver) ReadUnit(_ context.Context) (string, error) {
 func (d *SimulatedPressureDriver) SetUnit(_ context.Context, unit string) error {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	d.unit = unit
+	d.unit = NormalizePressureUnit(unit)
 	return nil
 }
 

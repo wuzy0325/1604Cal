@@ -96,6 +96,7 @@ func (d *tcpConnectionDriver) Disconnect(_ context.Context) error {
 }
 
 // sendSCPICommand 发送 SCPI 命令并读取响应（带超时）。
+// 对于设置类命令（不含 ?），设备通常不回复，直接返回空响应以免阻塞 3 秒。
 func (d *tcpConnectionDriver) sendSCPICommand(ctx context.Context, cmd string, readTimeout time.Duration) (string, error) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
@@ -118,6 +119,10 @@ func (d *tcpConnectionDriver) sendSCPICommand(ctx context.Context, cmd string, r
 	}
 	if _, err := fmt.Fprintf(d.conn, "%s\r\n", cmd); err != nil {
 		return "", fmt.Errorf("%s write SCPI command %q: %w", d.model, cmd, err)
+	}
+	// 设置类命令（不含 ?）通常无响应，跳过读取避免 3 秒超时阻塞
+	if !strings.Contains(cmd, "?") {
+		return "", nil
 	}
 	if err := d.conn.SetReadDeadline(time.Now().Add(readTimeout)); err != nil {
 		return "", fmt.Errorf("%s set read deadline: %w", d.model, err)

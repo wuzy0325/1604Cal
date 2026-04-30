@@ -2,6 +2,7 @@ package http
 
 import (
 	"encoding/json"
+	"log"
 	"net/http"
 
 	apperrors "cal1604/internal/errors"
@@ -218,9 +219,11 @@ func (s *apiServer) multipressUnitHandler(w http.ResponseWriter, r *http.Request
 
 		unit, err := s.multipressService.ReadUnit(r.Context(), deviceID)
 		if err != nil {
+			log.Printf("[API multipressUnitHandler GET] %s error: %v", deviceID, err)
 			writeError(w, err)
 			return
 		}
+		log.Printf("[API multipressUnitHandler GET] %s → %q", deviceID, unit)
 
 		writeSuccess(w, http.StatusOK, map[string]any{
 			"unit":     unit,
@@ -240,12 +243,15 @@ func (s *apiServer) multipressUnitHandler(w http.ResponseWriter, r *http.Request
 			writeError(w, apperrors.ErrInvalidArgument)
 			return
 		}
+		log.Printf("[API multipressUnitHandler POST] %s → %q", req.DeviceID, req.Unit)
 
 		if err := s.multipressService.SetUnit(r.Context(), req.DeviceID, req.Unit); err != nil {
+			log.Printf("[API multipressUnitHandler POST] %s error: %v", req.DeviceID, err)
 			writeError(w, err)
 			return
 		}
 
+		log.Printf("[API multipressUnitHandler POST] %s done", req.DeviceID)
 		writeSuccess(w, http.StatusOK, map[string]string{"status": "ok"})
 
 	default:

@@ -2,15 +2,18 @@ package main
 
 import (
 	"context"
+	"io"
 	"log"
 	"net"
 	"net/http"
 	"os"
 	"strings"
+	"time"
 
 	apihttp "cal1604/internal/api/http"
 	"cal1604/internal/config"
 	"cal1604/internal/device/manager"
+	"cal1604/internal/domain"
 )
 
 const configPathEnvName = "CAL1604_CONFIG"
@@ -32,6 +35,13 @@ func NewApp() *App {
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
 
+	// 调试日志：同时输出到 stderr 和 log 文件
+	logFile, err := os.OpenFile("cal1604_debug.log", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
+	if err == nil {
+		log.SetOutput(io.MultiWriter(os.Stderr, logFile))
+	}
+	log.Printf("[app] startup at %s", time.Now().Format(time.RFC3339))
+
 	runtimeCfg, err := resolveRuntimeConfig(os.Getenv)
 	if err != nil {
 		log.Fatalf("load runtime config failed: %v", err)
@@ -47,6 +57,11 @@ func (a *App) startup(ctx context.Context) {
 	if err != nil {
 		log.Fatalf("init persistent device manager failed: %v", err)
 	}
+	// 启动时重置所有设备为断开状态，避免上次会话的 "connected" 残留
+	for _, dev := range deviceManager.List() {
+		deviceManager.UpdateStatus(dev.ID, domain.DeviceStatusDisconnected)
+	}
+	log.Printf("[app] reset %d device statuses to disconnected", len(deviceManager.List()))
 
 	router := apihttp.NewRouterWithRuntimeConfig(deviceManager, connectCfg, calibrationCfg, configPath, runtimeCfg)
 

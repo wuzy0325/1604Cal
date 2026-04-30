@@ -20,6 +20,20 @@ func isValidPressureUnit(unit string) bool {
 	}
 }
 
+// NormalizePressureUnit 将单位字符串规范化为标准大小写形式。
+// 设备可能返回全小写（如 "kpa"、"mmhg"），前端和显示需要标准形式（如 "kPa"、"mmHg"）。
+func NormalizePressureUnit(unit string) string {
+	m := map[string]string{
+		"pa": "Pa", "kpa": "kPa", "mpa": "MPa",
+		"bar": "bar", "mbar": "mbar", "psi": "psi",
+		"kgf/cm2": "kgf/cm2", "mmhg": "mmHg", "atm": "atm", "inhg": "inHg",
+	}
+	if normalized, ok := m[strings.ToLower(strings.TrimSpace(unit))]; ok {
+		return normalized
+	}
+	return unit
+}
+
 func pressureUnitToCode(unit string) (string, bool) {
 	m := map[string]string{
 		"pa": "1130", "kpa": "1133", "mpa": "1132", "bar": "1105", "mbar": "1104",
@@ -51,6 +65,40 @@ func parseSPC4000UnitCode(code string) string {
 	}
 	if unit, ok := m[strings.TrimSpace(code)]; ok {
 		return unit
+	}
+	return "MPa"
+}
+
+// parseConSTGeneralUnit 解析 ConST 811A/860 等通用型号的单位查询响应。
+// 支持 SCPI 标准单位代码（1132=MPa 等）和字符串格式。
+func parseConSTGeneralUnit(resp string) string {
+	trimmed := strings.TrimSpace(resp)
+	m := map[string]string{
+		"1130": "Pa", "1133": "kPa", "1132": "MPa",
+		"1105": "bar", "1104": "mbar", "1141": "psi",
+		"1145": "kgf/cm2", "1134": "mmHg", "1135": "atm",
+	}
+	if unit, ok := m[trimmed]; ok {
+		return unit
+	}
+	if isValidPressureUnit(trimmed) {
+		return NormalizePressureUnit(trimmed)
+	}
+	return "MPa"
+}
+
+// parseConST820Unit 解析 ConST 820 的单位查询响应。
+// 支持 0=Pa/1=kPa/2=MPa/3=psi/4=kgf/cm2 等代码和字符串格式。
+func parseConST820Unit(resp string) string {
+	trimmed := strings.TrimSpace(resp)
+	m := map[string]string{
+		"0": "Pa", "1": "kPa", "2": "MPa", "3": "psi", "4": "kgf/cm2",
+	}
+	if unit, ok := m[trimmed]; ok {
+		return unit
+	}
+	if isValidPressureUnit(trimmed) {
+		return NormalizePressureUnit(trimmed)
 	}
 	return "MPa"
 }

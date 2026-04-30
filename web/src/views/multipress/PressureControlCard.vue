@@ -36,10 +36,15 @@
         class="target-input"
       />
       <el-select v-model="unitSelect" size="small" class="unit-select" @change="handleUnitChange">
-        <el-option label="kPa" value="kPa" />
-        <el-option label="MPa" value="MPa" />
-        <el-option label="bar" value="bar" />
-        <el-option label="psi" value="psi" />
+        <el-option label="kPa (千帕)" value="kPa" />
+        <el-option label="MPa (兆帕)" value="MPa" />
+        <el-option label="Pa (帕)" value="Pa" />
+        <el-option label="bar (巴)" value="bar" />
+        <el-option label="mbar (毫巴)" value="mbar" />
+        <el-option label="psi (磅/平方英寸)" value="psi" />
+        <el-option label="kgf/cm²" value="kgf/cm2" />
+        <el-option label="mmHg (毫米汞柱)" value="mmHg" />
+        <el-option label="atm (标准大气压)" value="atm" />
       </el-select>
     </div>
 

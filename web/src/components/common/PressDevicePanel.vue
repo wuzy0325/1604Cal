@@ -105,11 +105,13 @@
 import { ref, computed, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 import { FirstAidKit } from '@element-plus/icons-vue'
+import { ElMessage } from 'element-plus'
 import DeviceStatusBadge from '@/components/common/DeviceStatusBadge.vue'
 import { useDeviceInventoryStore } from '@/stores/device/inventoryStore'
 import {
   multipressSetUnit,
-  multipressSetPressure
+  multipressSetPressure,
+  multipressListDevices
 } from "@/api/multipress"
 
 const emit = defineEmits<{
@@ -128,9 +130,13 @@ const targetPressure = ref(100)
 const unitOptions = [
   { value: 'kPa', label: 'kPa (千帕)' },
   { value: 'MPa', label: 'MPa (兆帕)' },
+  { value: 'Pa', label: 'Pa (帕)' },
   { value: 'bar', label: 'bar (巴)' },
+  { value: 'mbar', label: 'mbar (毫巴)' },
   { value: 'psi', label: 'psi (磅/平方英寸)' },
-  { value: 'mmHg', label: 'mmHg (毫米汞柱)' }
+  { value: 'kgf/cm2', label: 'kgf/cm²' },
+  { value: 'mmHg', label: 'mmHg (毫米汞柱)' },
+  { value: 'atm', label: 'atm (标准大气压)' }
 ]
 
 // 获取选中的打压设备
@@ -165,21 +171,31 @@ watch(
   { immediate: true }
 )
 
-// 设备连接后同步单位
-watch(device, (dev) => {
-  if (dev?.unit) {
-    selectedUnit.value = dev.unit
+// 设备连接后同步单位（watch device.unit 而非 device 对象，避免对象引用不变时 watch 不触发）
+watch(() => device.value?.unit, (unit) => {
+  if (unit) {
+    selectedUnit.value = unit
   }
 }, { immediate: true })
 
 // 切换单位时同步到后端并更新本地 store
 async function onUnitChange(unit: string) {
   if (!device.value) return
+  const previousUnit = device.value.unit
   device.value.unit = unit
   try {
     await multipressSetUnit(device.value.id, unit)
+    // 切换单位后从后端拉取最新状态（含已按新单位换算的压力值）
+    const states = await multipressListDevices()
+    const s = states.find(d => d.deviceId === device.value!.id)
+    if (s && device.value) {
+      device.value.currentPressure = s.currentPressure
+      device.value.unit = s.unit
+    }
+    ElMessage.success(`打压单位已切换为 ${unit}`)
   } catch {
-    // 静默失败，本地已更新
+    device.value.unit = previousUnit
+    ElMessage.error('设置打压单位失败')
   }
 }
 

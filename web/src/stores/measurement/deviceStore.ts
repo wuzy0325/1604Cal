@@ -12,7 +12,8 @@ import {
 } from "@/api/session"
 import {
   multipressRegister,
-  multipressUnregister
+  multipressUnregister,
+  multipressListDevices
 } from "@/api/multipress"
 import type { DeviceDTO } from "@/types/device"
 import { ElMessage } from 'element-plus'
@@ -136,6 +137,20 @@ export const useMeasurementDeviceStore = defineStore('measurementDevices', () =>
       device.status = 'connected'
       if (typeof device.currentPressure !== 'number') {
         device.currentPressure = 0
+      }
+
+      // 注册后从 multipress 服务拉取实际读取到的单位与压力，覆盖配置中的默认值
+      try {
+        const states = await multipressListDevices()
+        const state = states.find(s => s.deviceId === id)
+        if (state) {
+          if (state.unit) {
+            device.unit = state.unit
+          }
+          device.currentPressure = state.currentPressure
+        }
+      } catch {
+        // 静默失败，使用设备配置中的单位
       }
 
       ElMessage.success(`设备 ${device.name} 连接成功`)

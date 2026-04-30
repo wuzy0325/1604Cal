@@ -3,6 +3,7 @@ package driver
 import (
 	"context"
 	"fmt"
+	"log"
 	"time"
 )
 
@@ -62,7 +63,14 @@ func (d *ConST811ADriver) ReadCurrentPressure(ctx context.Context) (float64, err
 }
 
 func (d *ConST811ADriver) ReadUnit(ctx context.Context) (string, error) {
-	return d.constReadUnit(ctx, "PRESsure0?")
+	resp, err := d.base.sendSCPICommand(ctx, "PRESsure:MODule1:UNIT?", 3*time.Second)
+	if err != nil {
+		log.Printf("[811A] ReadUnit error: %v", err)
+		return "", fmt.Errorf("read unit: %w", err)
+	}
+	unit := NormalizePressureUnit(parseConSTGeneralUnit(resp))
+	log.Printf("[811A] ReadUnit raw=%q parsed=%q", resp, unit)
+	return unit, nil
 }
 
 func (d *ConST811ADriver) SetUnit(ctx context.Context, unit string) error {
@@ -71,6 +79,7 @@ func (d *ConST811ADriver) SetUnit(ctx context.Context, unit string) error {
 		return fmt.Errorf("unsupported pressure unit: %s", unit)
 	}
 	cmd := fmt.Sprintf("PRESsure:MODule1:UNIT %s", unitCode)
+	log.Printf("[811A] SetUnit %q → cmd=%q", unit, cmd)
 	_, err := d.base.sendSCPICommand(ctx, cmd, 3*time.Second)
 	if err != nil {
 		return fmt.Errorf("set unit: %w", err)

@@ -36,24 +36,6 @@ func (d *constBaseDriver) constDisconnect(ctx context.Context) error {
 	return d.base.Disconnect(ctx)
 }
 
-// constReadUnit 公共读取单位逻辑：发送 SCPI 查询命令，解析逗号分隔的响应，校验单位。
-func (d *constBaseDriver) constReadUnit(ctx context.Context, pressureQueryCmd string) (string, error) {
-	for attempt := 0; attempt < 3; attempt++ {
-		resp, err := d.base.sendSCPICommand(ctx, pressureQueryCmd, 3*time.Second)
-		if err != nil {
-			return "", fmt.Errorf("read unit: %w", err)
-		}
-		parts := strings.SplitN(resp, ",", 2)
-		if len(parts) >= 2 {
-			unit := strings.TrimSpace(parts[1])
-			if isValidPressureUnit(unit) {
-				return unit, nil
-			}
-		}
-	}
-	return "", nil
-}
-
 // constReadStability 公共读取稳定状态逻辑。
 func (d *constBaseDriver) constReadStability(ctx context.Context, stableCmd string) (bool, error) {
 	resp, err := d.base.sendSCPICommand(ctx, stableCmd, 3*time.Second)

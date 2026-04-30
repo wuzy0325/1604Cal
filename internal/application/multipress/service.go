@@ -3,9 +3,11 @@ package multipress
 import (
 	"context"
 	"fmt"
+	"log"
 	"sync"
 	"time"
 
+	"cal1604/internal/application/session"
 	"cal1604/internal/device"
 	"cal1604/internal/infrastructure/driver"
 )
@@ -111,11 +113,14 @@ func (s *Service) RegisterDevice(ctx context.Context, deviceID string) error {
 		return fmt.Errorf("connect device %s: %w", deviceID, err)
 	}
 
-	// 读取当前单位
-	unit := dev.Unit
+	// 读取当前单位并规范化大小写
+	unit := driver.NormalizePressureUnit(dev.Unit)
+	readUnit := ""
 	if u, err := pDrv.ReadUnit(ctx); err == nil && u != "" {
 		unit = u
+		readUnit = u
 	}
+	log.Printf("[multipress.RegisterDevice] %s model=%q configUnit=%q readUnit=%q final=%q", deviceID, dev.Model, dev.Unit, readUnit, unit)
 
 	entry := &deviceEntry{
 		driver: pDrv,
@@ -308,14 +313,17 @@ func (s *Service) ReadUnit(ctx context.Context, deviceID string) (string, error)
 
 	unit, err := entry.driver.ReadUnit(ctx)
 	if err != nil {
+		log.Printf("[multipress.ReadUnit] %s error: %v", deviceID, err)
 		return "", fmt.Errorf("read unit from %s: %w", deviceID, err)
 	}
 
+	unit = driver.NormalizePressureUnit(unit)
 	entry.state.Unit = unit
+	log.Printf("[multipress.ReadUnit] %s → %q", deviceID, unit)
 	return unit, nil
 }
 
-// SetUnit 设置指定设备的压力单位。
+// SetUnit 设置指定设备的压力单位，成功后立即重读压力值以显示新单位下的正确数值。
 func (s *Service) SetUnit(ctx context.Context, deviceID string, unit string) error {
 	entry, err := s.getEntry(deviceID)
 	if err != nil {
@@ -329,7 +337,16 @@ func (s *Service) SetUnit(ctx context.Context, deviceID string, unit string) err
 		return fmt.Errorf("set unit on %s: %w", deviceID, err)
 	}
 
-	entry.state.Unit = unit
+	entry.state.Unit = driver.NormalizePressureUnit(unit)
+
+	// 切换单位后立即重读压力，确保显示值与新单位匹配
+	if pressure, err := entry.driver.ReadCurrentPressure(ctx); err == nil {
+		entry.state.CurrentPressure = pressure
+		log.Printf("[multipress.SetUnit] %s: unit=%q re-read pressure=%f", deviceID, entry.state.Unit, pressure)
+	} else {
+		log.Printf("[multipress.SetUnit] %s: unit=%q re-read pressure error: %v", deviceID, entry.state.Unit, err)
+	}
+
 	return nil
 }
 
@@ -344,6 +361,9 @@ func (s *Service) ListDeviceStates() []DevicePressureState {
 		snapshot := entry.state
 		entry.mu.Unlock()
 		result = append(result, snapshot)
+	}
+	for _, st := range result {
+		log.Printf("[multipress.ListDeviceStates] device=%s unit=%q pressure=%f", st.DeviceID, st.Unit, st.CurrentPressure)
 	}
 	return result
 }
@@ -381,7 +401,7 @@ func (s *Service) getEntry(deviceID string) (*deviceEntry, error) {
 	s.mu.Unlock()
 
 	if !ok {
-		return nil, fmt.Errorf("device %s not registered", deviceID)
+		return nil, session.ErrDeviceNotFound
 	}
 	return entry, nil
 }

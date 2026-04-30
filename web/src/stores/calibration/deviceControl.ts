@@ -16,7 +16,8 @@ import {
 } from "@/api/session"
 import {
   multipressRegister,
-  multipressUnregister
+  multipressUnregister,
+  multipressListDevices
 } from "@/api/multipress"
 import { useDeviceInventoryStore } from '@/stores/device/inventoryStore'
 
@@ -90,6 +91,18 @@ export const useDeviceControlStore = defineStore('deviceControl', () => {
       await multipressRegister(deviceId)
       // multipress 服务不更新 DeviceManager 状态，需手动同步前端 store
       deviceStore.updateDeviceStatus(deviceId, 'connected')
+      // 从 multipress 服务拉取实际读取到的单位与压力，覆盖配置中的默认值
+      try {
+        const states = await multipressListDevices()
+        const state = states.find(s => s.deviceId === deviceId)
+        const dev = deviceStore.pressureDevices.find(d => d.id === deviceId)
+        if (state && dev) {
+          if (state.unit) dev.unit = state.unit
+          dev.currentPressure = state.currentPressure
+        }
+      } catch {
+        // 静默失败，使用设备配置中的单位
+      }
     } catch (error) {
       console.error('连接打压设备失败:', error)
       ElMessage.error('连接打压设备失败')

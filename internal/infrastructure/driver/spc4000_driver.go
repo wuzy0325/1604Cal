@@ -3,6 +3,7 @@ package driver
 import (
 	"context"
 	"fmt"
+	"log"
 	"math"
 	"time"
 )
@@ -63,9 +64,12 @@ func (d *SPC4000Driver) ReadCurrentPressure(ctx context.Context) (float64, error
 func (d *SPC4000Driver) ReadUnit(ctx context.Context) (string, error) {
 	resp, err := d.base.sendSCPICommand(ctx, "Units?", 3*time.Second)
 	if err != nil {
+		log.Printf("[SPC4000] ReadUnit error: %v", err)
 		return "", fmt.Errorf("read unit: %w", err)
 	}
-	return parseSPC4000UnitCode(resp), nil
+	unit := NormalizePressureUnit(parseSPC4000UnitCode(resp))
+	log.Printf("[SPC4000] ReadUnit raw=%q parsed=%q", resp, unit)
+	return unit, nil
 }
 
 func (d *SPC4000Driver) SetUnit(ctx context.Context, unit string) error {
@@ -74,6 +78,7 @@ func (d *SPC4000Driver) SetUnit(ctx context.Context, unit string) error {
 		return fmt.Errorf("unsupported pressure unit: %s", unit)
 	}
 	cmd := fmt.Sprintf("Units %s", code)
+	log.Printf("[SPC4000] SetUnit %q → cmd=%q", unit, cmd)
 	_, err := d.base.sendSCPICommand(ctx, cmd, 3*time.Second)
 	if err != nil {
 		return fmt.Errorf("set unit: %w", err)
