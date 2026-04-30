@@ -39,6 +39,7 @@ import {
 import { createEventStream } from '@/api/client'
 import type { StreamEventPayload } from '@/types/api'
 import type { MeasurementState, CollectedRow, StabilityUpdate, AlarmData } from './types'
+import { useMeasurementDeviceStore } from '@/stores/measurement/deviceStore'
 
 export type { MeasurementState, CollectedRow, StabilityUpdate }
 
@@ -166,8 +167,18 @@ export const useMeasurementStore = defineStore('measurement', () => {
   }
 
   const refreshMeasureUnit = async () => {
-    try { measureUnit.value = await apiReadMeasureUnit() }
-    catch { /* 静默 */ }
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      try {
+        measureUnit.value = await apiReadMeasureUnit()
+        console.log(`[1604单位读取] 从硬件读取到单位: ${measureUnit.value}`)
+        return
+      } catch {
+        console.warn(`[1604单位读取] 第${attempt}次读取失败`)
+        if (attempt < 3) {
+          await new Promise(r => setTimeout(r, 500))
+        }
+      }
+    }
   }
 
   const setMeasureUnit = async (unit: string) => {
@@ -268,6 +279,16 @@ export const useMeasurementStore = defineStore('measurement', () => {
           const pointIdx = points.value.findIndex(p => p.index === collected.pointIndex)
           if (pointIdx >= 0) {
             points.value[pointIdx] = { ...points.value[pointIdx], collectedData: collected.data, status: 'completed' }
+          }
+          break
+        }
+        case 'multipress.pressure.update': {
+          const data = payload.data as Record<string, unknown>
+          const deviceId = data?.deviceId as string | undefined
+          const pressure = data?.currentPressure as number | undefined
+          if (deviceId && typeof pressure === 'number') {
+            const deviceStore = useMeasurementDeviceStore()
+            deviceStore.updateDevicePressure(deviceId, pressure)
           }
           break
         }

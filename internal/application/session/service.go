@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 	"sync"
 
 	"cal1604/internal/device"
@@ -230,15 +231,33 @@ func (s *Service) CalibrateFullScale(ctx context.Context, channels []int, fullSc
 }
 
 // ReadMeasureUnit 读取计量设备压力单位。
+// 读取成功后自动将硬件实际单位同步回设备配置存储，确保 CheckUnitConsistency 比较的是硬件真实单位。
 func (s *Service) ReadMeasureUnit(ctx context.Context) (string, error) {
 	s.mu.Lock()
 	drv := s.measureDriver
+	devID := s.measureDevID
 	s.mu.Unlock()
 
 	if drv == nil {
 		return "", ErrMeasureDeviceNotSet
 	}
-	return drv.ReadUnit(ctx)
+	unit, err := drv.ReadUnit(ctx)
+	if err != nil {
+		log.Printf("[1604单位读取] 从硬件读取失败: %v", err)
+		return "", err
+	}
+	log.Printf("[1604单位读取] 从硬件读取到单位: %s", unit)
+
+	// 同步硬件单位到设备配置存储
+	if devID != "" {
+		if dev, ok := s.deviceManager.Get(devID); ok && dev.Unit != unit {
+			dev.Unit = unit
+			s.deviceManager.Upsert(dev)
+			log.Printf("[1604单位读取] 设备 %s 单位已同步: %q → %q", devID, dev.Unit, unit)
+		}
+	}
+
+	return unit, nil
 }
 
 // SetMeasureUnit 设置计量设备压力单位。

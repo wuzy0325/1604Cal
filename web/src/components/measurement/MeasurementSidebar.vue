@@ -29,6 +29,7 @@
         <MeasurementDevicePanel
           @connect="handleMeasureDeviceConnect"
           @disconnect="handleMeasureDeviceDisconnect"
+          @unit-change="handleMeasureUnitChange"
         />
       </div>
       <div class="sidebar-section">
@@ -40,27 +41,9 @@
           @connect="handlePressDeviceConnect"
           @disconnect="handlePressDeviceDisconnect"
           @set-pressure="handleSetPressure"
+          @exhaust="handleExhaust"
+          @unit-change="handlePressUnitChange"
         />
-      </div>
-      <div
-        v-if="showUnitCheck"
-        class="sidebar-section"
-      >
-        <h3 class="sidebar-title">
-          <el-icon><ScaleToOriginal /></el-icon>
-          单位检查
-        </h3>
-        <div
-          class="unit-check-result"
-          :class="unitConsistent ? 'unit-ok' : 'unit-warn'"
-        >
-          <el-icon v-if="unitConsistent"><CircleCheckFilled /></el-icon>
-          <el-icon v-else><Warning /></el-icon>
-          <span>{{ unitConsistent ? '设备单位一致' : '设备单位不一致' }}</span>
-        </div>
-        <div v-if="!unitConsistent && unitConflicts.length > 0" class="unit-conflicts">
-          <div v-for="(msg, idx) in unitConflicts" :key="idx" class="conflict-item">{{ msg }}</div>
-        </div>
       </div>
       <div class="sidebar-section">
         <h3 class="sidebar-title">
@@ -84,11 +67,11 @@
 import { ref, computed, onMounted } from 'vue'
 import {
   ArrowLeft, ArrowRight, CircleCheckFilled, CircleCloseFilled,
-  Warning, Monitor, FirstAidKit, ScaleToOriginal
+  Monitor, FirstAidKit
 } from '@element-plus/icons-vue'
 import MeasurementDevicePanel from '@/components/measurement/MeasurementDevicePanel.vue'
 import PressDevicePanel from '@/components/common/PressDevicePanel.vue'
-import { fetchUnitConsistency } from "@/api/device"
+import { fetchUnitConsistency, fetchDevices, upsertDevice } from "@/api/device"
 import { useMeasurementStore } from '@/stores/measurement'
 import { useMeasurementDeviceStore } from '@/stores/measurement/deviceStore'
 import { useDeviceStore } from '@/stores/deviceStore'
@@ -151,7 +134,6 @@ const handleMeasureDeviceConnect = async (deviceId: string) => {
   const connectedPressure = deviceStore.pressureDevices.find(d => d.status === 'connected')
   if (connectedPressure) {
     await measurementStore.bindDevices(deviceId, connectedPressure.id)
-    await checkUnitConsistency()
   } else {
     unitConsistent.value = true
     unitConflicts.value = []
@@ -164,6 +146,23 @@ const handleMeasureDeviceConnect = async (deviceId: string) => {
     measurementStore.refreshValveStatus(),
     measurementStore.refreshMeasureUnit()
   ])
+
+  if (measurementStore.measureUnit) {
+    try {
+      const devices = await fetchDevices()
+      const dto = devices.find(d => d.id === deviceId)
+      if (dto) {
+        await upsertDevice({ ...dto, unit: measurementStore.measureUnit })
+      }
+    } catch (syncErr) {
+      console.warn('同步计量设备单位到配置失败:', syncErr)
+    }
+  }
+
+  // 单位同步到后端后再检查一致性，确保 deviceManager 中两个设备的单位都已是最新值
+  if (connectedPressure) {
+    await checkUnitConsistency()
+  }
 }
 
 const handleMeasureDeviceDisconnect = async (deviceId: string) => {
@@ -213,8 +212,20 @@ const handlePressDeviceDisconnect = async (deviceId: string) => {
   emitUnitCheck()
 }
 
+const handlePressUnitChange = async () => {
+  await checkUnitConsistency()
+}
+
+const handleMeasureUnitChange = async () => {
+  await checkUnitConsistency()
+}
+
 const handleSetPressure = async (_deviceId: string, pressure: number) => {
   console.debug('设定压力:', pressure)
+}
+
+const handleExhaust = async (_deviceId: string) => {
+  console.debug('排空:', _deviceId)
 }
 
 const prerequisites = computed(() => [
@@ -337,20 +348,6 @@ $amber: #f59e0b;
   }
 
   .el-icon { color: $mint; font-size: 14px; }
-}
-
-/* 单位检查 */
-.unit-check-result {
-  display: flex; align-items: center; gap: 8px; font-size: 13px;
-  padding: 10px 12px; border-radius: 8px; font-weight: 500;
-  font-family: $font-sans;
-  &.unit-ok { background: rgba(34, 197, 94, 0.1); border: 1px solid rgba(34, 197, 94, 0.2); color: #16a34a; }
-  &.unit-warn { background: rgba(245, 158, 11, 0.1); border: 1px solid rgba(245, 158, 11, 0.2); color: #d97706; }
-}
-.unit-conflicts {
-  display: flex; flex-direction: column; gap: 4px;
-  margin-top: 4px;
-  .conflict-item { color: $red; font-size: 11px; padding: 2px 0; font-family: $font-sans; }
 }
 
 /* 启动条件 */
