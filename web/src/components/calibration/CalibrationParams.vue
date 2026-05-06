@@ -1,98 +1,131 @@
 <template>
   <section class="params-card">
-    <div class="params-row">
-      <div class="control-group">
-        <label>最小:</label>
-        <input
-          v-model.number="calibrationStore.calibrationParams.minValue"
-          type="number"
-          step="0.1"
-          class="compact-input"
-        />
+    <div class="params-grid">
+      <!-- 压力范围 -->
+      <div class="param-group">
+        <span class="group-label">压力范围</span>
+        <div class="group-body">
+          <label class="input-label">最小</label>
+          <input
+            v-model.number="calibrationStore.calibrationParams.minValue"
+            type="number"
+            step="0.1"
+            class="compact-input"
+          />
+          <label class="input-label">最大</label>
+          <input
+            v-model.number="calibrationStore.calibrationParams.maxValue"
+            type="number"
+            step="0.1"
+            class="compact-input"
+          />
+        </div>
       </div>
-      <div class="control-group">
-        <label>最大:</label>
-        <input
-          v-model.number="calibrationStore.calibrationParams.maxValue"
-          type="number"
-          step="0.1"
-          class="compact-input"
-        />
+
+      <!-- 采集配置 -->
+      <div class="param-group">
+        <span class="group-label">采集配置</span>
+        <div class="group-body">
+          <label class="input-label">点数</label>
+          <input v-model.number="calibrationStore.calibrationParams.points" type="number" min="2" max="6" class="compact-input narrow" />
+          <label class="input-label">精度</label>
+          <input v-model.number="calibrationStore.calibrationParams.precision" type="number" min="0" max="4" class="compact-input narrow" />
+          <label class="input-label">平均</label>
+          <input v-model.number="calibrationStore.calibrationParams.averageCount" type="number" min="1" max="100" class="compact-input narrow" />
+          <div class="label-input-group">
+            <label class="input-label">等级</label>
+            <select v-model="calibrationStore.calibrationParams.precisionLevel" class="compact-select">
+              <option value="0.01">0.01%</option>
+              <option value="0.05">0.05%</option>
+              <option value="0.1">0.1%</option>
+              <option value="0.2">0.2%</option>
+            </select>
+          </div>
+        </div>
       </div>
-      <div class="control-group">
-        <label>点数:</label>
-        <input
-          v-model.number="calibrationStore.calibrationParams.points"
-          type="number"
-          min="2"
-          max="6"
-          class="compact-input narrow"
-        />
+
+      <!-- 稳定设置 -->
+      <div class="param-group">
+        <span class="group-label">稳定设置</span>
+        <div class="group-body">
+          <label class="input-label">时间</label>
+          <select v-model.number="calibrationStore.calibrationParams.stableTime" class="compact-select">
+            <option :value="1">1s</option>
+            <option :value="3">3s</option>
+            <option :value="5">5s</option>
+            <option :value="10">10s</option>
+          </select>
+        </div>
       </div>
-      <div class="control-group">
-        <label>精度:</label>
-        <input
-          v-model.number="calibrationStore.calibrationParams.precision"
-          type="number"
-          min="0"
-          max="4"
-          class="compact-input narrow"
-        />
+
+      <!-- 打压模式 / 控制模式 / 采集通道 并列 -->
+      <div class="param-group">
+        <span class="group-label">打压模式</span>
+        <div class="group-body">
+          <div class="segment-control">
+            <button
+              type="button"
+              class="segment-btn"
+              :class="{ active: calibrationStore.calibrationParams.pressureMode === 'single' }"
+              @click="calibrationStore.calibrationParams.pressureMode = 'single'"
+            >单程</button>
+            <button
+              type="button"
+              class="segment-btn"
+              :class="{ active: calibrationStore.calibrationParams.pressureMode === 'roundTrip' }"
+              @click="calibrationStore.calibrationParams.pressureMode = 'roundTrip'"
+            >回程</button>
+          </div>
+        </div>
       </div>
-      <div class="control-group">
-        <label>平均:</label>
-        <input
-          v-model.number="calibrationStore.calibrationParams.averageCount"
-          type="number"
-          min="1"
-          max="100"
-          class="compact-input narrow"
-        />
+
+      <div class="param-group">
+        <span class="group-label">控制模式</span>
+        <div class="group-body">
+          <div class="segment-control">
+            <button
+              type="button"
+              class="segment-btn"
+              :class="{ active: calibrationStore.controlMode === 'auto' }"
+              @click="calibrationStore.controlMode = 'auto'"
+            >自动</button>
+            <button
+              type="button"
+              class="segment-btn"
+              :class="{ active: calibrationStore.controlMode === 'manual' }"
+              @click="calibrationStore.controlMode = 'manual'"
+            >手动</button>
+          </div>
+        </div>
       </div>
-      <div class="control-group">
-        <label>稳定:</label>
-        <select v-model.number="calibrationStore.calibrationParams.stableTime" class="compact-select">
-          <option :value="1">1s</option>
-          <option :value="3">3s</option>
-          <option :value="5">5s</option>
-          <option :value="10">10s</option>
-        </select>
-      </div>
-      <div class="control-group">
-        <label>精度等级</label>
-        <select v-model="calibrationStore.calibrationParams.precisionLevel" class="compact-select wide">
-          <option value="0.01">0.01%</option>
-          <option value="0.05">0.05%</option>
-          <option value="0.1">0.1%</option>
-          <option value="0.2">0.2%</option>
-        </select>
-      </div>
-      <div class="control-group">
-        <label>打压</label>
-        <div class="segment-control">
-          <button
-            type="button"
-            class="segment-btn"
-            :class="{ active: calibrationStore.calibrationParams.pressureMode === 'single' }"
-            @click="calibrationStore.calibrationParams.pressureMode = 'single'"
-          >单程</button>
-          <button
-            type="button"
-            class="segment-btn"
-            :class="{ active: calibrationStore.calibrationParams.pressureMode === 'roundTrip' }"
-            @click="calibrationStore.calibrationParams.pressureMode = 'roundTrip'"
-          >回程</button>
+
+      <div class="param-group">
+        <span class="group-label">采集通道</span>
+        <div class="group-body">
+          <button class="channel-select-btn" @click="channelDialogVisible = true">
+            <el-icon><Grid /></el-icon>
+            <span>{{ calibrationStore.selectedChannels.length }}/16</span>
+          </button>
         </div>
       </div>
     </div>
+
+    <ChannelSelectDialog
+      v-model:visible="channelDialogVisible"
+      :selected-channels="calibrationStore.selectedChannels"
+      @confirm="calibrationStore.setSelectedChannels"
+    />
   </section>
 </template>
 
 <script setup lang="ts">
-import { watch } from 'vue'
+import { ref, watch } from 'vue'
+import { Grid } from '@element-plus/icons-vue'
 import { useCalibrationStore } from '@/stores/calibration'
+import ChannelSelectDialog from '@/components/common/ChannelSelectDialog.vue'
 
 const calibrationStore = useCalibrationStore()
+const channelDialogVisible = ref(false)
 
 let debounceTimer: ReturnType<typeof setTimeout> | null = null
 
@@ -113,62 +146,77 @@ watch(
 $font-sans: 'Inter', 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
 $font-mono: 'JetBrains Mono', 'Fira Code', 'SF Mono', Consolas, monospace;
 $mint: #10b981;
-$mint-light: #34d399;
 $mint-dark: #059669;
-$slate-50: #f9fafb;
-$slate-100: #f3f4f6;
 $slate-200: #e5e7eb;
 $slate-300: #d1d5db;
 $slate-400: #9ca3af;
 $slate-500: #6b7280;
-$slate-600: #4b5563;
 $slate-700: #374151;
 $slate-800: #1f2937;
+$blue: #3b82f6;
 
 .params-card {
-  background: #ffffff;
-  border-radius: 12px;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
-  border: 1px solid $slate-200;
-  padding: 12px;
-  display: flex;
-  flex-direction: column;
-  flex-shrink: 0;
+  padding: 12px 0;
   font-family: $font-sans;
-  transition: box-shadow 0.2s ease, border-color 0.2s ease;
-
-  &:hover {
-    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.07), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
-  }
 }
 
-.params-row {
+.params-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 20px 32px;
+}
+
+/* ── 参数分组 ── */
+.param-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.group-label {
+  font-size: 10px;
+  font-weight: 600;
+  color: $slate-400;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-family: $font-sans;
+  padding-bottom: 2px;
+  border-bottom: 1px solid $slate-200;
+}
+
+.group-body {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 8px 12px;
+  gap: 4px 8px;
 }
 
-.control-group {
-  display: flex;
-  align-items: center;
-  gap: 6px;
+.input-label {
+  font-size: 12px;
+  color: $slate-500;
+  font-weight: 500;
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+  font-family: $font-sans;
 
-  label {
-    font-size: 12px;
-    color: $slate-500;
-    font-weight: 500;
-    letter-spacing: 0.05em;
-    white-space: nowrap;
-    font-family: $font-sans;
+  // 第一个 label 不需要左边距
+  &:first-child {
+    margin-left: 0;
   }
 }
 
+.label-input-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* ── 输入控件 ── */
 .compact-input {
-  height: 32px;
+  height: 30px;
   font-size: 13px;
   border: 1px solid $slate-300;
-  border-radius: 8px;
+  border-radius: 6px;
   padding: 0 8px;
   width: 56px;
   text-align: center;
@@ -184,13 +232,7 @@ $slate-800: #1f2937;
     box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.15);
   }
 
-  &.narrow {
-    width: 40px;
-  }
-
-  &.wide {
-    width: 80px;
-  }
+  &.narrow { width: 40px; }
 }
 
 .compact-input::-webkit-inner-spin-button,
@@ -198,62 +240,80 @@ $slate-800: #1f2937;
   -webkit-appearance: none;
   margin: 0;
 }
-
-.compact-input {
-  -moz-appearance: textfield;
-}
+.compact-input { -moz-appearance: textfield; }
 
 .compact-select {
-  height: 32px;
-  font-size: 13px;
+  height: 30px;
+  font-size: 12px;
   border: 1px solid $slate-300;
-  border-radius: 8px;
-  padding: 0 24px 0 10px;
+  border-radius: 6px;
+  padding: 0 22px 0 8px;
   color: $slate-700;
   background: #fff;
   outline: none;
   cursor: pointer;
-  min-width: 52px;
+  min-width: 56px;
   appearance: none;
   font-family: $font-sans;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%239ca3af' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
-  background-position: right 8px center;
+  background-position: right 6px center;
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
 
   &:focus {
     border-color: $mint;
     box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.15);
   }
-
-  &.wide {
-    min-width: 80px;
-  }
 }
 
+/* ── 分段控件 ── */
+
+.channel-select-btn {
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid $slate-300;
+  border-radius: 6px;
+  background: #fff;
+  color: $blue;
+  font-size: 12px;
+  font-family: $font-mono;
+  font-weight: 500;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  transition: all 0.15s ease;
+
+  &:hover {
+    background: rgba(59, 130, 246, 0.06);
+    border-color: $blue;
+  }
+
+  .el-icon {
+    font-size: 12px;
+    color: $slate-400;
+  }
+}
 .segment-control {
   display: flex;
   padding: 2px;
-  background: $slate-100;
-  border-radius: 8px;
-  border: 1px solid $slate-200;
+  background: $slate-200;
+  border-radius: 6px;
 }
 
 .segment-btn {
-  padding: 4px 14px;
+  padding: 3px 12px;
   font-size: 12px;
   font-weight: 500;
   border: none;
   background: transparent;
   color: $slate-500;
   cursor: pointer;
-  border-radius: 6px;
+  border-radius: 4px;
   transition: all 0.15s ease;
   font-family: $font-sans;
 
-  &:hover {
-    color: $slate-700;
-  }
+  &:hover { color: $slate-700; }
 
   &.active {
     background: linear-gradient(135deg, $mint, $mint-dark);
@@ -262,9 +322,11 @@ $slate-800: #1f2937;
   }
 }
 
+/* ── 响应式 ── */
 @media (max-width: 900px) {
-  .params-row {
-    align-items: flex-start;
+  .params-grid {
+    flex-direction: column;
+    gap: 14px;
   }
 }
 </style>

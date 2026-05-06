@@ -1,35 +1,42 @@
 <template>
   <PageLayout>
-    <header class="page-header">
-      <div class="header-left">
+    <!-- ═══ 仪表盘头部 ═══ -->
+    <header class="instrument-header">
+      <div class="header-nav">
         <button class="back-btn" @click="goBack">
           <el-icon><ArrowLeft /></el-icon>
         </button>
-        <div class="header-title">
-          <h1>计量工作台</h1>
-          <span class="state-badge" :class="stateClass">{{ stateLabel }}</span>
-        </div>
       </div>
-      <div class="header-right">
-        <div class="status-info">
-          <span class="info-label">稳定:</span>
-          <span
-            class="info-value"
-            :class="measurementStore.isStable ? 'stable' : 'unstable'"
-          >
-            {{ measurementStore.isStable ? '是' : '否' }}
+
+      <div class="header-identity">
+        <h1 class="header-title">计量工作台</h1>
+        <span class="state-chip" :class="stateClass">{{ stateLabel }}</span>
+      </div>
+
+      <div class="header-telemetry">
+        <div class="telem-cell">
+          <span class="telem-label">当前压力</span>
+          <span class="telem-value mono">{{ displayPressure }}</span>
+          <span class="telem-unit">{{ measurementStore.measureUnit || 'MPa' }}</span>
+        </div>
+        <span class="telem-divider" />
+        <div class="telem-cell">
+          <span class="telem-label">稳定性</span>
+          <span class="telem-indicator" :class="measurementStore.isStable ? 'on' : 'off'">
+            <span class="telem-dot" />
+            {{ measurementStore.isStable ? '已稳定' : '稳定中' }}
           </span>
         </div>
-        <div class="status-info">
-          <span class="info-label">实时时间:</span>
-          <span class="time-badge">
-            {{ (measurementStore.stabilityState.stableDurationMs / 1000).toFixed(1) }}<small>s</small>
-          </span>
+        <span class="telem-divider" />
+        <div class="telem-cell">
+          <span class="telem-label">稳定计时</span>
+          <span class="telem-value mono">{{ stableSeconds }}<small>s</small></span>
         </div>
       </div>
     </header>
 
-    <div class="workbench-content">
+    <!-- ═══ 工作台主体 ═══ -->
+    <div class="workbench">
       <MeasurementSidebar
         ref="sidebarRef"
         :collapsed="sidebarCollapsed"
@@ -37,22 +44,29 @@
       />
 
       <main class="workbench-main">
-        <MeasurementControl
-          :can-start="canStart"
-          :is-stable="measurementStore.isStable"
-          :stable-seconds="measurementStore.stabilityState.stableDurationMs / 1000"
-          @start="handleStart"
-          @pause="handlePause"
-          @resume="handleResume"
-          @stop="handleStop"
-          @reset="handleReset"
-          @export="exportDialogVisible = true"
-          @select-channel="channelDialogVisible = true"
-          @manual-pressurize="handleManualPressurize"
-          @manual-collect="handleManualCollect"
-        />
-        <MeasurementParamsPanel />
-        <MeasurementDataView />
+        <div class="scroll-container">
+          <MeasurementControl
+            :can-start="canStart"
+            :is-stable="measurementStore.isStable"
+            :stable-seconds="measurementStore.stabilityState.stableDurationMs / 1000"
+            @start="handleStart"
+            @pause="handlePause"
+            @resume="handleResume"
+            @stop="handleStop"
+            @reset="handleReset"
+            @export="exportDialogVisible = true"
+            @select-channel="channelDialogVisible = true"
+            @manual-pressurize="handleManualPressurize"
+            @manual-collect="handleManualCollect"
+          />
+          <div class="section-gap" />
+          <div class="card-block">
+            <MeasurementParamsPanel />
+          </div>
+          <div class="card-block">
+            <MeasurementDataView />
+          </div>
+        </div>
       </main>
     </div>
 
@@ -76,12 +90,13 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { ArrowLeft } from '@element-plus/icons-vue'
 import { useMeasurementStore } from '@/stores/measurement'
 import { useMeasurementDeviceStore } from '@/stores/measurement/deviceStore'
+import { useMeasurementSync } from '@/composables/useMeasurementSync'
 import { saveMeasurementAlarmConfig } from '@/api/measurement'
 import PageLayout from '@/components/common/PageLayout.vue'
 import MeasurementSidebar from '@/components/measurement/MeasurementSidebar.vue'
@@ -114,17 +129,12 @@ const reportTemplateName = computed(() => {
 })
 
 onMounted(async () => {
-  await Promise.all([
-    deviceStore.loadDevices(),
-    measurementStore.loadAlarmConfig()
-  ])
-  measurementStore.setupSSE()
+  await deviceStore.loadDevices()
 })
 
-onUnmounted(() => {
-  measurementStore.teardownSSE()
-})
+useMeasurementSync()
 
+/* ── 状态 ── */
 const stateLabel = computed(() => {
   const m: Record<string, string> = {
     idle: '空闲', pressuring: '打压中', stabilizing: '稳定中',
@@ -135,16 +145,27 @@ const stateLabel = computed(() => {
 
 const stateClass = computed(() => {
   const m: Record<string, string> = {
-    idle: 'state-idle', preparing: 'state-preparing', measuring: 'state-measuring',
-    paused: 'state-paused', completed: 'state-completed', error: 'state-error'
+    idle: 'chip-idle', preparing: 'chip-preparing', running: 'chip-running',
+    paused: 'chip-paused', completed: 'chip-completed', error: 'chip-error'
   }
   return m[measurementStore.state] || ''
 })
 
+/* ── 遥测数据 ── */
+const displayPressure = computed(() => {
+  const v = measurementStore.currentPressure
+  if (v === null || v === undefined) return '—'
+  return Number(v).toFixed(3)
+})
+
+const stableSeconds = computed(() => {
+  const ms = measurementStore.stabilityState.stableDurationMs
+  return (ms / 1000).toFixed(1)
+})
+
 function goBack() { router.push('/') }
 
-// ── 采集控制 ──
-
+/* ── 采集控制 ── */
 async function handleStart() {
   if (!canStart.value) { ElMessage.warning('请先连接设备并生成压力表'); return }
   await measurementStore.start(measurementStore.channels)
@@ -170,15 +191,13 @@ async function handleManualCollect() {
   measurementStore.completePoint()
 }
 
-// ── 报警通道选择 ──
-
+/* ── 报警通道 ── */
 function onChannelConfirm(channels: number[]) {
   measurementStore.alarmConfig.enabledChannels = channels
   channelDialogVisible.value = false
 }
 
-// ── 报警配置自动保存（250ms 防抖） ──
-
+/* ── 报警配置自动保存 ── */
 let alarmSaveTimer: ReturnType<typeof setTimeout> | null = null
 watch(
   () => [
@@ -196,8 +215,7 @@ watch(
   { deep: true }
 )
 
-// ── 导出报告 ──
-
+/* ── 导出 ── */
 async function handleSelectPath() {
   ElMessage.info('请选择导出路径（当前尚未对接文件对话框 API）')
 }
@@ -213,7 +231,7 @@ async function handleExport(path: string) {
     a.click()
     ElMessage.success('报告导出成功')
     exportDialogVisible.value = false
-  } catch (error) {
+  } catch {
     ElMessage.error('报告导出失败')
   } finally {
     isExporting.value = false
@@ -222,144 +240,184 @@ async function handleExport(path: string) {
 </script>
 
 <style scoped lang="scss">
-.page-header {
+$font-sans: 'Inter', 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+$font-mono: 'JetBrains Mono', 'Fira Code', 'SF Mono', Consolas, monospace;
+$mint: #10b981;
+$mint-light: #34d399;
+$slate-50: #f9fafb;
+$slate-100: #f3f4f6;
+$slate-200: #e5e7eb;
+$slate-300: #d1d5db;
+$slate-400: #9ca3af;
+$slate-500: #6b7280;
+$slate-600: #4b5563;
+$slate-700: #374151;
+$slate-800: #1f2937;
+$slate-900: #111827;
+$green: #22c55e;
+$red: #ef4444;
+$amber: #f59e0b;
+
+/* ═══ 仪表盘头部 ═══ */
+.instrument-header {
   display: flex;
-  justify-content: space-between;
   align-items: center;
+  gap: 20px;
   flex-shrink: 0;
-  height: 48px;
+  height: 56px;
   padding: 0 24px;
-  background: #ffffff;
-  border-bottom: 1px solid #e5e7eb;
+  background: linear-gradient(135deg, $slate-800 0%, $slate-900 100%);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  font-family: $font-sans;
 }
 
-.header-left {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
+.header-nav { display: flex; align-items: center; }
 
 .back-btn {
-  width: 28px;
-  height: 28px;
-  background: transparent;
-  border: 1px solid #e5e7eb;
+  width: 30px; height: 30px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 8px;
-  color: #9ca3af;
+  color: rgba(255, 255, 255, 0.5);
   cursor: pointer;
-  transition: all 0.15s ease;
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 16px;
+  transition: all 0.2s ease;
 
   &:hover {
-    background: #f9fafb;
-    color: #4b5563;
-    border-color: #d1d5db;
+    background: rgba(255, 255, 255, 0.12);
+    color: #fff;
+    border-color: rgba(255, 255, 255, 0.25);
   }
+}
+
+.header-identity {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
 }
 
 .header-title {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-
-  h1 {
-    font-size: 18px;
-    font-weight: 700;
-    color: #1f2937;
-    margin: 0;
-    letter-spacing: -0.01em;
-    font-family: 'Inter', 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
-  }
-}
-
-/* 状态徽章：按 Tags 规范 — 15% 背景透明度，30% 边框透明度 */
-.state-badge {
-  padding: 3px 10px;
-  border-radius: 4px;
-  font-size: 12px;
-  font-weight: 500;
-  line-height: 1.5;
+  font-size: 16px;
+  font-weight: 700;
+  color: #fff;
+  margin: 0;
   letter-spacing: 0.02em;
+  font-family: $font-sans;
 }
 
-.state-idle {
-  background: rgba(107, 114, 128, 0.12);
-  border: 1px solid rgba(107, 114, 128, 0.25);
-  color: #6b7280;
-}
-.state-preparing, .state-measuring {
-  background: rgba(59, 130, 246, 0.12);
-  border: 1px solid rgba(59, 130, 246, 0.25);
-  color: #2563eb;
-}
-.state-paused {
-  background: rgba(245, 158, 11, 0.12);
-  border: 1px solid rgba(245, 158, 11, 0.25);
-  color: #d97706;
-}
-.state-completed {
-  background: rgba(16, 185, 129, 0.12);
-  border: 1px solid rgba(16, 185, 129, 0.25);
-  color: #059669;
-}
-.state-error {
-  background: rgba(239, 68, 68, 0.12);
-  border: 1px solid rgba(239, 68, 68, 0.25);
-  color: #dc2626;
-}
-
-.header-right {
+.header-telemetry {
   display: flex;
   align-items: center;
-  gap: 24px;
+  gap: 16px;
+  margin-left: auto;
 }
 
-.status-info {
+.telem-cell {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.telem-label {
+  font-size: 11px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.35);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.telem-value {
+  font-size: 14px;
+  font-weight: 600;
+  color: #fff;
+  &.mono { font-family: $font-mono; }
+  small { font-size: 10px; color: rgba(255, 255, 255, 0.4); margin-left: 1px; }
+}
+
+.telem-unit {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.4);
+  font-weight: 500;
+}
+
+.telem-divider {
+  width: 1px;
+  height: 24px;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.telem-indicator {
   display: flex;
   align-items: center;
   gap: 6px;
-}
-
-.info-label {
-  color: #9ca3af;
   font-size: 12px;
-  font-weight: 500;
-  letter-spacing: 0.05em;
-}
-
-.info-value {
-  font-size: 13px;
   font-weight: 600;
-
-  &.stable { color: #22c55e; }
-  &.unstable { color: #ef4444; }
-}
-
-.time-badge {
-  font-family: 'JetBrains Mono', 'Fira Code', 'SF Mono', Consolas, monospace;
-  background: #f3f4f6;
-  padding: 2px 8px;
+  padding: 2px 10px;
   border-radius: 4px;
-  font-size: 13px;
-  font-weight: 500;
-  color: #374151;
 
-  small {
-    font-size: 10px;
-    margin-left: 2px;
-    color: #9ca3af;
-  }
+  &.on { color: $mint-light; background: rgba(16, 185, 129, 0.12); }
+  &.off { color: $amber; background: rgba(245, 158, 11, 0.12); }
 }
 
-.workbench-content {
+.telem-dot {
+  width: 6px; height: 6px; border-radius: 50%;
+  .on & { background: $mint-light; box-shadow: 0 0 6px rgba(16, 185, 129, 0.6); animation: pulse-dot 2s ease-in-out infinite; }
+  .off & { background: $amber; box-shadow: 0 0 6px rgba(245, 158, 11, 0.6); animation: pulse-dot 1.2s ease-in-out infinite; }
+}
+
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.5; transform: scale(0.85); }
+}
+
+/* ── 状态芯片 ── */
+.state-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 10px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+
+  .chip-dot {
+    width: 5px; height: 5px; border-radius: 50%;
+  }
+
+  &.chip-idle { background: rgba(156, 163, 175, 0.15); color: $slate-400; .chip-dot { background: $slate-400; } }
+  &.chip-preparing, &.chip-running { background: rgba(59, 130, 246, 0.15); color: #60a5fa; .chip-dot { background: #60a5fa; box-shadow: 0 0 5px rgba(96, 165, 250, 0.5); } }
+  &.chip-paused { background: rgba(245, 158, 11, 0.15); color: $amber; .chip-dot { background: $amber; } }
+  &.chip-completed { background: rgba(16, 185, 129, 0.15); color: $mint-light; .chip-dot { background: $mint-light; } }
+  &.chip-error { background: rgba(239, 68, 68, 0.15); color: #f87171; .chip-dot { background: #f87171; } }
+}
+
+/* ═══ 工作台 ═══ */
+.workbench {
   flex: 1;
   min-height: 0;
   display: flex;
   gap: 16px;
   overflow: hidden;
+  position: relative;
+  padding: 4px 24px 24px;
+
+  &::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(16, 185, 129, 0.04) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(16, 185, 129, 0.04) 1px, transparent 1px);
+    background-size: 24px 24px;
+    pointer-events: none;
+    z-index: 0;
+  }
 }
 
 .workbench-main {
@@ -367,14 +425,53 @@ async function handleExport(path: string) {
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  overflow: hidden;
+  position: relative;
+  z-index: 1;
+}
+
+.scroll-container {
+  flex: 1;
   overflow-y: auto;
-  padding-right: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 4px 4px 4px 0;
+
+  &::-webkit-scrollbar { width: 4px; }
+  &::-webkit-scrollbar-thumb { background: $slate-300; border-radius: 2px; }
+  &::-webkit-scrollbar-track { background: transparent; }
+}
+
+.section-gap {
+  flex-shrink: 0;
+  height: 8px;
+}
+
+.card-block {
+  background: #ffffff;
+  border-radius: 10px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.04);
+  position: relative;
+  overflow: hidden;
+  animation: card-enter 0.35s ease both;
+}
+
+@keyframes card-enter {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* 响应式 */
+@media (max-width: 1024px) {
+  .header-telemetry { gap: 10px; }
+  .telem-label { display: none; }
 }
 
 @media (max-width: 768px) {
-  .page-header { padding: 0 16px; }
-  .header-right { display: none; }
-  .workbench-content { flex-direction: column; }
+  .instrument-header { height: auto; flex-wrap: wrap; padding: 10px 16px; gap: 8px; }
+  .header-telemetry { flex-wrap: wrap; margin-left: 0; width: 100%; }
+  .telem-divider { display: none; }
+  .workbench { flex-direction: column; }
 }
 </style>
