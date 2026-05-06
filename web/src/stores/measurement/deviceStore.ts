@@ -146,6 +146,12 @@ export const useMeasurementDeviceStore = defineStore('measurementDevices', () =>
         if (state) {
           if (state.unit) {
             device.unit = state.unit
+            // 同步实际单位到后端设备配置，确保 CheckUnitConsistency 比较的是硬件实际单位
+            try {
+              await upsertDevice(pressureDeviceToDto(device))
+            } catch (syncErr) {
+              console.warn('同步打压设备单位到配置失败:', syncErr)
+            }
           }
           device.currentPressure = state.currentPressure
         }

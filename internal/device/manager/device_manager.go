@@ -2,6 +2,7 @@ package manager
 
 import (
 	"sort"
+	"strings"
 	"sync"
 
 	"cal1604/internal/domain"
@@ -60,7 +61,8 @@ func (m *DeviceManager) Get(id string) (domain.Device, bool) {
 	return dev, ok
 }
 
-// List 返回设备快照。
+// List 返回设备快照，按设备 ID 升序排列以保证顺序稳定。
+// Go map 遍历顺序随机化，必须显式排序否则前端每次轮询顺序可能不同。
 func (m *DeviceManager) List() []domain.Device {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -69,39 +71,43 @@ func (m *DeviceManager) List() []domain.Device {
 	for _, dev := range m.devices {
 		result = append(result, dev)
 	}
+	sort.Slice(result, func(i, j int) bool {
+		return result[i].ID < result[j].ID
+	})
 
 	return result
 }
 
-// CheckUnitConsistency 检查全部设备单位是否一致。
+// CheckUnitConsistency 检查全部**已连接**设备单位是否一致。
+// 未连接设备不参与判定（其 Unit 可能为配置默认值，与硬件实际单位不同）。
 // 返回值依次为：是否一致、冲突设备 ID 列表（升序）。
 func (m *DeviceManager) CheckUnitConsistency() (bool, []string) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	if len(m.devices) <= 1 {
-		return true, nil
+	connected := make([]domain.Device, 0, len(m.devices))
+	for _, dev := range m.devices {
+		if dev.Status == domain.DeviceStatusConnected {
+			connected = append(connected, dev)
+		}
 	}
 
-	ids := make([]string, 0, len(m.devices))
-	for id := range m.devices {
-		ids = append(ids, id)
+	if len(connected) <= 1 {
+		return true, nil
 	}
-	sort.Strings(ids)
 
 	baseline := ""
 	conflicts := make([]string, 0)
 
-	for _, id := range ids {
-		dev := m.devices[id]
-		unit := dev.Unit
+	for _, dev := range connected {
+		unit := strings.ToLower(strings.TrimSpace(dev.Unit))
 		if baseline == "" && unit != "" {
 			baseline = unit
 			continue
 		}
 
 		if unit == "" || (baseline != "" && unit != baseline) {
-			conflicts = append(conflicts, id)
+			conflicts = append(conflicts, dev.ID)
 		}
 	}
 

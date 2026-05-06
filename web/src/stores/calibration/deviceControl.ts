@@ -20,6 +20,7 @@ import {
   multipressListDevices
 } from "@/api/multipress"
 import { useDeviceInventoryStore } from '@/stores/device/inventoryStore'
+import { fetchDevices, upsertDevice } from '@/api/device'
 
 export const useDeviceControlStore = defineStore('deviceControl', () => {
   const deviceStore = useDeviceInventoryStore()
@@ -69,6 +70,19 @@ export const useDeviceControlStore = defineStore('deviceControl', () => {
         ElMessage.warning('设备已连接，但阀门/单位信息读取失败，请稍后重试')
       }
 
+      // 把从硬件读取到的实际单位同步到设备配置，确保 CheckUnitConsistency 比较的是真实单位
+      if (measureUnit.value) {
+        try {
+          const devices = await fetchDevices()
+          const dto = devices.find(d => d.id === deviceId)
+          if (dto) {
+            await upsertDevice({ ...dto, unit: measureUnit.value })
+          }
+        } catch (syncErr) {
+          console.warn('同步计量设备单位到配置失败:', syncErr)
+        }
+      }
+
       return true
     } catch (error) {
       console.error('连接1604设备失败:', error)
@@ -97,7 +111,19 @@ export const useDeviceControlStore = defineStore('deviceControl', () => {
         const state = states.find(s => s.deviceId === deviceId)
         const dev = deviceStore.pressureDevices.find(d => d.id === deviceId)
         if (state && dev) {
-          if (state.unit) dev.unit = state.unit
+          if (state.unit) {
+            dev.unit = state.unit
+            // 同步实际单位到设备配置，确保 CheckUnitConsistency 比较的是硬件真实单位
+            try {
+              const devices = await fetchDevices()
+              const dto = devices.find(d => d.id === deviceId)
+              if (dto) {
+                await upsertDevice({ ...dto, unit: state.unit })
+              }
+            } catch (syncErr) {
+              console.warn('同步打压设备单位到配置失败:', syncErr)
+            }
+          }
           dev.currentPressure = state.currentPressure
         }
       } catch {
@@ -186,6 +212,7 @@ export const useDeviceControlStore = defineStore('deviceControl', () => {
       }
       if (unit.status === 'fulfilled') {
         measureUnit.value = unit.value
+        console.log(`[1604单位读取] 从硬件读取到单位: ${measureUnit.value}`)
         unitReady = true
       }
       // 连接阶段只要求阀门和单位可读；且允许在不同重试轮次分别成功。
@@ -231,8 +258,9 @@ export const useDeviceControlStore = defineStore('deviceControl', () => {
   const refreshMeasureUnit = async () => {
     try {
       measureUnit.value = await readMeasureUnit()
+      console.log(`[1604单位读取] 从硬件读取到单位: ${measureUnit.value}`)
     } catch {
-      // 静默失败
+      console.warn('[1604单位读取] 读取失败')
     }
   }
 

@@ -428,7 +428,7 @@ func (s *Service) pollLoop(ctx context.Context) {
 		s.mu.Unlock()
 	}()
 
-	ticker := time.NewTicker(2 * time.Second)
+	ticker := time.NewTicker(500 * time.Millisecond)
 	defer ticker.Stop()
 
 	for {

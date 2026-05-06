@@ -1,236 +1,405 @@
 #!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 """
-Cal1604 应用程序图标生成器
-生成符合项目设计规范的 SVG 和 PNG 图标
+Cal1604 桌面端图标生成器。
+
+输出以下资源：
+- build/appicon.svg
+- build/appicon.png
+- build/appicon_1024.png
+- build/appicon_512.png
+- build/appicon_256.png
+- build/windows/icon.ico
+
+说明：
+- Wails 构建默认直接读取 build/windows/icon.ico。
+- 只有在显式传入 --refresh-syso 时，才额外刷新根目录
+  resource_windows_amd64.syso，供纯 go build 链路使用。
 """
 
-import os
-import sys
+from __future__ import annotations
 
-def generate_svg_icon():
-    """生成 SVG 图标"""
-    # 配色方案来自 DESIGN.md
-    bg_color = "#1e1e1e"  # 主背景色
-    bg_secondary = "#252526"  # 次级背景
-    accent_gold = "#ffd700"  # 明金强调色
-    accent_gold_dark = "#d4a800"  # 深金色
-    text_color = "#d4d4d4"  # 主要文字色
-    
-    svg_content = f'''<?xml version="1.0" encoding="UTF-8"?>
-<svg width="1024" height="1024" viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+import argparse
+import math
+import shutil
+import subprocess
+from pathlib import Path
+
+from PIL import Image, ImageDraw
+
+CANVAS_SIZE = 1024
+
+BACKGROUND_TOP = (54, 58, 67)
+BACKGROUND_BOTTOM = (19, 21, 26)
+BACKGROUND_EDGE = (11, 13, 16, 255)
+HIGHLIGHT = (255, 255, 255, 22)
+WHITE = (245, 246, 248, 255)
+WHITE_SOFT = (255, 255, 255, 92)
+WHITE_DIM = (255, 255, 255, 40)
+AMBER = (255, 198, 56, 255)
+AMBER_BRIGHT = (255, 220, 112, 255)
+SURFACE_SHADOW = (0, 0, 0, 32)
+
+
+def lerp_color(start: tuple[int, ...], end: tuple[int, ...], ratio: float) -> tuple[int, ...]:
+    """在线性插值中混合颜色。"""
+    return tuple(int(a + (b - a) * ratio) for a, b in zip(start, end))
+
+
+def polar_point(cx: float, cy: float, radius: float, degrees: float) -> tuple[float, float]:
+    """将极坐标角度转换为画布坐标。"""
+    radians = math.radians(degrees)
+    return cx + math.cos(radians) * radius, cy + math.sin(radians) * radius
+
+
+def build_tick_segments(
+    cx: float,
+    cy: float,
+    radius: float,
+    inner_radius: float,
+    angles: list[float],
+) -> list[tuple[tuple[float, float], tuple[float, float], int]]:
+    """生成刻度线的起止点，供 PIL 和 SVG 共用。"""
+    segments: list[tuple[tuple[float, float], tuple[float, float], int]] = []
+    middle_angle = angles[len(angles) // 2]
+    for angle in angles:
+        outer = polar_point(cx, cy, radius, angle)
+        inner = polar_point(cx, cy, inner_radius, angle)
+        stroke = 20 if angle == middle_angle else 14
+        segments.append((inner, outer, stroke))
+    return segments
+
+
+def draw_background(size: int) -> Image.Image:
+    """绘制深色圆角底板和柔和高光。"""
+    image = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    mask = Image.new("L", (size, size), 0)
+    mask_draw = ImageDraw.Draw(mask)
+
+    padding = int(size * 0.045)
+    radius = int(size * 0.21)
+    bounds = [padding, padding, size - padding, size - padding]
+    mask_draw.rounded_rectangle(bounds, radius=radius, fill=255)
+
+    gradient = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    gradient_draw = ImageDraw.Draw(gradient)
+    for y in range(size):
+        ratio = y / (size - 1)
+        color = lerp_color(BACKGROUND_TOP, BACKGROUND_BOTTOM, ratio)
+        gradient_draw.line([(0, y), (size, y)], fill=(*color, 255))
+
+    glow_layer = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    glow_draw = ImageDraw.Draw(glow_layer)
+    glow_center = (size * 0.5, size * 0.28)
+    max_radius = int(size * 0.48)
+    for step in range(max_radius, 0, -8):
+        alpha = int(22 * (step / max_radius))
+        glow_draw.ellipse(
+            [
+                glow_center[0] - step,
+                glow_center[1] - step * 0.82,
+                glow_center[0] + step,
+                glow_center[1] + step * 0.82,
+            ],
+            fill=(73, 80, 94, alpha),
+        )
+
+    highlight_layer = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    highlight_draw = ImageDraw.Draw(highlight_layer)
+    highlight_draw.ellipse(
+        [
+            int(size * -0.02),
+            int(size * -0.08),
+            int(size * 0.52),
+            int(size * 0.30),
+        ],
+        fill=HIGHLIGHT,
+    )
+
+    border_layer = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    border_draw = ImageDraw.Draw(border_layer)
+    border_draw.rounded_rectangle(bounds, radius=radius, outline=BACKGROUND_EDGE, width=8)
+
+    combined = Image.alpha_composite(gradient, glow_layer)
+    combined = Image.alpha_composite(combined, highlight_layer)
+    combined.putalpha(mask)
+    image.alpha_composite(combined)
+    image.alpha_composite(border_layer)
+    return image
+
+
+def draw_symbol(size: int) -> Image.Image:
+    """绘制仪表盘、指针与校准勾。"""
+    image = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(image)
+
+    center_x = size * 0.5
+    center_y = size * 0.59
+    radius = size * 0.23
+    arc_width = max(30, size // 22)
+    bbox = [center_x - radius, center_y - radius, center_x + radius, center_y + radius]
+
+    # 先铺一层弱阴影，避免高对比白色主体显得悬浮。
+    shadow_bbox = [value + (8 if index % 2 == 0 else 14) for index, value in enumerate(bbox)]
+    draw.arc(shadow_bbox, start=204, end=336, fill=SURFACE_SHADOW, width=arc_width)
+    draw.arc(bbox, start=204, end=336, fill=WHITE, width=arc_width)
+
+    inner_radius = radius * 0.78
+    inner_bbox = [
+        center_x - inner_radius,
+        center_y - inner_radius,
+        center_x + inner_radius,
+        center_y + inner_radius,
+    ]
+    draw.arc(inner_bbox, start=214, end=326, fill=WHITE_DIM, width=max(6, size // 180))
+
+    tick_segments = build_tick_segments(
+        center_x,
+        center_y,
+        radius - arc_width * 0.08,
+        radius - arc_width * 0.72,
+        [214, 242, 270, 298, 326],
+    )
+    for start_point, end_point, stroke in tick_segments:
+        draw.line([start_point, end_point], fill=WHITE_SOFT, width=stroke)
+
+    needle_angle = 322
+    tip = polar_point(center_x, center_y, radius * 0.76, needle_angle)
+    tail = polar_point(center_x, center_y, radius * 0.20, needle_angle + 180)
+    draw.line([tail, tip], fill=WHITE, width=max(18, size // 58))
+    draw.line([(center_x, center_y), tip], fill=WHITE, width=max(12, size // 78))
+
+    hub_outer = max(28, size // 24)
+    hub_inner = max(12, size // 52)
+    draw.ellipse(
+        [center_x - hub_outer, center_y - hub_outer, center_x + hub_outer, center_y + hub_outer],
+        fill=AMBER,
+    )
+    draw.ellipse(
+        [center_x - hub_inner, center_y - hub_inner, center_x + hub_inner, center_y + hub_inner],
+        fill=BACKGROUND_BOTTOM + (255,),
+    )
+
+    badge_center_x = size * 0.74
+    badge_center_y = size * 0.23
+    badge_radius = size * 0.08
+    badge_box = [
+        badge_center_x - badge_radius,
+        badge_center_y - badge_radius,
+        badge_center_x + badge_radius,
+        badge_center_y + badge_radius,
+    ]
+    draw.arc(
+        badge_box,
+        start=210,
+        end=510,
+        fill=(*AMBER_BRIGHT[:3], 200),
+        width=max(14, size // 70),
+    )
+
+    check_width = max(18, size // 58)
+    check_points = [
+        (badge_center_x - badge_radius * 0.42, badge_center_y + badge_radius * 0.08),
+        (badge_center_x - badge_radius * 0.08, badge_center_y + badge_radius * 0.42),
+        (badge_center_x + badge_radius * 0.48, badge_center_y - badge_radius * 0.26),
+    ]
+    draw.line(check_points[:2], fill=AMBER, width=check_width)
+    draw.line(check_points[1:], fill=AMBER, width=check_width)
+
+    return image
+
+
+def draw_icon(size: int = CANVAS_SIZE) -> Image.Image:
+    """合成最终图标。"""
+    background = draw_background(size)
+    symbol = draw_symbol(size)
+    return Image.alpha_composite(background, symbol)
+
+
+def svg_arc_path(cx: float, cy: float, radius: float, start_angle: float, end_angle: float) -> str:
+    """生成 SVG 圆弧路径。"""
+    start = polar_point(cx, cy, radius, start_angle)
+    end = polar_point(cx, cy, radius, end_angle)
+    large_arc = 1 if abs(end_angle - start_angle) > 180 else 0
+    return (
+        f"M {start[0]:.2f} {start[1]:.2f} "
+        f"A {radius:.2f} {radius:.2f} 0 {large_arc} 1 {end[0]:.2f} {end[1]:.2f}"
+    )
+
+
+def generate_svg(size: int = CANVAS_SIZE) -> str:
+    """输出可维护的 SVG 源文件。"""
+    padding = size * 0.045
+    radius = size * 0.21
+    center_x = size * 0.5
+    center_y = size * 0.59
+    gauge_radius = size * 0.23
+    arc_width = max(30, size // 22)
+    inner_radius = gauge_radius * 0.78
+    hub_outer = max(28, size // 24)
+    hub_inner = max(12, size // 52)
+    badge_center_x = size * 0.74
+    badge_center_y = size * 0.23
+    badge_radius = size * 0.08
+
+    arc_path = svg_arc_path(center_x, center_y, gauge_radius, 204, 336)
+    inner_arc_path = svg_arc_path(center_x, center_y, inner_radius, 214, 326)
+    badge_arc_path = svg_arc_path(badge_center_x, badge_center_y, badge_radius, 210, 510)
+
+    tick_lines = []
+    for start_point, end_point, stroke in build_tick_segments(
+        center_x,
+        center_y,
+        gauge_radius - arc_width * 0.08,
+        gauge_radius - arc_width * 0.72,
+        [214, 242, 270, 298, 326],
+    ):
+        tick_lines.append(
+            f'<line x1="{start_point[0]:.2f}" y1="{start_point[1]:.2f}" '
+            f'x2="{end_point[0]:.2f}" y2="{end_point[1]:.2f}" '
+            f'stroke="#ffffff" stroke-opacity="0.36" stroke-width="{stroke}" '
+            'stroke-linecap="round" />'
+        )
+
+    needle_tip = polar_point(center_x, center_y, gauge_radius * 0.76, 322)
+    needle_tail = polar_point(center_x, center_y, gauge_radius * 0.20, 142)
+    check_points = [
+        (badge_center_x - badge_radius * 0.42, badge_center_y + badge_radius * 0.08),
+        (badge_center_x - badge_radius * 0.08, badge_center_y + badge_radius * 0.42),
+        (badge_center_x + badge_radius * 0.48, badge_center_y - badge_radius * 0.26),
+    ]
+
+    return f"""<?xml version="1.0" encoding="UTF-8"?>
+<svg width="{size}" height="{size}" viewBox="0 0 {size} {size}" xmlns="http://www.w3.org/2000/svg">
   <defs>
-    <!-- 背景渐变 -->
-    <radialGradient id="bgGradient" cx="50%" cy="50%" r="50%" fx="50%" fy="50%">
-      <stop offset="0%" style="stop-color:#2d2d2d;stop-opacity:1" />
-      <stop offset="100%" style="stop-color:#1e1e1e;stop-opacity:1" />
-    </radialGradient>
-    
-    <!-- 金色渐变 -->
-    <linearGradient id="goldGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" style="stop-color:#ffed4a;stop-opacity:1" />
-      <stop offset="50%" style="stop-color:#ffd700;stop-opacity:1" />
-      <stop offset="100%" style="stop-color:#d4a800;stop-opacity:1" />
+    <linearGradient id="bgGradient" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#363a43"/>
+      <stop offset="100%" stop-color="#13151a"/>
     </linearGradient>
-    
-    <!-- 金色发光效果 -->
-    <filter id="goldGlow" x="-50%" y="-50%" width="200%" height="200%">
-      <feGaussianBlur stdDeviation="4" result="coloredBlur"/>
-      <feMerge>
-        <feMergeNode in="coloredBlur"/>
-        <feMergeNode in="SourceGraphic"/>
-      </feMerge>
-    </filter>
-    
-    <!-- 阴影效果 -->
-    <filter id="dropShadow" x="-20%" y="-20%" width="140%" height="140%">
-      <feGaussianBlur in="SourceAlpha" stdDeviation="8"/>
-      <feOffset dx="4" dy="4" result="offsetblur"/>
-      <feComponentTransfer>
-        <feFuncA type="linear" slope="0.5"/>
-      </feComponentTransfer>
-      <feMerge>
-        <feMergeNode/>
-        <feMergeNode in="SourceGraphic"/>
-      </feMerge>
-    </filter>
+    <radialGradient id="glowGradient" cx="50%" cy="28%" r="48%">
+      <stop offset="0%" stop-color="#49505e" stop-opacity="0.38"/>
+      <stop offset="100%" stop-color="#49505e" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="amberGradient" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#ffdc70"/>
+      <stop offset="100%" stop-color="#ffc638"/>
+    </linearGradient>
+    <clipPath id="tileClip">
+      <rect x="{padding:.2f}" y="{padding:.2f}" width="{size - padding * 2:.2f}" height="{size - padding * 2:.2f}" rx="{radius:.2f}" ry="{radius:.2f}" />
+    </clipPath>
   </defs>
-  
-  <!-- 背景圆角矩形 -->
-  <rect x="32" y="32" width="960" height="960" rx="160" ry="160" fill="url(#bgGradient)"/>
-  
-  <!-- 外边框 -->
-  <rect x="48" y="48" width="928" height="928" rx="144" ry="144" 
-        fill="none" stroke="#333333" stroke-width="4"/>
-  
-  <!-- 内部装饰圆环 -->
-  <circle cx="512" cy="512" r="380" fill="none" stroke="#333333" stroke-width="2"/>
-  <circle cx="512" cy="512" r="360" fill="none" stroke="#444444" stroke-width="1"/>
-  
-  <!-- 压力表主体 - 外圈 -->
-  <circle cx="512" cy="480" r="280" fill="none" stroke="url(#goldGradient)" stroke-width="8" filter="url(#dropShadow)"/>
-  
-  <!-- 压力表刻度盘背景 -->
-  <circle cx="512" cy="480" r="260" fill="#252526" stroke="#333333" stroke-width="2"/>
-  
-  <!-- 刻度线 - 主刻度 -->
-  <g stroke="url(#goldGradient)" stroke-width="4" stroke-linecap="round">
-    <line x1="512" y1="240" x2="512" y2="270" />
-    <line x1="752" y1="480" x2="722" y2="480" />
-    <line x1="512" y1="720" x2="512" y2="690" />
-    <line x1="272" y1="480" x2="302" y2="480" />
-    <!-- 45度刻度 -->
-    <line x1="682" y1="310" x2="661" y2="331" stroke-width="3"/>
-    <line x1="682" y1="650" x2="661" y2="629" stroke-width="3"/>
-    <line x1="342" y1="650" x2="363" y2="629" stroke-width="3"/>
-    <line x1="342" y1="310" x2="363" y2="331" stroke-width="3"/>
-  </g>
-  
-  <!-- 刻度线 - 次刻度 -->
-  <g stroke="#555555" stroke-width="2" stroke-linecap="round">
-    <line x1="622" y1="262" x2="612" y2="281" />
-    <line x1="700" y1="372" x2="681" y2="382" />
-    <line x1="700" y1="588" x2="681" y2="578" />
-    <line x1="622" y1="698" x2="612" y2="679" />
-    <line x1="402" y1="698" x2="412" y2="679" />
-    <line x1="324" y1="588" x2="343" y2="578" />
-    <line x1="324" y1="372" x2="343" y2="382" />
-    <line x1="402" y1="262" x2="412" y2="281" />
-  </g>
-  
-  <!-- 中心点 -->
-  <circle cx="512" cy="480" r="24" fill="url(#goldGradient)" filter="url(#goldGlow)"/>
-  <circle cx="512" cy="480" r="12" fill="#1e1e1e"/>
-  
-  <!-- 指针 - 指向 12 点方向 -->
-  <g transform="rotate(0, 512, 480)">
-    <polygon points="512,260 502,480 512,500 522,480" fill="url(#goldGradient)" filter="url(#dropShadow)"/>
-    <circle cx="512" cy="480" r="8" fill="url(#goldGradient)"/>
-  </g>
-  
-  <!-- 校准标记 - 对勾符号 -->
-  <g transform="translate(680, 280)" filter="url(#goldGlow)">
-    <path d="M 0 40 L 30 70 L 80 10" fill="none" stroke="url(#goldGradient)" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
-  </g>
-  
-  <!-- 型号文字 1604 -->
-  <text x="512" y="840" text-anchor="middle" font-family="Arial, sans-serif" font-size="120" font-weight="bold" fill="url(#goldGradient)" letter-spacing="16" filter="url(#dropShadow)">1604</text>
-  
-  <!-- CAL 标识 -->
-  <text x="512" y="600" text-anchor="middle" font-family="Arial, sans-serif" font-size="48" font-weight="500" fill="#888888" letter-spacing="8">CALIBRATION</text>
-  
-  <!-- 装饰性圆点 -->
-  <circle cx="160" cy="160" r="12" fill="#333333"/>
-  <circle cx="864" cy="160" r="12" fill="#333333"/>
-  <circle cx="160" cy="864" r="12" fill="#333333"/>
-  <circle cx="864" cy="864" r="12" fill="#333333"/>
-</svg>'''
-    
-    return svg_content
 
-def save_svg(filepath, content):
-    """保存 SVG 文件"""
-    with open(filepath, 'w', encoding='utf-8') as f:
-        f.write(content)
-    print(f"SVG 图标已保存: {filepath}")
+  <g clip-path="url(#tileClip)">
+    <rect width="{size}" height="{size}" fill="url(#bgGradient)" />
+    <ellipse cx="{size * 0.5:.2f}" cy="{size * 0.28:.2f}" rx="{size * 0.48:.2f}" ry="{size * 0.39:.2f}" fill="url(#glowGradient)" />
+    <ellipse cx="{size * 0.25:.2f}" cy="{size * 0.11:.2f}" rx="{size * 0.27:.2f}" ry="{size * 0.19:.2f}" fill="#ffffff" fill-opacity="0.08" />
+  </g>
 
-def convert_svg_to_png(svg_path, png_path, sizes=None):
-    """将 SVG 转换为 PNG"""
-    if sizes is None:
-        sizes = [256, 512, 1024]
-    
-    try:
-        from cairosvg import svg2png
-        
-        # 生成主图标
-        for size in sizes:
-            output_path = png_path.replace('.png', f'_{size}.png')
-            svg2png(url=svg_path, write_to=output_path, output_width=size, output_height=size)
-            print(f"PNG 图标已生成 ({size}x{size}): {output_path}")
-        
-        # 生成标准尺寸的图标
-        svg2png(url=svg_path, write_to=png_path, output_width=1024, output_height=1024)
-        print(f"PNG 图标已保存: {png_path}")
-        return True
-        
-    except ImportError:
-        print("警告: 未安装 cairosvg，跳过 PNG 转换")
-        print("如需 PNG 格式，请运行: pip install cairosvg")
+  <rect x="{padding:.2f}" y="{padding:.2f}" width="{size - padding * 2:.2f}" height="{size - padding * 2:.2f}" rx="{radius:.2f}" ry="{radius:.2f}" fill="none" stroke="#0b0d10" stroke-width="8" />
+
+  <path d="{arc_path}" fill="none" stroke="#f5f6f8" stroke-width="{arc_width}" stroke-linecap="round" />
+  <path d="{inner_arc_path}" fill="none" stroke="#ffffff" stroke-opacity="0.16" stroke-width="{max(6, size // 180)}" stroke-linecap="round" />
+  {" ".join(tick_lines)}
+
+  <line x1="{needle_tail[0]:.2f}" y1="{needle_tail[1]:.2f}" x2="{needle_tip[0]:.2f}" y2="{needle_tip[1]:.2f}"
+        stroke="#f5f6f8" stroke-width="{max(18, size // 58)}" stroke-linecap="round" />
+  <line x1="{center_x:.2f}" y1="{center_y:.2f}" x2="{needle_tip[0]:.2f}" y2="{needle_tip[1]:.2f}"
+        stroke="#f5f6f8" stroke-width="{max(12, size // 78)}" stroke-linecap="round" />
+
+  <circle cx="{center_x:.2f}" cy="{center_y:.2f}" r="{hub_outer}" fill="url(#amberGradient)" />
+  <circle cx="{center_x:.2f}" cy="{center_y:.2f}" r="{hub_inner}" fill="#13151a" />
+
+  <path d="{badge_arc_path}" fill="none" stroke="url(#amberGradient)" stroke-width="{max(14, size // 70)}" stroke-linecap="round" />
+  <path d="M {check_points[0][0]:.2f} {check_points[0][1]:.2f} L {check_points[1][0]:.2f} {check_points[1][1]:.2f} L {check_points[2][0]:.2f} {check_points[2][1]:.2f}"
+        fill="none" stroke="url(#amberGradient)" stroke-width="{max(18, size // 58)}" stroke-linecap="round" stroke-linejoin="round" />
+</svg>
+"""
+
+
+def save_png_assets(build_dir: Path, icon: Image.Image) -> None:
+    """输出 PNG 资源。"""
+    targets = {
+        "appicon.png": CANVAS_SIZE,
+        "appicon_1024.png": CANVAS_SIZE,
+        "appicon_512.png": 512,
+        "appicon_256.png": 256,
+    }
+    for filename, size in targets.items():
+        target = build_dir / filename
+        output = icon if size == CANVAS_SIZE else icon.resize((size, size), Image.Resampling.LANCZOS)
+        output.save(target, "PNG")
+        print(f"PNG: {target}")
+
+
+def save_svg_asset(build_dir: Path) -> None:
+    """输出 SVG 源文件。"""
+    target = build_dir / "appicon.svg"
+    target.write_text(generate_svg(), encoding="utf-8")
+    print(f"SVG: {target}")
+
+
+def save_ico_asset(windows_dir: Path, icon: Image.Image) -> None:
+    """输出 Windows ICO。"""
+    target = windows_dir / "icon.ico"
+    icon.save(
+        target,
+        format="ICO",
+        sizes=[(256, 256), (128, 128), (64, 64), (48, 48), (32, 32), (24, 24), (16, 16)],
+    )
+    print(f"ICO: {target}")
+
+
+def refresh_windows_resource(root_dir: Path) -> bool:
+    """刷新 syso，供纯 go build 链路使用。"""
+    goversioninfo = shutil.which("goversioninfo") or shutil.which("goversioninfo.exe")
+    if not goversioninfo:
+        print("未找到 goversioninfo，跳过 syso 刷新。")
         return False
 
-def create_ico(svg_path, ico_path):
-    """创建 Windows ICO 文件"""
-    try:
-        from PIL import Image
-        import io
-        from cairosvg import svg2png
-        
-        # 读取 SVG 并生成多种尺寸的 PNG
-        sizes = [16, 24, 32, 48, 64, 128, 256]
-        images = []
-        
-        for size in sizes:
-            png_data = svg2png(url=svg_path, output_width=size, output_height=size)
-            img = Image.open(io.BytesIO(png_data))
-            if img.mode != 'RGBA':
-                img = img.convert('RGBA')
-            images.append(img)
-        
-        # 保存为 ICO
-        images[0].save(ico_path, format='ICO', sizes=[(s, s) for s in sizes], append_images=images[1:])
-        print(f"ICO 图标已保存: {ico_path}")
-        return True
-        
-    except ImportError as e:
-        print(f"警告: 创建 ICO 需要 PIL 和 cairosvg: {e}")
-        return False
+    resourceinfo_path = root_dir / "resourceinfo.json"
+    syso_path = root_dir / "resource_windows_amd64.syso"
+    subprocess.run(
+        [goversioninfo, "-64", "-o", str(syso_path), str(resourceinfo_path)],
+        cwd=root_dir,
+        check=True,
+    )
+    print(f"SYSO: {syso_path}")
+    return True
 
-def main():
-    """主函数"""
-    # 项目根目录
-    project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    build_dir = os.path.join(project_root, 'build')
-    
-    # 确保 build 目录存在
-    os.makedirs(build_dir, exist_ok=True)
-    os.makedirs(os.path.join(build_dir, 'windows'), exist_ok=True)
-    
-    # 文件路径
-    svg_path = os.path.join(build_dir, 'appicon.svg')
-    png_path = os.path.join(build_dir, 'appicon.png')
-    ico_path = os.path.join(build_dir, 'windows', 'icon.ico')
-    
-    print("=" * 50)
-    print("Cal1604 图标生成器")
-    print("=" * 50)
-    
-    # 生成 SVG
-    print("\n1. 生成 SVG 图标...")
-    svg_content = generate_svg_icon()
-    save_svg(svg_path, svg_content)
-    
-    # 转换为 PNG
-    print("\n2. 转换 PNG 图标...")
-    png_success = convert_svg_to_png(svg_path, png_path)
-    
-    # 创建 ICO
-    print("\n3. 创建 Windows ICO 图标...")
-    ico_success = create_ico(svg_path, ico_path)
-    
-    print("\n" + "=" * 50)
-    print("图标生成完成!")
-    print("=" * 50)
-    print(f"\n生成的文件:")
-    print(f"  - SVG: {svg_path}")
-    if png_success:
-        print(f"  - PNG: {png_path}")
-    if ico_success:
-        print(f"  - ICO: {ico_path}")
-    
-    print("\n图标设计说明:")
-    print("  - 深色背景 (#1e1e1e) 符合项目设计规范")
-    print("  - 金色压力表 (#ffd700) 体现精确校准主题")
-    print("  - 1604 型号标识突出产品特征")
-    print("  - 现代扁平设计配合微妙渐变")
 
-if __name__ == '__main__':
+def parse_args() -> argparse.Namespace:
+    """解析命令行参数。"""
+    parser = argparse.ArgumentParser(description="生成 Cal1604 图标资源。")
+    parser.add_argument(
+        "--refresh-syso",
+        action="store_true",
+        help="额外刷新根目录 resource_windows_amd64.syso，供纯 go build 链路使用。",
+    )
+    return parser.parse_args()
+
+
+def main() -> None:
+    """生成图标资源。"""
+    args = parse_args()
+    root_dir = Path(__file__).resolve().parents[1]
+    build_dir = root_dir / "build"
+    windows_dir = build_dir / "windows"
+    build_dir.mkdir(parents=True, exist_ok=True)
+    windows_dir.mkdir(parents=True, exist_ok=True)
+
+    print("生成 Cal1604 新版桌面图标...")
+    icon = draw_icon()
+    save_svg_asset(build_dir)
+    save_png_assets(build_dir, icon)
+    save_ico_asset(windows_dir, icon)
+
+    if args.refresh_syso:
+        refresh_windows_resource(root_dir)
+    else:
+        print("已跳过 syso 刷新；Wails 构建默认会直接读取 build/windows/icon.ico。")
+
+    print("图标资源已完成刷新。")
+
+
+if __name__ == "__main__":
     main()

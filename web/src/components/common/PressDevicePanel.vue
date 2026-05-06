@@ -82,19 +82,26 @@
         </el-select>
       </div>
       <div class="pressure-actions">
-        <el-input-number
-          v-model="targetPressure"
-          :precision="2"
-          :step="1"
-          size="small"
-          class="target-input"
-        />
+        <div class="pressure-row">
+          <el-input
+            v-model.number="targetPressure"
+            type="number"
+            :step="1"
+            class="target-input"
+          />
+          <el-button
+            type="primary"
+            @click="setPressure"
+          >
+            设定压力
+          </el-button>
+        </div>
         <el-button
-          type="primary"
-          size="small"
-          @click="setPressure"
+          type="danger"
+          @click="exhaustPressure"
+          class="exhaust-btn"
         >
-          设定压力
+          排空
         </el-button>
       </div>
     </div>
@@ -108,9 +115,11 @@ import { FirstAidKit } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import DeviceStatusBadge from '@/components/common/DeviceStatusBadge.vue'
 import { useDeviceInventoryStore } from '@/stores/device/inventoryStore'
+import { upsertDevice } from '@/api/device'
 import {
   multipressSetUnit,
   multipressSetPressure,
+  multipressExhaust,
   multipressListDevices
 } from "@/api/multipress"
 
@@ -118,6 +127,8 @@ const emit = defineEmits<{
   connect: [deviceId: string]
   disconnect: [deviceId: string]
   'set-pressure': [deviceId: string, pressure: number]
+  exhaust: [deviceId: string]
+  'unit-change': [payload: { deviceId: string; unit: string }]
 }>()
 
 const deviceStore = useDeviceInventoryStore()
@@ -128,15 +139,15 @@ const selectedUnit = ref('kPa')
 const targetPressure = ref(100)
 
 const unitOptions = [
-  { value: 'kPa', label: 'kPa (千帕)' },
-  { value: 'MPa', label: 'MPa (兆帕)' },
-  { value: 'Pa', label: 'Pa (帕)' },
-  { value: 'bar', label: 'bar (巴)' },
-  { value: 'mbar', label: 'mbar (毫巴)' },
-  { value: 'psi', label: 'psi (磅/平方英寸)' },
+  { value: 'kPa', label: 'kPa' },
+  { value: 'MPa', label: 'MPa' },
+  { value: 'Pa', label: 'Pa' },
+  { value: 'bar', label: 'bar' },
+  { value: 'mbar', label: 'mbar' },
+  { value: 'psi', label: 'psi' },
   { value: 'kgf/cm2', label: 'kgf/cm²' },
-  { value: 'mmHg', label: 'mmHg (毫米汞柱)' },
-  { value: 'atm', label: 'atm (标准大气压)' }
+  { value: 'mmHg', label: 'mmHg' },
+  { value: 'atm', label: 'atm' }
 ]
 
 // 获取选中的打压设备
@@ -185,6 +196,21 @@ async function onUnitChange(unit: string) {
   device.value.unit = unit
   try {
     await multipressSetUnit(device.value.id, unit)
+    // 同步单位到设备配置，确保 CheckUnitConsistency 比较的是实际单位
+    try {
+      await upsertDevice({
+        id: device.value.id,
+        name: device.value.name,
+        type: 'pressure',
+        model: device.value.model,
+        host: device.value.ip,
+        port: device.value.port,
+        unit: device.value.unit,
+        status: device.value.status
+      })
+    } catch (syncErr) {
+      console.warn('同步打压设备单位到配置失败:', syncErr)
+    }
     // 切换单位后从后端拉取最新状态（含已按新单位换算的压力值）
     const states = await multipressListDevices()
     const s = states.find(d => d.deviceId === device.value!.id)
@@ -193,6 +219,7 @@ async function onUnitChange(unit: string) {
       device.value.unit = s.unit
     }
     ElMessage.success(`打压单位已切换为 ${unit}`)
+    emit('unit-change', { deviceId: device.value.id, unit })
   } catch {
     device.value.unit = previousUnit
     ElMessage.error('设置打压单位失败')
@@ -226,6 +253,16 @@ const setPressure = async () => {
     // 静默失败
   }
   emit('set-pressure', device.value.id, targetPressure.value)
+}
+
+const exhaustPressure = async () => {
+  if (!device.value) return
+  try {
+    await multipressExhaust(device.value.id)
+  } catch {
+    // 静默失败
+  }
+  emit('exhaust', device.value.id)
 }
 </script>
 
@@ -418,17 +455,52 @@ $amber: #f59e0b;
 
     .pressure-actions {
       display: flex;
-      align-items: center;
+      flex-direction: column;
       gap: 8px;
       padding-top: 4px;
       border-top: 1px solid $slate-200;
 
-      .target-input {
-        flex: 1;
+      .pressure-row {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+
+        .target-input {
+          flex: 1;
+          min-width: 0;
+        }
+
+        .target-input :deep(.el-input__wrapper) {
+          height: 36px;
+        }
+
+        .target-input :deep(.el-input__inner) {
+          font-size: 14px;
+        }
+
+        .target-input :deep(input::-webkit-outer-spin-button),
+        .target-input :deep(input::-webkit-inner-spin-button) {
+          -webkit-appearance: none;
+          margin: 0;
+        }
+
+        .target-input :deep(input[type="number"]) {
+          -moz-appearance: textfield;
+        }
+
+        .el-button {
+          height: 28px;
+          font-size: 12px;
+          font-weight: 600;
+          border-radius: 6px;
+          padding: 0 6px;
+          flex-shrink: 0;
+        }
       }
 
-      .el-button {
-        height: 32px;
+      .exhaust-btn {
+        width: 100%;
+        height: 28px;
         font-size: 12px;
         font-weight: 600;
         border-radius: 6px;

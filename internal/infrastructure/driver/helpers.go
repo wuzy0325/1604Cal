@@ -189,6 +189,11 @@ func parseWTN1604Unit(response string) (string, bool) {
 	if err != nil {
 		return "", false
 	}
+	// 先尝试系数匹配，避免 bar/atm 等非整数码因舍入误判为 kgf/cm2
+	if unit, ok := matchCoefficientToUnit(v); ok {
+		return unit, true
+	}
+	// 回退到整数码匹配（设备原生支持的 0=kgf/cm2, 1=psi, 6=kPa, 6894=Pa）
 	unitInt := int(math.Round(v))
 	switch unitInt {
 	case 0:
@@ -198,6 +203,32 @@ func parseWTN1604Unit(response string) (string, bool) {
 	case 6:
 		return "kPa", true
 	case 6894:
+		return "Pa", true
+	default:
+		return "", false
+	}
+}
+
+// matchCoefficientToUnit 按系数值匹配单位，与 coefficientToUnit 逻辑一致但返回 bool。
+func matchCoefficientToUnit(v float64) (string, bool) {
+	switch {
+	case v == 1.0:
+		return "psi", true
+	case approxEqual(v, 0.07031):
+		return "kgf/cm2", true
+	case approxEqual(v, 0.0689476):
+		return "bar", true
+	case approxEqual(v, 68.9476):
+		return "mbar", true
+	case approxEqual(v, 6.89476):
+		return "kPa", true
+	case approxEqual(v, 0.00689476):
+		return "MPa", true
+	case approxEqual(v, 51.7149):
+		return "mmHg", true
+	case approxEqual(v, 0.068046):
+		return "atm", true
+	case approxEqual(v, 6894.76):
 		return "Pa", true
 	default:
 		return "", false

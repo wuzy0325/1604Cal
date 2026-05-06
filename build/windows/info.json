@@ -1,15 +1,15 @@
 {
 	"fixed": {
-		"file_version": "{{.Info.ProductVersion}}"
+		"file_version": "1.0.0"
 	},
 	"info": {
 		"0000": {
-			"ProductVersion": "{{.Info.ProductVersion}}",
-			"CompanyName": "{{.Info.CompanyName}}",
-			"FileDescription": "{{.Info.ProductName}}",
-			"LegalCopyright": "{{.Info.Copyright}}",
-			"ProductName": "{{.Info.ProductName}}",
-			"Comments": "{{.Info.Comments}}"
+			"ProductVersion": "1.0.0",
+			"CompanyName": "Cal1604",
+			"FileDescription": "Cal1604 校准系统",
+			"LegalCopyright": "Copyright © 2024 Cal1604",
+			"ProductName": "Cal1604 校准系统",
+			"Comments": "Cal1604 校准系统"
 		}
 	}
 }

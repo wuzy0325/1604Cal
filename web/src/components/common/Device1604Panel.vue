@@ -130,6 +130,7 @@ import { Cpu } from '@element-plus/icons-vue'
 import DeviceStatusBadge from '@/components/common/DeviceStatusBadge.vue'
 import { useDeviceInventoryStore } from '@/stores/device/inventoryStore'
 import { useCalibrationStore } from '@/stores/calibration'
+import { fetchDevices, upsertDevice } from '@/api/device'
 
 const emit = defineEmits<{
   connect: [deviceId: string]
@@ -290,6 +291,16 @@ const toggleConnection = async () => {
 const handleMeasureUnitChange = async (unit: string) => {
   if (!unit) return
   await calibrationStore.setMeasureUnit(unit)
+  // 同步单位到设备配置，确保 CheckUnitConsistency 比较的是实际单位
+  try {
+    const devices = await fetchDevices()
+    const dto = devices.find(d => d.id === selectedDeviceId.value)
+    if (dto) {
+      await upsertDevice({ ...dto, unit })
+    }
+  } catch (syncErr) {
+    console.warn('同步计量设备单位到配置失败:', syncErr)
+  }
 }
 </script>
 

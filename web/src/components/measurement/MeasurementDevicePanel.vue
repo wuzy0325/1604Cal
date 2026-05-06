@@ -60,14 +60,6 @@
       class="device-status"
     >
       <div class="status-row">
-        <span class="label">设备型号:</span>
-        <span class="value">{{ displayModel }}</span>
-      </div>
-      <div class="status-row">
-        <span class="label">通道数:</span>
-        <span class="value">{{ displayChannels }}</span>
-      </div>
-      <div class="status-row">
         <span class="label">阀门状态:</span>
         <el-tag
           :type="valveTagType"
@@ -130,10 +122,12 @@ import { Cpu } from '@element-plus/icons-vue'
 import DeviceStatusBadge from '@/components/common/DeviceStatusBadge.vue'
 import { useDeviceInventoryStore } from '@/stores/device/inventoryStore'
 import { useMeasurementStore } from '@/stores/measurement'
+import { fetchDevices, upsertDevice } from '@/api/device'
 
 const emit = defineEmits<{
   connect: [deviceId: string]
   disconnect: [deviceId: string]
+  'unit-change': [payload: { deviceId: string; unit: string }]
 }>()
 
 const deviceStore = useDeviceInventoryStore()
@@ -157,13 +151,6 @@ const measureUnitOptions = [
 
 const device = computed(() =>
   measureDevices.value.find(d => d.id === selectedDeviceId.value)
-)
-
-const displayModel = computed(() =>
-  measurementStore.deviceInfo['model'] || device.value?.model || '--'
-)
-const displayChannels = computed(() =>
-  measurementStore.deviceInfo['channels'] || device.value?.channels || 16
 )
 
 const isConnected = computed(() => device.value?.status === 'connected')
@@ -291,6 +278,16 @@ const toggleConnection = async () => {
 const handleMeasureUnitChange = async (unit: string) => {
   if (!unit) return
   await measurementStore.setMeasureUnit(unit)
+  try {
+    const devices = await fetchDevices()
+    const dto = devices.find(d => d.id === selectedDeviceId.value)
+    if (dto) {
+      await upsertDevice({ ...dto, unit })
+    }
+  } catch (syncErr) {
+    console.warn('同步计量设备单位到配置失败:', syncErr)
+  }
+  emit('unit-change', { deviceId: selectedDeviceId.value, unit })
 }
 </script>
 
@@ -463,14 +460,15 @@ $amber: #f59e0b;
   /* 阀门控制按钮区 */
   .valve-control {
     display: flex;
-    gap: 6px;
+    gap: 4px;
 
     .el-button {
       flex: 1;
-      height: 32px;
+      height: 28px;
       font-size: 12px;
       font-weight: 600;
       border-radius: 6px;
+      padding: 0 6px;
     }
   }
 }
