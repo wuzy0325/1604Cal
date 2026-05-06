@@ -270,19 +270,6 @@ const canStart = computed(() => {
   return measurementStore.isStartable && measurementStore.deviceBound
 })
 
-const isStable = computed(() => {
-  if (typeof props.isStable === 'boolean') {
-    return props.isStable
-  }
-  return measurementStore.isStable
-})
-
-const stableSeconds = computed(() => {
-  if (typeof props.stableSeconds === 'number') {
-    return props.stableSeconds
-  }
-  return measurementStore.stabilityState.stableDurationMs / 1000
-})
 </script>
 
 <style scoped lang="scss">
