@@ -14,3 +14,18 @@ e2e/npm-cache/
 nul
 # Added by code-review-graph
 .code-review-graph/
+
+# Tool configs
+.claude/settings.json
+.claude/settings.local.json
+.agents/
+.claude/skills/
+.trae/
+.mcp.json
+opencode.json
+.opencode/
+skills-lock.json
+
+# Docs and screenshots
+docs/plans/architecture-deepening.md
+screenshot_*.png
