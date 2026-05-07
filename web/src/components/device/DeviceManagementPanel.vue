@@ -222,6 +222,14 @@
             </el-icon>
             {{ device.status === 'connected' ? '断开' : '连接' }}
           </button>
+          <button
+            type="button"
+            class="btn btn-delete"
+            @click="handleDeleteDevice(device)"
+          >
+            <el-icon><Delete /></el-icon>
+            删除
+          </button>
         </div>
       </article>
     </section>
@@ -350,11 +358,14 @@ import {
   Warning,
   Clock,
   Edit,
-  Check
+  Check,
+  Delete
 } from '@element-plus/icons-vue'
+import { ElMessageBox } from 'element-plus'
 
 import {
   connectDevice,
+  deleteDevice,
   disconnectDevice,
   fetchDeviceConnectConfig,
   fetchDevices,
@@ -652,6 +663,23 @@ async function toggleConnection(device: DeviceDTO) {
   }
 }
 
+async function handleDeleteDevice(device: DeviceDTO) {
+  errorMessage.value = ''
+  try {
+    await ElMessageBox.confirm(
+      `确定要删除设备「${device.name || device.id}」吗？此操作不可撤销。`,
+      '确认删除',
+      { confirmButtonText: '删除', cancelButtonText: '取消', type: 'warning' }
+    )
+    await deleteDevice(device.id)
+    await refreshAll()
+  } catch (error) {
+    if (error !== 'cancel' && error !== 'close') {
+      errorMessage.value = error instanceof Error ? error.message : '删除设备失败'
+    }
+  }
+}
+
 function validateForm() {
   if (!form.host) {
     return '请填写IP地址。'
@@ -869,6 +897,16 @@ $amber: #f59e0b;
     background: $slate-100;
     color: $slate-800;
     border-color: $slate-300;
+  }
+}
+
+.btn-delete {
+  color: $red;
+  border-color: rgba(239, 68, 68, 0.2);
+
+  &:hover {
+    background: rgba(239, 68, 68, 0.08);
+    border-color: rgba(239, 68, 68, 0.35);
   }
 }
 

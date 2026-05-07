@@ -183,6 +183,7 @@ func newRouter(
 	// 设备管理
 	mux.HandleFunc("GET /api/v1/devices", server.listDevicesHandler)
 	mux.HandleFunc("POST /api/v1/devices", server.handleUpsertDevice)
+	mux.HandleFunc("DELETE /api/v1/devices/{id}", server.handleDeleteDevice)
 	mux.HandleFunc("POST /api/v1/devices/status", server.deviceStatusHandler)
 	mux.HandleFunc("POST /api/v1/devices/connect", server.deviceConnectHandler)
 	mux.HandleFunc("POST /api/v1/devices/disconnect", server.deviceDisconnectHandler)

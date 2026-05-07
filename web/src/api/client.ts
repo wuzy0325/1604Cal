@@ -66,6 +66,12 @@ export async function apiPost<T>(path: string, body?: unknown): Promise<T> {
   return resp.data
 }
 
+/** DELETE 请求，自动解包 ApiResponse.data */
+export async function apiDelete<T>(path: string): Promise<T> {
+  const resp = await requestJSON<ApiResponse<T>>(path, { method: 'DELETE' })
+  return resp.data
+}
+
 export async function requestJSON<T>(path: string, init?: RequestInit): Promise<T> {
   const resp = await fetch(`${API_BASE}${path}`, init)
   if (!resp.ok) {

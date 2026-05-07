@@ -260,7 +260,8 @@ export const useCalibrationStore = defineStore('calibration', () => {
       return
     }
 
-    if (controlMode.value === 'manual' && !pressDeviceConnected.value && point.status === 'pending') {
+    // 手动模式下，pending 点可直接确认（操作者自行保证压力已到位）
+    if (controlMode.value === 'manual' && point.status === 'pending') {
       point.status = 'stabilizing'
       ElMessage.success('已确认压力到位，可以进行采集')
       return

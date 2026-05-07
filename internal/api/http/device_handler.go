@@ -235,6 +235,18 @@ func (s *apiServer) unitConsistencyHandler(w http.ResponseWriter, _ *http.Reques
 	})
 }
 
+// handleDeleteDevice 删除指定设备。
+func (s *apiServer) handleDeleteDevice(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	if id == "" {
+		writeError(w, apperrors.ErrInvalidArgument)
+		return
+	}
+
+	s.deviceManager.Delete(id)
+	writeSuccess(w, http.StatusOK, map[string]string{"id": id})
+}
+
 func decodeDeviceIDRequest(r *http.Request, w http.ResponseWriter) (string, bool) {
 	req, err := decodeJSON[setDeviceStatusRequest](r)
 	if err != nil {

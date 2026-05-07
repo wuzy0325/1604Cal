@@ -1,5 +1,5 @@
 import type { DeviceDTO, UnitConsistencyDTO, DeviceConnectConfigDTO } from '@/types/device'
-import { apiGet, apiPost } from './client'
+import { apiGet, apiPost, apiDelete } from './client'
 
 export async function fetchDevices(): Promise<DeviceDTO[]> {
   return (await apiGet<DeviceDTO[]>('/devices')) ?? []
@@ -15,6 +15,10 @@ export async function connectDevice(id: string): Promise<DeviceDTO> {
 
 export async function disconnectDevice(id: string): Promise<DeviceDTO> {
   return apiPost<DeviceDTO>('/devices/disconnect', { id })
+}
+
+export async function deleteDevice(id: string): Promise<{ id: string }> {
+  return apiDelete<{ id: string }>(`/devices/${encodeURIComponent(id)}`)
 }
 
 export async function setDeviceStatus(

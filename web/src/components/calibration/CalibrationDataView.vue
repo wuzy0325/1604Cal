@@ -334,13 +334,11 @@ const canPressurize = (status: string) =>
   canOperatePointActions.value && status === 'pending' && !manualModeWithoutPressDevice.value
 
 const canConfirm = (status: string) =>
-  canOperatePointActions.value && (status === 'stabilizing' || (manualModeWithoutPressDevice.value && status === 'pending'))
+  canOperatePointActions.value && (status === 'stabilizing' || (calibrationStore.controlMode === 'manual' && status === 'pending'))
 
 const canCollect = (status: string) =>
   canOperatePointActions.value && (
     status === 'stabilizing' ||
-    status === 'pressurizing' ||
-    status === 'collecting' ||
     status === 'completed' ||
     status === 'error'
   )
