@@ -32,6 +32,7 @@ import {
   autoCollectMeasurement,
   manualPressurizeMeasurement,
   manualCollectMeasurement,
+  manualStartMeasurement,
   type MeasurementPoint,
   type MeasurementAlarmConfig,
   type MeasurementParamsPayload
@@ -204,6 +205,23 @@ export const useMeasurementStore = defineStore('measurement', () => {
     } catch (error) {
       const detail = error instanceof Error ? error.message : String(error)
       ElMessage.error(`启动采集失败: ${detail}`)
+    }
+  }
+
+  const manualStart = async (selectedChannels: number[]) => {
+    if (!deviceBound.value) {
+      ElMessage.warning('请先绑定计量设备')
+      return
+    }
+    try {
+      channels.value = selectedChannels
+      currentPointIndex.value = 0
+      const newState = await manualStartMeasurement(selectedChannels)
+      state.value = newState as MeasurementState
+      ElMessage.success('手动模式已就绪')
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error)
+      ElMessage.error(`启动手动模式失败: ${detail}`)
     }
   }
 
@@ -423,6 +441,7 @@ export const useMeasurementStore = defineStore('measurement', () => {
     resetDevice,
     // 采集工作流
     start,
+    manualStart,
     pause,
     stop,
     refreshData,

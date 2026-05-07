@@ -226,6 +226,7 @@ func newRouter(
 	mux.HandleFunc("POST /api/v1/measurement/alarm/resolve", server.measurementAlarmResolveHandler)
 	mux.HandleFunc("GET /api/v1/measurement/alarm/pending", server.measurementAlarmPendingHandler)
 	mux.HandleFunc("POST /api/v1/measurement/auto-collect", server.measurementAutoCollectHandler)
+	mux.HandleFunc("POST /api/v1/measurement/manual-start", server.measurementManualStartHandler)
 	mux.HandleFunc("POST /api/v1/measurement/manual-pressurize", server.measurementManualPressurizeHandler)
 	mux.HandleFunc("POST /api/v1/measurement/manual-collect", server.measurementManualCollectHandler)
 

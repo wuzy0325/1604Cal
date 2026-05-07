@@ -35,11 +35,14 @@ func (s *Service) StartWorkflow(_ context.Context, channels []int) error {
 
 	s.config.Channels = append([]int(nil), channels...)
 	s.channels = append([]int(nil), channels...)
-	s.rows = nil
 	s.sess.SetChannels(channels)
 
-	if err := s.sessionMachine.Transition(domain.SessionStateReady); err != nil {
-		return fmt.Errorf("start measurement workflow: %w", err)
+	currentState := s.sessionMachine.State()
+	if currentState != domain.SessionStateReady {
+		s.rows = nil
+		if err := s.sessionMachine.Transition(domain.SessionStateReady); err != nil {
+			return fmt.Errorf("start measurement workflow: %w", err)
+		}
 	}
 
 	s.session = &Session{

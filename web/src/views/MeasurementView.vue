@@ -50,6 +50,7 @@
             :can-start="canStart"
             :is-stable="measurementStore.isStable"
             :stable-seconds="measurementStore.stabilityState.stableDurationMs / 1000"
+            :has-pressure-device="hasPressureDevice"
             @start="handleStart"
             @pause="handlePause"
             @resume="handleResume"
@@ -57,15 +58,18 @@
             @reset="handleReset"
             @export="exportDialogVisible = true"
             @select-channel="channelDialogVisible = true"
+            @manual-start="handleManualStart"
             @manual-pressurize="handleManualPressurize"
-            @manual-collect="handleManualCollect"
           />
           <div class="section-gap" />
           <div class="card-block">
             <MeasurementParamsPanel />
           </div>
           <div class="card-block">
-            <MeasurementDataView />
+            <MeasurementDataView
+              :control-mode="measurementStore.measurementParams.controlMode"
+              @collect-point="handleCollectPoint"
+            />
           </div>
         </div>
       </main>
@@ -122,6 +126,10 @@ const canStart = computed(() =>
   deviceStore.measureDevices.some(d => d.status === 'connected') &&
   deviceStore.pressureDevices.some(d => d.status === 'connected') &&
   measurementStore.points.length > 0
+)
+
+const hasPressureDevice = computed(() =>
+  deviceStore.pressureDevices.some(d => d.status === 'connected')
 )
 
 const reportTemplateName = computed(() => {
@@ -193,15 +201,20 @@ function handleReset() {
   ElMessage.info('采集数据已重置')
 }
 
+async function handleManualStart() {
+  const hasMeasure = deviceStore.measureDevices.some(d => d.status === 'connected')
+  if (!hasMeasure) { ElMessage.warning('请先连接计量设备'); return }
+  if (measurementStore.points.length === 0) { ElMessage.warning('请先生成压力表'); return }
+  await measurementStore.manualStart(measurementStore.channels)
+}
+
 async function handleManualPressurize() {
-  const idx = measurementStore.currentPointIndex || 1
+  const idx = measurementStore.currentPointIndex + 1
   await measurementStore.manualPressurize(idx)
 }
 
-async function handleManualCollect() {
-  const idx = measurementStore.currentPointIndex || 1
-  await measurementStore.manualCollect(idx)
-  measurementStore.completePoint()
+async function handleCollectPoint(pointIndex: number) {
+  await measurementStore.manualCollect(pointIndex)
 }
 
 /* ── 报警通道 ── */

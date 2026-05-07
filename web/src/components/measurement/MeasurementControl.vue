@@ -76,18 +76,19 @@
           <button
             type="button"
             class="ctrl-btn btn-start"
+            :disabled="!canManualStart"
+            @click="$emit('manual-start')"
+          >
+            开始
+          </button>
+          <button
+            v-if="hasPressureDevice"
+            type="button"
+            class="ctrl-btn btn-start"
             :disabled="!canManualPressurize"
             @click="$emit('manual-pressurize')"
           >
             手动打压
-          </button>
-          <button
-            type="button"
-            class="ctrl-btn btn-collect"
-            :disabled="!canManualCollect"
-            @click="$emit('manual-collect')"
-          >
-            采集
           </button>
         </template>
         <button
@@ -203,6 +204,10 @@ const props = defineProps({
   selectedChannelCount: {
     type: Number,
     default: undefined
+  },
+  hasPressureDevice: {
+    type: Boolean,
+    default: true
   }
 })
 
@@ -214,8 +219,8 @@ defineEmits<{
   reset: []
   export: []
   'select-channel': []
+  'manual-start': []
   'manual-pressurize': []
-  'manual-collect': []
 }>()
 
 const measurementStore = useMeasurementStore()
@@ -227,7 +232,7 @@ const handleChannelConfirm = (channels: number[]) => {
 }
 
 const completedCount = computed(() =>
-  measurementStore.currentPointIndex
+  measurementStore.points.filter(p => p.status === 'completed').length
 )
 
 const totalCount = computed(() => measurementStore.points.length)
@@ -246,13 +251,15 @@ const hasCompletedPoints = computed(() =>
 )
 
 const canManualPressurize = computed(() =>
-  measurementStore.points.length > 0 && !measurementStore.isRunning
+  props.hasPressureDevice &&
+  measurementStore.points.length > 0 &&
+  !measurementStore.isRunning
 )
 
-const canManualCollect = computed(() =>
+const canManualStart = computed(() =>
   measurementStore.measurementParams.controlMode === 'manual' &&
-  measurementStore.state === 'stabilizing' &&
-  measurementStore.isStable
+  measurementStore.points.length > 0 &&
+  ['idle', 'stopped', 'completed'].includes(measurementStore.state)
 )
 
 const enabledChannelsDesc = computed(() => {
@@ -520,17 +527,6 @@ $amber: #f59e0b;
   &:hover:not(:disabled) {
     background: rgba(59, 130, 246, 0.16);
     border-color: rgba(59, 130, 246, 0.35);
-  }
-}
-
-.btn-collect {
-  background: rgba(55, 65, 81, 0.08);
-  color: $slate-700;
-  border: 1px solid $slate-200;
-
-  &:hover:not(:disabled) {
-    background: rgba(55, 65, 81, 0.14);
-    border-color: $slate-300;
   }
 }
 

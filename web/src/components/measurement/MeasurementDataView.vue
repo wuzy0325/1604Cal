@@ -49,7 +49,15 @@
                 </div>
               </td>
               <td class="cell-status">
-                <span :class="['status-tag', getStatusType(pt.status)]">
+                <button
+                  v-if="controlMode === 'manual'"
+                  type="button"
+                  class="row-collect-btn"
+                  @click="$emit('collect-point', pt.index)"
+                >
+                  采集
+                </button>
+                <span v-else :class="['status-tag', getStatusType(pt.status)]">
                   <span :class="['status-dot', getStatusType(pt.status)]" />
                   {{ getStatusText(pt.status) }}
                 </span>
@@ -141,9 +149,13 @@ import type { MeasurementPoint } from '@/api/measurement'
 const props = defineProps<{
   rows?: CollectedRow[]
   channels?: number[]
+  controlMode?: string
 }>()
 
-defineEmits<{ 'export-csv': [] }>()
+defineEmits<{
+  'export-csv': []
+  'collect-point': [pointIndex: number]
+}>()
 
 const measurementStore = useMeasurementStore()
 
@@ -607,6 +619,31 @@ $amber: #f59e0b;
 }
 .status-dot.error { background: $red; }
 
+/* 行内采集按钮 */
+.row-collect-btn {
+  padding: 3px 12px;
+  border: 1px solid $mint;
+  border-radius: 6px;
+  background: linear-gradient(135deg, $mint, $mint-dark);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+  font-family: $font-sans;
+  cursor: pointer;
+  transition: all 0.15s ease;
+
+  &:hover:not(:disabled) {
+    background: linear-gradient(135deg, $mint-light, $mint);
+    transform: translateY(-1px);
+    box-shadow: 0 2px 8px rgba(16, 185, 129, 0.3);
+  }
+
+  &:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+}
+
 .target-input {
   width: 52px;
   text-align: center;
@@ -621,6 +658,14 @@ $amber: #f59e0b;
   font-variant-numeric: tabular-nums;
   font-family: $font-mono;
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
+
+  &::-webkit-inner-spin-button,
+  &::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+
+  -moz-appearance: textfield;
 
   &:focus {
     border-color: $mint;

@@ -127,6 +127,11 @@ export async function autoCollectMeasurement(): Promise<string> {
   return (await apiPost<{ state: string }>('/measurement/auto-collect')).state
 }
 
+/** 手动模式启动工作流（仅进入 ready 状态，不启动实时采样） */
+export async function manualStartMeasurement(channels: number[]): Promise<string> {
+  return (await apiPost<{ state: string }>('/measurement/manual-start', { channels })).state
+}
+
 /** 手动打压指定测点 */
 export async function manualPressurizeMeasurement(pointIndex: number): Promise<string> {
   return (await apiPost<{ state: string }>('/measurement/manual-pressurize', { pointIndex })).state

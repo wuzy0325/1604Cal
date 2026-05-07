@@ -134,6 +134,28 @@ func (s *apiServer) measurementAutoCollectHandler(w http.ResponseWriter, r *http
 	writeSuccess(w, http.StatusOK, map[string]string{"state": string(s.measurementService.State())})
 }
 
+// measurementManualStartHandler 仅启动工作流（进入 ready 状态），不启动实时采样。
+// 手动模式使用此端点，允许后续手动打压或直接采集。
+func (s *apiServer) measurementManualStartHandler(w http.ResponseWriter, r *http.Request) {
+	req, err := decodeJSON[measurementStartRequest](r)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+
+	if len(req.Channels) == 0 {
+		writeError(w, apperrors.ErrInvalidArgument)
+		return
+	}
+
+	if err := s.measurementService.StartWorkflow(r.Context(), req.Channels); err != nil {
+		writeError(w, err)
+		return
+	}
+
+	writeSuccess(w, http.StatusOK, map[string]string{"state": string(s.measurementService.State())})
+}
+
 func (s *apiServer) measurementManualPressurizeHandler(w http.ResponseWriter, r *http.Request) {
 	req, err := decodeJSON[struct {
 		PointIndex int `json:"pointIndex"`

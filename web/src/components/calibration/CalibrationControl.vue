@@ -144,12 +144,11 @@ $amber: #f59e0b;
   background: #ffffff;
   border-radius: 12px;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
-  border: 1px solid $slate-200;
   padding: 16px;
   display: flex;
   flex-direction: column;
   font-family: $font-sans;
-  transition: box-shadow 0.2s ease, border-color 0.2s ease;
+  transition: box-shadow 0.2s ease;
 
   &:hover {
     box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.07), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
