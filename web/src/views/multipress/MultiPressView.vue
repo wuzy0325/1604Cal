@@ -122,7 +122,7 @@ async function handleStopAll(): Promise<void> {
   await store.stopAll()
 }
 
-onMounted(() => { store.setupListeners() })
+onMounted(() => { store.loadPressureDevices(); store.setupListeners() })
 onUnmounted(() => { store.cleanup() })
 </script>
 
