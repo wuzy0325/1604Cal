@@ -322,19 +322,6 @@ body {
 .cursor-not-allowed { cursor: not-allowed; }
 
 // 玻璃拟态效果
-.glass {
-    background: $glass-bg;
-    backdrop-filter: $glass-backdrop;
-    -webkit-backdrop-filter: $glass-backdrop;
-    border: 1px solid $glass-border;
-}
-
-.glass-light {
-    background: $glass-bg-light;
-    backdrop-filter: $glass-backdrop;
-    -webkit-backdrop-filter: $glass-backdrop;
-    border: 1px solid $glass-border;
-}
 
 // 卡片基础样式
 .card-base {
@@ -631,6 +618,33 @@ body {
     }
 }
 
+// 通道选择弹窗专用样式（全局，避免 teleport 后 scoped 穿透失效）
+.channel-select-dialog {
+    background: #ffffff;
+    color: #1f2937;
+
+    .el-dialog__header {
+        padding: 16px 20px 12px;
+        border-bottom: 1px solid #e5e7eb;
+    }
+
+    .el-dialog__title {
+        color: #1f2937;
+        font-size: 16px;
+        font-weight: 600;
+    }
+
+    .el-dialog__body {
+        padding: 16px 20px;
+        color: #374151;
+    }
+
+    .el-dialog__footer {
+        padding: 12px 20px 16px;
+        border-top: 1px solid #e5e7eb;
+    }
+}
+
 // 标签样式覆盖
 .el-tag {
     border-radius: $radius-sm;
@@ -737,26 +751,25 @@ body {
     box-shadow: $shadow-lg;
 
     &--success {
-        border-top: 3px solid $success-500;
+        border-top: 1px solid $success-500;
     }
 
     &--warning {
-        border-top: 3px solid $warning-500;
+        border-top: 1px solid $warning-500;
     }
 
     &--error {
-        border-top: 3px solid $danger-500;
+        border-top: 1px solid $danger-500;
     }
 
     &--info {
-        border-top: 3px solid $info-500;
+        border-top: 1px solid $info-500;
     }
 }
 
 // 加载样式覆盖
 .el-loading-mask {
-    background: rgba($neutral-950, 0.8);
-    backdrop-filter: blur(4px);
+    background: rgba($neutral-100, 0.85);
 }
 
 .el-loading-spinner .circular {
@@ -1207,18 +1220,18 @@ body {
     }
 
     &.el-notification--success {
-        border-top: 3px solid $success-500;
+        border-top: 1px solid $success-500;
     }
 
     &.el-notification--warning {
-        border-top: 3px solid $warning-500;
+        border-top: 1px solid $warning-500;
     }
 
     &.el-notification--error {
-        border-top: 3px solid $danger-500;
+        border-top: 1px solid $danger-500;
     }
 
     &.el-notification--info {
-        border-top: 3px solid $info-500;
+        border-top: 1px solid $info-500;
     }
 }

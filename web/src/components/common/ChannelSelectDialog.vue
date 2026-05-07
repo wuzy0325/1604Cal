@@ -3,6 +3,8 @@
     :model-value="visible"
     title="通道选择"
     width="380px"
+    class="channel-select-dialog"
+    append-to-body
     :close-on-click-modal="false"
     @update:model-value="$emit('update:visible', $event)"
   >
@@ -39,8 +41,10 @@ watch(() => props.visible, (val) => {
   }
 })
 
-const handleConfirm = () => {
+function handleConfirm() {
   emit('confirm', [...localChannels.value])
   emit('update:visible', false)
 }
 </script>
+
+

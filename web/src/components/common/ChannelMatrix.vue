@@ -22,30 +22,27 @@
         </el-button>
       </div>
     </div>
-    
+
     <div class="matrix-grid">
-      <div 
-        v-for="(selected, index) in localChannels" 
-        :key="index"
+      <div
+        v-for="ch in allChannels"
+        :key="ch"
         class="channel-item"
-        :class="{ selected }"
+        :class="{ selected: isSelected(ch) }"
         role="checkbox"
-        :aria-checked="isSelected(index)"
+        :aria-checked="isSelected(ch)"
         tabindex="0"
-        @click="toggleChannel(index)"
-        @keydown.enter="toggleChannel(index)"
-        @keydown.space.prevent="toggleChannel(index)"
+        @click="toggleChannel(ch)"
+        @keydown.enter="toggleChannel(ch)"
+        @keydown.space.prevent="toggleChannel(ch)"
       >
-        <el-checkbox
-          v-model="localChannels[index]"
-          @click.stop
-          @change="emitUpdate"
-        >
-          CH{{ index + 1 }}
-        </el-checkbox>
+        <span class="check-box" aria-hidden="true">
+          <span v-if="isSelected(ch)" class="check-mark">✓</span>
+        </span>
+        <span class="channel-label">CH{{ ch }}</span>
       </div>
     </div>
-    
+
     <div
       v-if="selectedCount === 0"
       class="warning"
@@ -58,7 +55,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue'
+import { computed } from 'vue'
 import { Warning } from '@element-plus/icons-vue'
 
 const props = defineProps<{
@@ -69,52 +66,29 @@ const emit = defineEmits<{
   'update:selectedChannels': [channels: number[]]
 }>()
 
-// 本地状态 - 16个通道的选中状态
-const localChannels = ref<boolean[]>(new Array(16).fill(false))
+const allChannels = Array.from({ length: 16 }, (_, i) => i + 1)
 
-// 从props同步初始值
-watch(() => props.selectedChannels, (newVal) => {
-  if (newVal) {
-    localChannels.value = new Array(16).fill(false).map((_, i) => newVal.includes(i + 1))
-  }
-}, { immediate: true })
+const selected = computed<number[]>(() => props.selectedChannels ?? [])
 
-// 计算选中的数量
-const selectedCount = computed(() => localChannels.value.filter(Boolean).length)
+const selectedCount = computed(() => selected.value.length)
 
-// 计算选中的通道编号（1-16）
-const selectedChannelNumbers = computed(() => {
-  return localChannels.value
-    .map((selected, index) => selected ? index + 1 : null)
-    .filter((num): num is number => num !== null)
-})
-
-// 判断通道是否选中
-const isSelected = (index: number): boolean => {
-  return localChannels.value[index]
+function isSelected(ch: number): boolean {
+  return selected.value.includes(ch)
 }
 
-// 切换通道
-const toggleChannel = (index: number) => {
-  localChannels.value[index] = !localChannels.value[index]
-  emitUpdate()
+function toggleChannel(ch: number) {
+  const channels = isSelected(ch)
+    ? selected.value.filter(c => c !== ch)
+    : [...selected.value, ch]
+  emit('update:selectedChannels', channels)
 }
 
-// 全选
-const selectAll = () => {
-  localChannels.value.fill(true)
-  emitUpdate()
+function selectAll() {
+  emit('update:selectedChannels', [...allChannels])
 }
 
-// 清空
-const clearAll = () => {
-  localChannels.value.fill(false)
-  emitUpdate()
-}
-
-// 触发更新事件
-const emitUpdate = () => {
-  emit('update:selectedChannels', selectedChannelNumbers.value)
+function clearAll() {
+  emit('update:selectedChannels', [])
 }
 </script>
 
@@ -122,7 +96,8 @@ const emitUpdate = () => {
 .channel-matrix {
   display: flex;
   flex-direction: column;
-  gap: var(--spacing-sm);
+  gap: 12px;
+  color: #1f2937;
 
   .matrix-header {
     display: flex;
@@ -130,7 +105,7 @@ const emitUpdate = () => {
     align-items: center;
 
     h4 {
-      color: var(--text-primary);
+      color: #1f2937;
       margin: 0;
       font-size: 12px;
       font-weight: 500;
@@ -139,10 +114,10 @@ const emitUpdate = () => {
     .actions {
       display: flex;
       align-items: center;
-      gap: var(--spacing-xs);
+      gap: 8px;
 
       .count {
-        color: var(--text-muted);
+        color: #6b7280;
         font-size: 11px;
       }
     }
@@ -151,39 +126,59 @@ const emitUpdate = () => {
   .matrix-grid {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
-    gap: 4px;
+    gap: 8px;
 
     .channel-item {
-      background: var(--bg-tertiary);
-      border: 1px solid transparent;
-      border-radius: var(--radius-sm);
-      padding: 5px 6px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      min-height: 34px;
+      background: #f9fafb;
+      border: 1px solid #e5e7eb;
+      border-radius: 8px;
+      padding: 7px 8px;
       cursor: pointer;
       transition: all 0.15s;
+      user-select: none;
 
       &:hover {
-        border-color: var(--accent-primary);
-        background: var(--bg-quaternary);
+        border-color: #10b981;
+        background: #f0fdf4;
       }
 
       &.selected {
-        background: var(--status-success-bg);
-        border-color: var(--status-success);
+        background: #ecfdf5;
+        border-color: #10b981;
       }
 
-      .el-checkbox {
-        color: var(--text-primary);
-        height: auto;
+      .check-box {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 14px;
+        height: 14px;
+        flex: 0 0 14px;
+        border: 1px solid #d1d5db;
+        border-radius: 4px;
+        background: #fff;
+      }
 
-        :deep(.el-checkbox__label) {
-          font-size: 11px;
-          padding-left: 4px;
-        }
+      &.selected .check-box {
+        border-color: #10b981;
+        background: #10b981;
+      }
 
-        :deep(.el-checkbox__input.is-checked + .el-checkbox__label) {
-          color: var(--status-success);
-          font-weight: 500;
-        }
+      .check-mark {
+        color: #fff;
+        font-size: 10px;
+        line-height: 1;
+      }
+
+      .channel-label {
+        color: #1f2937;
+        font-size: 12px;
+        font-weight: 500;
+        line-height: 1;
       }
     }
   }
@@ -191,12 +186,12 @@ const emitUpdate = () => {
   .warning {
     display: flex;
     align-items: center;
-    gap: var(--spacing-xs);
-    color: var(--status-warning);
+    gap: 6px;
+    color: #d97706;
     font-size: 11px;
-    padding: 6px var(--spacing-sm);
-    background: var(--status-warning-bg-subtle);
-    border-radius: var(--radius-sm);
+    padding: 6px 8px;
+    background: #fffbeb;
+    border-radius: 6px;
   }
 }
 </style>
