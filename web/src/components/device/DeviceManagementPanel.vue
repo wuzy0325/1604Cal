@@ -298,19 +298,6 @@
           >
         </label>
 
-        <label>
-          <span>单位</span>
-          <select
-            v-model="form.unit"
-            data-test="form-unit"
-          >
-            <option value="MPa">MPa</option>
-            <option value="kPa">kPa</option>
-            <option value="bar">bar</option>
-            <option value="psi">psi</option>
-          </select>
-        </label>
-
       </div>
 
       <p
@@ -392,7 +379,6 @@ type DeviceFormState = {
   model: string
   host: string
   port: number
-  unit: string
   status: DeviceDTO['status']
 }
 
@@ -418,7 +404,6 @@ const form = reactive<DeviceFormState>({
   model: '',
   host: '',
   port: 9000,
-  unit: 'MPa',
   status: 'disconnected'
 })
 
@@ -598,7 +583,6 @@ function openCreateDialog() {
   form.model = ''
   form.host = ''
   form.port = 9000
-  form.unit = 'MPa'
   form.status = 'disconnected'
   formError.value = ''
   dialogVisible.value = true
@@ -619,7 +603,6 @@ function openEditDialog(device: DeviceDTO) {
   form.model = device.model
   form.host = device.host
   form.port = device.port
-  form.unit = device.unit || 'MPa'
   form.status = device.status
   formError.value = ''
   dialogVisible.value = true
@@ -646,7 +629,6 @@ async function submitForm() {
       model: form.model,
       host: form.host,
       port: form.port,
-      unit: form.unit,
       status: form.status
     })
     dialogVisible.value = false

@@ -188,6 +188,11 @@ func (m *PersistentDeviceManager) saveToDisk() error {
 		Devices:     m.deviceList(),
 	}
 
+	// 单位从硬件实时读取，不做本地持久化。
+	for i := range data.Devices {
+		data.Devices[i].Unit = ""
+	}
+
 	jsonData, err := json.MarshalIndent(data, "", "  ")
 	if err != nil {
 		return fmt.Errorf("marshal devices: %w", err)

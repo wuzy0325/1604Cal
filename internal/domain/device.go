@@ -47,9 +47,6 @@ func (d Device) Validate() error {
 	if net.ParseIP(d.Host) == nil || d.Port < 1 || d.Port > 65535 {
 		return ErrInvalidDevice
 	}
-	if d.Unit == "" {
-		return ErrInvalidDevice
-	}
 	return nil
 }
 
