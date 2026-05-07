@@ -54,27 +54,7 @@
         </div>
       </div>
 
-      <!-- 打压 / 控制 / 通道 并列 -->
-      <div class="param-group">
-        <span class="group-label">打压模式</span>
-        <div class="group-body">
-          <div class="segment-control">
-            <button
-              type="button"
-              class="segment-btn"
-              :class="{ active: calibrationStore.calibrationParams.pressureMode === 'single' }"
-              @click="calibrationStore.calibrationParams.pressureMode = 'single'"
-            >单程</button>
-            <button
-              type="button"
-              class="segment-btn"
-              :class="{ active: calibrationStore.calibrationParams.pressureMode === 'roundTrip' }"
-              @click="calibrationStore.calibrationParams.pressureMode = 'roundTrip'"
-            >回程</button>
-          </div>
-        </div>
-      </div>
-
+      <!-- 控制 / 通道 并列 -->
       <div class="param-group">
         <span class="group-label">控制模式</span>
         <div class="group-body">
