@@ -1,8 +1,6 @@
 <template>
   <section class="control-card">
-    <!-- 进度 + 操作按钮 并列 -->
     <div class="control-main">
-      <!-- 左：进度条 -->
       <div v-if="calibrationStore.pressurePoints.length > 0" class="progress-group">
         <div class="progress-labels">
           <span class="progress-text">进度 {{ completedCount }}/{{ calibrationStore.pressurePoints.length }}</span>
@@ -13,13 +11,11 @@
         </div>
       </div>
 
-      <!-- 右：操作按钮 -->
       <div class="action-group">
         <template v-if="calibrationStore.controlMode === 'manual' && isRunning">
           <ManualControlPanel
             :max-pressure="calibrationParams.maxValue"
             :stability-status="stabilityStatus"
-            @collected="handleManualCollect"
           />
         </template>
         <template v-else-if="sessionState === 'await_alarm_resolution'">
@@ -112,7 +108,6 @@ import {
   CircleClose,
   CircleCheck
 } from '@element-plus/icons-vue'
-import type { SessionState } from '@/types/calibration'
 import { useCalibrationStore } from '@/stores/calibration'
 import ManualControlPanel from './ManualControlPanel.vue'
 import { stabilityStatusKey } from '@/composables/useCalibrationSync'
@@ -122,23 +117,6 @@ const stabilityStatus = inject(stabilityStatusKey)!
 
 const sessionState = computed(() => calibrationStore.sessionState)
 const isRunning = computed(() => calibrationStore.isRunning)
-
-const sessionStateTextMap: Record<SessionState, string> = {
-  idle: '空闲',
-  ready: '就绪',
-  pressurizing: '打压中',
-  stabilizing: '稳定中',
-  collecting: '采集中',
-  point_done: '点完成',
-  fitting: '拟合中',
-  completed: '已完成',
-  paused: '已暂停',
-  stopped: '已停止',
-  await_manual_collect: '等待手动采集',
-  await_alarm_resolution: '等待报警处理',
-  recovering: '恢复中',
-  error: '错误'
-}
 
 const completedCount = computed(() =>
   calibrationStore.pressurePoints.filter(p => p.status === 'completed').length
@@ -151,9 +129,6 @@ const progressPercent = computed(() => {
 
 const calibrationParams = computed(() => calibrationStore.calibrationParams)
 
-function handleManualCollect(data: number[]) {
-  console.log('Manual collection complete:', data.length, 'channels')
-}
 </script>
 
 <style scoped lang="scss">

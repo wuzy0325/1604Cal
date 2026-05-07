@@ -2,11 +2,9 @@ package http
 
 import (
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"strconv"
 
-	"cal1604/internal/application/calibration"
 	"cal1604/internal/domain"
 	apperrors "cal1604/internal/errors"
 )
@@ -44,16 +42,9 @@ type alarmDecisionRequest struct {
 }
 
 func (s *apiServer) calibrationSetDevicesHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		w.WriteHeader(http.StatusMethodNotAllowed)
-		return
-	}
-
-	var req setDevicesRequest
-	decoder := json.NewDecoder(r.Body)
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&req); err != nil {
-		writeError(w, apperrors.ErrInvalidArgument)
+	req, err := decodeJSON[setDevicesRequest](r)
+	if err != nil {
+		writeError(w, err)
 		return
 	}
 
@@ -71,22 +62,15 @@ func (s *apiServer) calibrationSetDevicesHandler(w http.ResponseWriter, r *http.
 }
 
 func (s *apiServer) calibrationSetConfigHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		w.WriteHeader(http.StatusMethodNotAllowed)
+	req, err := decodeJSON[setConfigRequest](r)
+	if err != nil {
+		writeError(w, err)
 		return
 	}
 
-	var req setConfigRequest
-	decoder := json.NewDecoder(r.Body)
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&req); err != nil {
-		writeError(w, apperrors.ErrInvalidArgument)
-		return
-	}
-
-	config := calibration.CalibrationConfig{
+	config := domain.WorkflowConfig{
 		Channels:       req.Channels,
-		PressurePoints: req.PressurePoints,
+		PointCount:     req.PressurePoints,
 		AverageCount:   req.AverageCount,
 		MinPressure:    req.MinPressure,
 		MaxPressure:    req.MaxPressure,
@@ -94,26 +78,15 @@ func (s *apiServer) calibrationSetConfigHandler(w http.ResponseWriter, r *http.R
 		ControlMode:    req.ControlMode,
 		PressureMode:   req.PressureMode,
 	}
-	if config.PressurePoints < 2 || config.PressurePoints > 6 {
-		writeError(w, fmt.Errorf("pressure points must be between 2 and 6, got %d", config.PressurePoints))
-		return
-	}
 	s.calibrationService.SetConfig(config)
 
 	writeSuccess(w, http.StatusOK, map[string]string{"status": "ok"})
 }
 
 func (s *apiServer) calibrationSetChannelsHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		w.WriteHeader(http.StatusMethodNotAllowed)
-		return
-	}
-
-	var req setChannelsRequest
-	decoder := json.NewDecoder(r.Body)
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&req); err != nil {
-		writeError(w, apperrors.ErrInvalidArgument)
+	req, err := decodeJSON[setChannelsRequest](r)
+	if err != nil {
+		writeError(w, err)
 		return
 	}
 
@@ -121,22 +94,12 @@ func (s *apiServer) calibrationSetChannelsHandler(w http.ResponseWriter, r *http
 	writeSuccess(w, http.StatusOK, channelsResponse(req))
 }
 
-func (s *apiServer) calibrationGetChannelsHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		w.WriteHeader(http.StatusMethodNotAllowed)
-		return
-	}
-
+func (s *apiServer) calibrationGetChannelsHandler(w http.ResponseWriter, _ *http.Request) {
 	channels := s.calibrationService.GetChannels()
 	writeSuccess(w, http.StatusOK, channelsResponse{Channels: channels})
 }
 
-func (s *apiServer) calibrationGeneratePointsHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		w.WriteHeader(http.StatusMethodNotAllowed)
-		return
-	}
-
+func (s *apiServer) calibrationGeneratePointsHandler(w http.ResponseWriter, _ *http.Request) {
 	points, err := s.calibrationService.GeneratePressurePoints()
 	if err != nil {
 		writeError(w, err)
@@ -145,22 +108,12 @@ func (s *apiServer) calibrationGeneratePointsHandler(w http.ResponseWriter, r *h
 	writeSuccess(w, http.StatusOK, points)
 }
 
-func (s *apiServer) calibrationGetPointsHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		w.WriteHeader(http.StatusMethodNotAllowed)
-		return
-	}
-
+func (s *apiServer) calibrationGetPointsHandler(w http.ResponseWriter, _ *http.Request) {
 	points := s.calibrationService.GetPressurePoints()
 	writeSuccess(w, http.StatusOK, points)
 }
 
 func (s *apiServer) calibrationPressurizeHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		w.WriteHeader(http.StatusMethodNotAllowed)
-		return
-	}
-
 	pointIndex, ok := decodePointIndexRequest(r, w)
 	if !ok {
 		return
@@ -175,11 +128,6 @@ func (s *apiServer) calibrationPressurizeHandler(w http.ResponseWriter, r *http.
 }
 
 func (s *apiServer) calibrationCollectHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		w.WriteHeader(http.StatusMethodNotAllowed)
-		return
-	}
-
 	pointIndex, ok := decodePointIndexRequest(r, w)
 	if !ok {
 		return
@@ -195,11 +143,6 @@ func (s *apiServer) calibrationCollectHandler(w http.ResponseWriter, r *http.Req
 }
 
 func (s *apiServer) calibrationFitHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		w.WriteHeader(http.StatusMethodNotAllowed)
-		return
-	}
-
 	result, err := s.calibrationService.Fit(r.Context())
 	if err != nil {
 		writeError(w, err)
@@ -210,16 +153,9 @@ func (s *apiServer) calibrationFitHandler(w http.ResponseWriter, r *http.Request
 }
 
 func (s *apiServer) calibrationResolveAlarmHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		w.WriteHeader(http.StatusMethodNotAllowed)
-		return
-	}
-
-	var req alarmDecisionRequest
-	decoder := json.NewDecoder(r.Body)
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&req); err != nil {
-		writeError(w, apperrors.ErrInvalidArgument)
+	req, err := decodeJSON[alarmDecisionRequest](r)
+	if err != nil {
+		writeError(w, err)
 		return
 	}
 
@@ -232,11 +168,6 @@ func (s *apiServer) calibrationResolveAlarmHandler(w http.ResponseWriter, r *htt
 }
 
 func (s *apiServer) calibrationRetryPointHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		w.WriteHeader(http.StatusMethodNotAllowed)
-		return
-	}
-
 	pointIndex, ok := decodePointIndexRequest(r, w)
 	if !ok {
 		return
@@ -251,10 +182,8 @@ func (s *apiServer) calibrationRetryPointHandler(w http.ResponseWriter, r *http.
 }
 
 func decodePointIndexRequest(r *http.Request, w http.ResponseWriter) (int, bool) {
-	var req pointIndexRequest
-	decoder := json.NewDecoder(r.Body)
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&req); err != nil {
+	req, err := decodeJSON[pointIndexRequest](r)
+	if err != nil {
 		// 尝试从查询参数读取
 		idxStr := r.URL.Query().Get("pointIndex")
 		if idxStr != "" {
@@ -277,29 +206,15 @@ func decodePointIndexRequest(r *http.Request, w http.ResponseWriter) (int, bool)
 	return req.PointIndex, true
 }
 
-// calibrationGetAlarmConfigHandler 返回当前报警配置。
-func (s *apiServer) calibrationGetAlarmConfigHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		w.WriteHeader(http.StatusMethodNotAllowed)
-		return
-	}
-
+func (s *apiServer) calibrationGetAlarmConfigHandler(w http.ResponseWriter, _ *http.Request) {
 	config := s.calibrationService.GetAlarmConfig()
 	writeSuccess(w, http.StatusOK, config)
 }
 
-// calibrationSetAlarmConfigHandler 更新报警配置。
 func (s *apiServer) calibrationSetAlarmConfigHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		w.WriteHeader(http.StatusMethodNotAllowed)
-		return
-	}
-
-	var config domain.AlarmConfig
-	decoder := json.NewDecoder(r.Body)
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&config); err != nil {
-		writeError(w, apperrors.ErrInvalidArgument)
+	config, err := decodeJSON[domain.AlarmConfig](r)
+	if err != nil {
+		writeError(w, err)
 		return
 	}
 
@@ -307,13 +222,7 @@ func (s *apiServer) calibrationSetAlarmConfigHandler(w http.ResponseWriter, r *h
 	writeSuccess(w, http.StatusOK, map[string]string{"status": "ok"})
 }
 
-// calibrationGetSessionHandler 返回当前校准会话。
-func (s *apiServer) calibrationGetSessionHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		w.WriteHeader(http.StatusMethodNotAllowed)
-		return
-	}
-
+func (s *apiServer) calibrationGetSessionHandler(w http.ResponseWriter, _ *http.Request) {
 	session := s.calibrationService.GetCalibrationSession()
 	writeSuccess(w, http.StatusOK, session)
 }
@@ -323,11 +232,6 @@ type manualPressurizeRequest struct {
 }
 
 func (s *apiServer) calibrationManualPressurizeHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		w.WriteHeader(http.StatusMethodNotAllowed)
-		return
-	}
-
 	var req manualPressurizeRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, apperrors.ErrInvalidArgument)
@@ -343,11 +247,6 @@ func (s *apiServer) calibrationManualPressurizeHandler(w http.ResponseWriter, r 
 }
 
 func (s *apiServer) calibrationManualCollectHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		w.WriteHeader(http.StatusMethodNotAllowed)
-		return
-	}
-
 	data, err := s.calibrationService.ManualCollect(r.Context())
 	if err != nil {
 		writeError(w, err)

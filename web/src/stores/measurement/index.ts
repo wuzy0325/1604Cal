@@ -36,8 +36,6 @@ import {
   type MeasurementAlarmConfig,
   type MeasurementParamsPayload
 } from '@/api/measurement'
-import { createEventStream } from '@/api/client'
-import type { StreamEventPayload } from '@/types/api'
 import type { MeasurementState, CollectedRow, StabilityUpdate, AlarmData } from './types'
 import { useMeasurementDeviceStore } from '@/stores/measurement/deviceStore'
 
@@ -96,9 +94,6 @@ export const useMeasurementStore = defineStore('measurement', () => {
   })
   const alarmPending = ref(false)
   const alarmData = ref<AlarmData | null>(null)
-
-  // SSE
-  let eventSource: EventSource | null = null
 
   // ── 计算属性 ──
   const runningStates: MeasurementState[] = ['pressurizing', 'stabilizing', 'collecting']
@@ -170,10 +165,8 @@ export const useMeasurementStore = defineStore('measurement', () => {
     for (let attempt = 1; attempt <= 3; attempt++) {
       try {
         measureUnit.value = await apiReadMeasureUnit()
-        console.log(`[1604单位读取] 从硬件读取到单位: ${measureUnit.value}`)
         return
       } catch {
-        console.warn(`[1604单位读取] 第${attempt}次读取失败`)
         if (attempt < 3) {
           await new Promise(r => setTimeout(r, 500))
         }
@@ -241,68 +234,6 @@ export const useMeasurementStore = defineStore('measurement', () => {
     } catch { /* 静默 */ }
   }
 
-  // ── SSE 事件监听 ──
-
-  const setupSSE = () => {
-    if (eventSource) return
-    eventSource = createEventStream((payload: StreamEventPayload) => {
-      switch (payload.type) {
-        case 'measurement.state_changed':
-          state.value = (payload.data as { state: MeasurementState }).state
-          break
-        case 'measurement.data_updated': {
-          const data = payload.data as { timestamp: string; channels: Record<string, number> }
-          rows.value.push({ timestamp: data.timestamp, channels: data.channels })
-          break
-        }
-        case 'measurement.stability.update':
-          stabilityState.value = payload.data as StabilityUpdate
-          isStable.value = stabilityState.value.isStable
-          currentPressure.value = stabilityState.value.currentValue
-          break
-        case 'measurement.alarm.triggered':
-          alarmPending.value = true
-          alarmData.value = payload.data as AlarmData
-          break
-        case 'measurement.alarm.resolved':
-          alarmPending.value = false
-          alarmData.value = null
-          break
-        case 'measurement.point.status': {
-          const updatedPoint = payload.data as MeasurementPoint
-          const idx = points.value.findIndex(p => p.id === updatedPoint.id)
-          if (idx >= 0) points.value[idx] = updatedPoint
-          break
-        }
-        case 'measurement.data.collected': {
-          const collected = payload.data as { pointIndex: number; channels: number[]; data: number[] }
-          const pointIdx = points.value.findIndex(p => p.index === collected.pointIndex)
-          if (pointIdx >= 0) {
-            points.value[pointIdx] = { ...points.value[pointIdx], collectedData: collected.data, status: 'completed' }
-          }
-          break
-        }
-        case 'multipress.pressure.update': {
-          const data = payload.data as Record<string, unknown>
-          const deviceId = data?.deviceId as string | undefined
-          const pressure = data?.currentPressure as number | undefined
-          if (deviceId && typeof pressure === 'number') {
-            const deviceStore = useMeasurementDeviceStore()
-            deviceStore.updateDevicePressure(deviceId, pressure)
-          }
-          break
-        }
-      }
-    })
-  }
-
-  const teardownSSE = () => {
-    if (eventSource) {
-      eventSource.close()
-      eventSource = null
-    }
-  }
-
   const fetchCurrentState = async () => {
     try {
       const s = await fetchMeasurementState()
@@ -312,6 +243,11 @@ export const useMeasurementStore = defineStore('measurement', () => {
 
   const syncState = (newState: MeasurementState) => {
     state.value = newState
+  }
+
+  const updateDevicePressure = (deviceId: string, pressure: number) => {
+    const deviceStore = useMeasurementDeviceStore()
+    deviceStore.updateDevicePressure(deviceId, pressure)
   }
 
   // ── 计量工作流 ──
@@ -513,10 +449,8 @@ export const useMeasurementStore = defineStore('measurement', () => {
     autoCollect,
     manualPressurize,
     manualCollect,
-    // SSE
-    setupSSE,
-    teardownSSE,
     fetchCurrentState,
-    syncState
+    syncState,
+    updateDevicePressure
   }
 })

@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"cal1604/internal/events"
 )
 
 func TestSSEEndpointStreamsEvents(t *testing.T) {
@@ -25,7 +27,7 @@ func TestSSEEndpointStreamsEvents(t *testing.T) {
 	}()
 
 	time.Sleep(20 * time.Millisecond)
-	publishEvent("session.state.changed", map[string]any{"state": "ready"})
+	publishEvent(events.EventSessionStateChanged, map[string]any{"state": "ready"})
 
 	time.Sleep(40 * time.Millisecond)
 	cancel()
@@ -36,7 +38,7 @@ func TestSSEEndpointStreamsEvents(t *testing.T) {
 		t.Fatal("sse handler did not exit after context cancellation")
 	}
 
-	if !strings.Contains(rec.Body.String(), "session.state.changed") {
+	if !strings.Contains(rec.Body.String(), events.EventSessionStateChanged) {
 		t.Fatalf("expected sse stream body to contain event type, got %q", rec.Body.String())
 	}
 }

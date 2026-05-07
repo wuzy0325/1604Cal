@@ -171,15 +171,15 @@ $amber: #f59e0b;
   }
 
   &.pressurizing {
-    border-top: 3px solid $mint;
+    border-top: 1px solid $mint;
   }
 
   &.error {
-    border-top: 3px solid $red;
+    border-top: 1px solid $red;
   }
 
   &.exhausting {
-    border-top: 3px solid $amber;
+    border-top: 1px solid $amber;
   }
 }
 

@@ -43,8 +43,8 @@ func (s *Service) ExportReport(ctx context.Context, session *calibration.Calibra
 	}
 
 	// 收集标准压力值（仅正程）
-	standardValues := make([]float64, 0, len(session.PressurePoints))
-	for _, p := range session.PressurePoints {
+	standardValues := make([]float64, 0, len(session.Points))
+	for _, p := range session.Points {
 		if p.Direction == "" || p.Direction == "forward" {
 			standardValues = append(standardValues, p.TargetPressure)
 		}
@@ -58,7 +58,7 @@ func (s *Service) ExportReport(ctx context.Context, session *calibration.Calibra
 
 	// 尝试加载模板
 	templatePath, _ := s.ResolveTemplatePath(
-		session.Config.PressurePoints,
+		session.Config.PointCount,
 		session.Config.PressureMode,
 	)
 
@@ -225,13 +225,13 @@ func parseTemplateFileName(filename string) (ReportTemplate, bool) {
 
 // collectChannelData 从会话压力点中按通道提取采集数据。
 func collectChannelData(session *calibration.CalibrationSession) [][]float64 {
-	if len(session.PressurePoints) == 0 {
+	if len(session.Points) == 0 {
 		return nil
 	}
 
 	// 确定通道数
 	numChannels := 0
-	for _, p := range session.PressurePoints {
+	for _, p := range session.Points {
 		if len(p.CollectedData) > numChannels {
 			numChannels = len(p.CollectedData)
 			break
@@ -247,7 +247,7 @@ func collectChannelData(session *calibration.CalibrationSession) [][]float64 {
 		channels[i] = make([]float64, 0)
 	}
 
-	for _, p := range session.PressurePoints {
+	for _, p := range session.Points {
 		if p.Direction == "backward" {
 			continue
 		}
@@ -262,7 +262,7 @@ func collectChannelData(session *calibration.CalibrationSession) [][]float64 {
 // collectBackwardData 从会话压力点中提取指定通道的回程数据。
 func collectBackwardData(session *calibration.CalibrationSession, channelIdx int) []float64 {
 	var data []float64
-	for _, p := range session.PressurePoints {
+	for _, p := range session.Points {
 		if p.Direction != "backward" {
 			continue
 		}

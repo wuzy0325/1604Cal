@@ -59,8 +59,8 @@ const collapsed = ref(false)
 
 const menuItems = [
   { path: '/device-management', icon: Tools, title: '设备管理' },
-  { path: '/measurement', icon: DataLine, title: '计量模块' },
   { path: '/calibration', icon: SetUp, title: '标定工作台' },
+  { path: '/measurement', icon: DataLine, title: '计量工作台' },
   { path: '/multi-pressure', icon: Odometer, title: '多设备打压' }
 ]
 
@@ -77,6 +77,11 @@ function handleNavigate(path: string): void {
 $font-sans: 'Inter', 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
 $mint: #10b981;
 $mint-light: #34d399;
+$mint-dark: #059669;
+$slate-200: #e5e7eb;
+$slate-400: #9ca3af;
+$slate-500: #6b7280;
+$slate-600: #4b5563;
 $slate-700: #374151;
 $slate-800: #1f2937;
 $slate-900: #111827;
@@ -88,7 +93,8 @@ $transition-sidebar: 250ms cubic-bezier(0.4, 0, 0.2, 1);
 .sidebar {
   width: $sidebar-expanded;
   height: 100%;
-  background: linear-gradient(180deg, $slate-800 0%, $slate-900 100%);
+  background: #f6f7f6;
+  border-right: 1px solid $slate-200;
   display: flex;
   flex-direction: column;
   flex-shrink: 0;
@@ -110,7 +116,7 @@ $transition-sidebar: 250ms cubic-bezier(0.4, 0, 0.2, 1);
   display: flex;
   align-items: center;
   gap: 10px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  border-bottom: 1px solid $slate-200;
   width: 100%;
   flex-shrink: 0;
   min-height: 56px;
@@ -125,19 +131,17 @@ $transition-sidebar: 250ms cubic-bezier(0.4, 0, 0.2, 1);
 .logo-icon {
   width: 28px;
   height: 28px;
-  color: $mint-light;
+  color: $mint;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(16, 185, 129, 0.12);
-  border-radius: 6px;
+  background: rgba(16, 185, 129, 0.1);
+  border-radius: 8px;
   cursor: pointer;
   transition: background 0.2s ease;
   flex-shrink: 0;
 
-  &:hover {
-    background: rgba(16, 185, 129, 0.2);
-  }
+  &:hover { background: rgba(16, 185, 129, 0.16); }
 
   svg {
     width: 18px;
@@ -148,7 +152,7 @@ $transition-sidebar: 250ms cubic-bezier(0.4, 0, 0.2, 1);
 .brand-label {
   font-size: 14px;
   font-weight: 700;
-  color: #fff;
+  color: $slate-800;
   letter-spacing: -0.01em;
   white-space: nowrap;
 }
@@ -182,7 +186,7 @@ $transition-sidebar: 250ms cubic-bezier(0.4, 0, 0.2, 1);
   cursor: pointer;
   transition: all 0.2s ease;
   position: relative;
-  color: rgba(255, 255, 255, 0.35);
+  color: $slate-500;
   white-space: nowrap;
 
   .collapsed & {
@@ -192,13 +196,14 @@ $transition-sidebar: 250ms cubic-bezier(0.4, 0, 0.2, 1);
   }
 
   &:hover {
-    background: rgba(255, 255, 255, 0.08);
-    color: rgba(255, 255, 255, 0.7);
+    background: rgba(0, 0, 0, 0.04);
+    color: $slate-700;
   }
 
   &.active {
-    color: #fff;
-    background: rgba(16, 185, 129, 0.15);
+    color: $mint-dark;
+    background: rgba(16, 185, 129, 0.08);
+    font-weight: 600;
 
     .nav-indicator {
       opacity: 1;
@@ -222,22 +227,21 @@ $transition-sidebar: 250ms cubic-bezier(0.4, 0, 0.2, 1);
 
 .nav-indicator {
   position: absolute;
-  left: -9px;
+  left: -8px;
   top: 50%;
   transform: translateY(-50%);
-  width: 3px;
+  width: 1px;
   height: 16px;
   background: $mint;
-  border-radius: 0 2px 2px 0;
+  border-radius: 0;
   opacity: 0;
   transition: opacity 0.2s ease;
-  box-shadow: 0 0 6px rgba(16, 185, 129, 0.4);
 }
 
 /* ── 底部 ── */
 .sidebar-footer {
   padding: 8px;
-  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  border-top: 1px solid $slate-200;
   width: 100%;
   display: flex;
   flex-direction: column;
@@ -252,11 +256,9 @@ $transition-sidebar: 250ms cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .footer-item {
-  color: rgba(255, 255, 255, 0.2);
+  color: $slate-400;
 
-  &:hover {
-    color: rgba(255, 255, 255, 0.5);
-  }
+  &:hover { color: $slate-600; }
 }
 
 .collapse-btn {
@@ -267,18 +269,16 @@ $transition-sidebar: 250ms cubic-bezier(0.4, 0, 0.2, 1);
   justify-content: center;
   background: none;
   border: none;
-  color: rgba(255, 255, 255, 0.15);
+  color: $slate-400;
   cursor: pointer;
-  border-radius: 6px;
+  border-radius: 8px;
   transition: all 0.2s ease;
 
-  .collapsed & {
-    width: 36px;
-  }
+  .collapsed & { width: 36px; }
 
   &:hover {
-    color: rgba(255, 255, 255, 0.4);
-    background: rgba(255, 255, 255, 0.06);
+    color: $slate-600;
+    background: rgba(0, 0, 0, 0.04);
   }
 }
 

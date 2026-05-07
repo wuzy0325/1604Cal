@@ -3,11 +3,11 @@ package session
 import (
 	"context"
 	"errors"
-	"fmt"
 	"log"
 	"sync"
 
 	"cal1604/internal/device"
+	"cal1604/internal/events"
 	"cal1604/internal/infrastructure/driver"
 )
 
@@ -30,6 +30,7 @@ type Service struct {
 	deviceManager  device.DeviceStore
 	factory        *driver.Factory
 	driverProvider device.ActiveDriverProvider
+	resolver       *DriverResolver
 
 	measureDriver  device.MeasureDriver
 	pressureDriver device.PressureDriver
@@ -52,12 +53,23 @@ func NewService(
 	if publisher == nil {
 		publisher = func(string, any) {}
 	}
-	return &Service{
+	s := &Service{
 		deviceManager:  deviceManager,
 		factory:        factory,
 		publish:        publisher,
 		driverProvider: driverProvider,
 	}
+	s.resolver = &DriverResolver{
+		DeviceManager:  deviceManager,
+		DriverProvider: driverProvider,
+		Factory:        factory,
+	}
+	return s
+}
+
+// Resolver 返回内部驱动解析器，供 calibration 等模块复用驱动解析逻辑。
+func (s *Service) Resolver() *DriverResolver {
+	return s.resolver
 }
 
 // BindDevices 绑定计量设备和打压设备到当前会话。
@@ -65,14 +77,14 @@ func (s *Service) BindDevices(measureDevID, pressureDevID string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	mDrv, err := s.resolveMeasureDriver(measureDevID)
+	mDrv, err := s.resolver.ResolveMeasureDriver(measureDevID)
 	if err != nil {
 		return err
 	}
 
 	var pDrv device.PressureDriver
 	if pressureDevID != "" {
-		pDrv, err = s.resolvePressureDriver(pressureDevID)
+		pDrv, err = s.resolver.ResolvePressureDriver(pressureDevID)
 		if err != nil {
 			return err
 		}
@@ -83,7 +95,7 @@ func (s *Service) BindDevices(measureDevID, pressureDevID string) error {
 	s.measureDriver = mDrv
 	s.pressureDriver = pDrv
 
-	s.publish("session.device_bound", map[string]any{
+	s.publish(events.EventSessionDeviceBound, map[string]any{
 		"measureDeviceId":  measureDevID,
 		"pressureDeviceId": pressureDevID,
 	})
@@ -96,7 +108,7 @@ func (s *Service) BindMeasureDevice(measureDevID string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	mDrv, err := s.resolveMeasureDriver(measureDevID)
+	mDrv, err := s.resolver.ResolveMeasureDriver(measureDevID)
 	if err != nil {
 		return err
 	}
@@ -104,7 +116,7 @@ func (s *Service) BindMeasureDevice(measureDevID string) error {
 	s.measureDevID = measureDevID
 	s.measureDriver = mDrv
 
-	s.publish("session.device_bound", map[string]any{
+	s.publish(events.EventSessionDeviceBound, map[string]any{
 		"measureDeviceId":  measureDevID,
 		"pressureDeviceId": s.pressureDevID,
 	})
@@ -308,38 +320,4 @@ func (s *Service) PressureDriver() device.PressureDriver {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.pressureDriver
-}
-
-// resolveMeasureDriver 优先复用已连接的计量驱动。
-func (s *Service) resolveMeasureDriver(measureDevID string) (device.MeasureDriver, error) {
-	if s.driverProvider != nil {
-		if drv := s.driverProvider.GetActiveDriver(measureDevID); drv != nil {
-			if mDrv, ok := drv.(device.MeasureDriver); ok {
-				return mDrv, nil
-			}
-		}
-	}
-
-	measureDev, ok := s.deviceManager.Get(measureDevID)
-	if !ok {
-		return nil, fmt.Errorf("%w: %s", ErrDeviceNotFound, measureDevID)
-	}
-	return s.factory.CreateMeasureDriver(measureDev)
-}
-
-// resolvePressureDriver 优先复用已连接的打压驱动。
-func (s *Service) resolvePressureDriver(pressureDevID string) (device.PressureDriver, error) {
-	if s.driverProvider != nil {
-		if drv := s.driverProvider.GetActiveDriver(pressureDevID); drv != nil {
-			if pDrv, ok := drv.(device.PressureDriver); ok {
-				return pDrv, nil
-			}
-		}
-	}
-
-	pressureDev, ok := s.deviceManager.Get(pressureDevID)
-	if !ok {
-		return nil, fmt.Errorf("%w: %s", ErrDeviceNotFound, pressureDevID)
-	}
-	return s.factory.CreatePressureDriver(pressureDev)
 }

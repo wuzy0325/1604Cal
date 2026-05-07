@@ -212,7 +212,6 @@ export const useDeviceControlStore = defineStore('deviceControl', () => {
       }
       if (unit.status === 'fulfilled') {
         measureUnit.value = unit.value
-        console.log(`[1604单位读取] 从硬件读取到单位: ${measureUnit.value}`)
         unitReady = true
       }
       // 连接阶段只要求阀门和单位可读；且允许在不同重试轮次分别成功。
@@ -258,10 +257,7 @@ export const useDeviceControlStore = defineStore('deviceControl', () => {
   const refreshMeasureUnit = async () => {
     try {
       measureUnit.value = await readMeasureUnit()
-      console.log(`[1604单位读取] 从硬件读取到单位: ${measureUnit.value}`)
-    } catch {
-      console.warn('[1604单位读取] 读取失败')
-    }
+    } catch { /* unit read failed, continue with default */ }
   }
 
   // 设置计量设备单位

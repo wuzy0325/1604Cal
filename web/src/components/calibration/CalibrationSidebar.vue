@@ -216,10 +216,10 @@ $red: #ef4444;
     left: 0;
     top: 50%;
     transform: translateY(-50%);
-    width: 3px;
+    width: 1px;
     height: 14px;
-    background: linear-gradient(180deg, $mint, $mint-dark);
-    border-radius: 2px;
+    background: $mint;
+    border-radius: 0;
   }
 
   .el-icon {

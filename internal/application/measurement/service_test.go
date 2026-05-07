@@ -129,14 +129,14 @@ type embedPD struct{ device.PressureDriver }
 
 func TestInitialState(t *testing.T) {
 	svc, _ := setupMeasurementService()
-	if svc.State() != measurement.StateIdle {
+	if svc.State() != domain.SessionStateIdle {
 		t.Fatalf("expected idle, got %s", svc.State())
 	}
 }
 
 func TestGeneratePressurePointsUsesMeasurementConfig(t *testing.T) {
 	svc, _ := setupMeasurementService()
-	svc.SetConfig(measurement.Config{
+	svc.SetConfig(domain.WorkflowConfig{
 		MinPressure:  0,
 		MaxPressure:  100,
 		PointCount:   5,
@@ -172,7 +172,7 @@ func TestGeneratePressurePointsUsesMeasurementConfig(t *testing.T) {
 
 func TestStartWorkflowUsesGeneratedPointsAndTransitionsToReady(t *testing.T) {
 	svc, _ := setupMeasurementService()
-	svc.SetConfig(measurement.Config{
+	svc.SetConfig(domain.WorkflowConfig{
 		MinPressure: 0,
 		MaxPressure: 20,
 		PointCount:  3,
@@ -186,7 +186,7 @@ func TestStartWorkflowUsesGeneratedPointsAndTransitionsToReady(t *testing.T) {
 		t.Fatalf("StartWorkflow: %v", err)
 	}
 
-	if svc.State() != measurement.StateReady {
+	if svc.State() != domain.SessionStateReady {
 		t.Fatalf("expected ready, got %s", svc.State())
 	}
 
@@ -204,7 +204,7 @@ func TestStartWorkflowUsesGeneratedPointsAndTransitionsToReady(t *testing.T) {
 
 func TestSetConfigInvalidatesExistingPoints(t *testing.T) {
 	svc, _ := setupMeasurementService()
-	svc.SetConfig(measurement.Config{
+	svc.SetConfig(domain.WorkflowConfig{
 		MinPressure: 0,
 		MaxPressure: 20,
 		PointCount:  3,
@@ -214,7 +214,7 @@ func TestSetConfigInvalidatesExistingPoints(t *testing.T) {
 		t.Fatalf("GeneratePressurePoints: %v", err)
 	}
 
-	svc.SetConfig(measurement.Config{
+	svc.SetConfig(domain.WorkflowConfig{
 		MinPressure: 0,
 		MaxPressure: 50,
 		PointCount:  5,
@@ -228,7 +228,7 @@ func TestSetConfigInvalidatesExistingPoints(t *testing.T) {
 
 func TestStopWorkflowUpdatesSessionStatusToStopped(t *testing.T) {
 	svc, _ := setupMeasurementService()
-	svc.SetConfig(measurement.Config{
+	svc.SetConfig(domain.WorkflowConfig{
 		MinPressure: 0,
 		MaxPressure: 10,
 		PointCount:  2,
@@ -249,7 +249,7 @@ func TestStopWorkflowUpdatesSessionStatusToStopped(t *testing.T) {
 	if session == nil {
 		t.Fatal("expected measurement session after stop")
 	}
-	if session.Status != measurement.StateStopped {
+	if session.Status != domain.SessionStateStopped {
 		t.Fatalf("expected session status stopped, got %s", session.Status)
 	}
 	if session.EndTime == nil {
@@ -259,7 +259,7 @@ func TestStopWorkflowUpdatesSessionStatusToStopped(t *testing.T) {
 
 func TestResumeRealtimeSamplingSyncsWorkflowSessionStatus(t *testing.T) {
 	svc, _ := setupMeasurementService()
-	svc.SetConfig(measurement.Config{
+	svc.SetConfig(domain.WorkflowConfig{
 		MinPressure: 0,
 		MaxPressure: 10,
 		PointCount:  2,
@@ -282,7 +282,7 @@ func TestResumeRealtimeSamplingSyncsWorkflowSessionStatus(t *testing.T) {
 	if session == nil {
 		t.Fatal("expected measurement session after resume")
 	}
-	if session.Status != measurement.StateCollecting {
+	if session.Status != domain.SessionStateCollecting {
 		t.Fatalf("expected session status collecting after resume, got %s", session.Status)
 	}
 	_ = svc.Stop()
@@ -290,7 +290,7 @@ func TestResumeRealtimeSamplingSyncsWorkflowSessionStatus(t *testing.T) {
 
 func TestRunAutoCollectionAdvancesMeasurementPoints(t *testing.T) {
 	svc, _, pressureDrv := setupMeasurementServiceWithPressure()
-	svc.SetConfig(measurement.Config{
+	svc.SetConfig(domain.WorkflowConfig{
 		MinPressure:  0,
 		MaxPressure:  10,
 		PointCount:   2,
@@ -314,7 +314,7 @@ func TestRunAutoCollectionAdvancesMeasurementPoints(t *testing.T) {
 	if len(points) != 2 {
 		t.Fatalf("expected 2 points, got %d", len(points))
 	}
-	if points[0].Status != "completed" || points[1].Status != "completed" {
+	if points[0].Status != domain.PointStatusCompleted || points[1].Status != domain.PointStatusCompleted {
 		t.Fatalf("expected all points completed, got %+v", points)
 	}
 	if len(pressureDrv.targets) != 2 {
@@ -324,7 +324,7 @@ func TestRunAutoCollectionAdvancesMeasurementPoints(t *testing.T) {
 
 func TestManualCollectCapturesPointData(t *testing.T) {
 	svc, _, pressureDrv := setupMeasurementServiceWithPressure()
-	svc.SetConfig(measurement.Config{
+	svc.SetConfig(domain.WorkflowConfig{
 		MinPressure:  0,
 		MaxPressure:  20,
 		PointCount:   3,
@@ -348,7 +348,7 @@ func TestManualCollectCapturesPointData(t *testing.T) {
 	}
 
 	points := svc.GetPoints()
-	if points[0].Status != "completed" {
+	if points[0].Status != domain.PointStatusCompleted {
 		t.Fatalf("expected first point completed, got %+v", points[0])
 	}
 	if len(points[0].CollectedData) == 0 {
@@ -362,22 +362,22 @@ func TestManualCollectCapturesPointData(t *testing.T) {
 func TestSetStateTransitions(t *testing.T) {
 	tests := []struct {
 		name      string
-		from      measurement.State
-		to        measurement.State
+		from      domain.SessionState
+		to        domain.SessionState
 		wantError bool
 	}{
-		{name: "idle_to_pressurizing", from: measurement.StateIdle, to: measurement.StatePressurizing},
-		{name: "idle_to_collecting", from: measurement.StateIdle, to: measurement.StateCollecting},
-		{name: "pressurizing_to_stabilizing", from: measurement.StatePressurizing, to: measurement.StateStabilizing},
-		{name: "pressurizing_to_paused", from: measurement.StatePressurizing, to: measurement.StatePaused},
-		{name: "stabilizing_to_collecting", from: measurement.StateStabilizing, to: measurement.StateCollecting},
-		{name: "collecting_to_completed", from: measurement.StateCollecting, to: measurement.StateCompleted},
-		{name: "completed_to_idle", from: measurement.StateCompleted, to: measurement.StateIdle},
-		{name: "error_to_idle", from: measurement.StateError, to: measurement.StateIdle},
-		{name: "paused_to_collecting", from: measurement.StatePaused, to: measurement.StateCollecting},
-		{name: "paused_to_pressurizing", from: measurement.StatePaused, to: measurement.StatePressurizing},
-		{name: "paused_to_idle", from: measurement.StatePaused, to: measurement.StateIdle},
-		{name: "collecting_to_idle_invalid", from: measurement.StateCollecting, to: measurement.StateIdle, wantError: true},
+		{name: "idle_to_pressurizing", from: domain.SessionStateIdle, to: domain.SessionStatePressurizing},
+		{name: "idle_to_collecting", from: domain.SessionStateIdle, to: domain.SessionStateCollecting},
+		{name: "pressurizing_to_stabilizing", from: domain.SessionStatePressurizing, to: domain.SessionStateStabilizing},
+		{name: "pressurizing_to_paused", from: domain.SessionStatePressurizing, to: domain.SessionStatePaused},
+		{name: "stabilizing_to_collecting", from: domain.SessionStateStabilizing, to: domain.SessionStateCollecting},
+		{name: "collecting_to_completed", from: domain.SessionStateCollecting, to: domain.SessionStateCompleted},
+		{name: "completed_to_idle", from: domain.SessionStateCompleted, to: domain.SessionStateIdle},
+		{name: "error_to_idle", from: domain.SessionStateError, to: domain.SessionStateIdle},
+		{name: "paused_to_collecting", from: domain.SessionStatePaused, to: domain.SessionStateCollecting},
+		{name: "paused_to_pressurizing", from: domain.SessionStatePaused, to: domain.SessionStatePressurizing},
+		{name: "paused_to_idle", from: domain.SessionStatePaused, to: domain.SessionStateIdle},
+		{name: "collecting_to_idle_invalid", from: domain.SessionStateCollecting, to: domain.SessionStateIdle, wantError: true},
 	}
 
 	for _, tt := range tests {
@@ -403,20 +403,20 @@ func TestSetStateTransitions(t *testing.T) {
 	}
 }
 
-func reachState(t *testing.T, svc *measurement.Service, target measurement.State) {
+func reachState(t *testing.T, svc *measurement.Service, target domain.SessionState) {
 	t.Helper()
 
-	if target == measurement.StateIdle {
+	if target == domain.SessionStateIdle {
 		return
 	}
 
-	steps := map[measurement.State][]measurement.State{
-		measurement.StatePressurizing: {measurement.StatePressurizing},
-		measurement.StateStabilizing: {measurement.StatePressurizing, measurement.StateStabilizing},
-		measurement.StateCollecting:  {measurement.StatePressurizing, measurement.StateStabilizing, measurement.StateCollecting},
-		measurement.StateCompleted:   {measurement.StatePressurizing, measurement.StateStabilizing, measurement.StateCollecting, measurement.StateCompleted},
-		measurement.StateError:       {measurement.StatePressurizing, measurement.StateError},
-		measurement.StatePaused:      {measurement.StatePressurizing, measurement.StatePaused},
+	steps := map[domain.SessionState][]domain.SessionState{
+		domain.SessionStatePressurizing: {domain.SessionStatePressurizing},
+		domain.SessionStateStabilizing: {domain.SessionStatePressurizing, domain.SessionStateStabilizing},
+		domain.SessionStateCollecting:  {domain.SessionStatePressurizing, domain.SessionStateStabilizing, domain.SessionStateCollecting},
+		domain.SessionStateCompleted:   {domain.SessionStatePressurizing, domain.SessionStateStabilizing, domain.SessionStateCollecting, domain.SessionStateCompleted},
+		domain.SessionStateError:       {domain.SessionStatePressurizing, domain.SessionStateError},
+		domain.SessionStatePaused:      {domain.SessionStatePressurizing, domain.SessionStatePaused},
 	}
 
 	path, ok := steps[target]
@@ -436,7 +436,7 @@ func TestStartTransition(t *testing.T) {
 	if err := svc.Start(context.Background(), []int{1, 2, 3}); err != nil {
 		t.Fatalf("Start: %v", err)
 	}
-	if svc.State() != measurement.StateCollecting {
+	if svc.State() != domain.SessionStateCollecting {
 		t.Fatalf("expected collecting, got %s", svc.State())
 	}
 	_ = svc.Stop()
@@ -457,7 +457,7 @@ func TestPauseFromCollecting(t *testing.T) {
 	if err := svc.Pause(); err != nil {
 		t.Fatalf("Pause: %v", err)
 	}
-	if svc.State() != measurement.StatePaused {
+	if svc.State() != domain.SessionStatePaused {
 		t.Fatalf("expected paused, got %s", svc.State())
 	}
 }
@@ -475,7 +475,7 @@ func TestStopFromCollecting(t *testing.T) {
 	if err := svc.Stop(); err != nil {
 		t.Fatalf("Stop: %v", err)
 	}
-	if svc.State() != measurement.StateIdle {
+	if svc.State() != domain.SessionStateIdle {
 		t.Fatalf("expected idle, got %s", svc.State())
 	}
 }
@@ -487,7 +487,7 @@ func TestStopFromPaused(t *testing.T) {
 	if err := svc.Stop(); err != nil {
 		t.Fatalf("Stop from paused: %v", err)
 	}
-	if svc.State() != measurement.StateIdle {
+	if svc.State() != domain.SessionStateIdle {
 		t.Fatalf("expected idle, got %s", svc.State())
 	}
 }
@@ -506,7 +506,7 @@ func TestResumeFromPaused(t *testing.T) {
 	if err := svc.Start(context.Background(), []int{1, 2}); err != nil {
 		t.Fatalf("Resume: %v", err)
 	}
-	if svc.State() != measurement.StateCollecting {
+	if svc.State() != domain.SessionStateCollecting {
 		t.Fatalf("expected collecting, got %s", svc.State())
 	}
 	_ = svc.Stop()
@@ -523,37 +523,37 @@ func TestWriteCSVEmpty(t *testing.T) {
 func TestStateTransitions(t *testing.T) {
 	tests := []struct {
 		name    string
-		from    measurement.State
-		to      measurement.State
+		from    domain.SessionState
+		to      domain.SessionState
 		wantErr bool
 	}{
-		{"idle_to_collecting", measurement.StateIdle, measurement.StateCollecting, false},
-		{"idle_to_paused", measurement.StateIdle, measurement.StatePaused, true},
-		{"collecting_to_paused", measurement.StateCollecting, measurement.StatePaused, false},
-		{"collecting_to_idle", measurement.StateCollecting, measurement.StateIdle, false},
-		{"collecting_to_collecting", measurement.StateCollecting, measurement.StateCollecting, true},
-		{"paused_to_collecting", measurement.StatePaused, measurement.StateCollecting, false},
-		{"paused_to_idle", measurement.StatePaused, measurement.StateIdle, false},
-		{"paused_to_paused", measurement.StatePaused, measurement.StatePaused, true},
+		{"idle_to_collecting", domain.SessionStateIdle, domain.SessionStateCollecting, false},
+		{"idle_to_paused", domain.SessionStateIdle, domain.SessionStatePaused, true},
+		{"collecting_to_paused", domain.SessionStateCollecting, domain.SessionStatePaused, false},
+		{"collecting_to_idle", domain.SessionStateCollecting, domain.SessionStateIdle, false},
+		{"collecting_to_collecting", domain.SessionStateCollecting, domain.SessionStateCollecting, true},
+		{"paused_to_collecting", domain.SessionStatePaused, domain.SessionStateCollecting, false},
+		{"paused_to_idle", domain.SessionStatePaused, domain.SessionStateIdle, false},
+		{"paused_to_paused", domain.SessionStatePaused, domain.SessionStatePaused, true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			svc, _ := setupMeasurementService()
 			switch tt.from {
-			case measurement.StateCollecting:
+			case domain.SessionStateCollecting:
 				_ = svc.Start(context.Background(), []int{1})
-			case measurement.StatePaused:
+			case domain.SessionStatePaused:
 				_ = svc.Start(context.Background(), []int{1})
 				_ = svc.Pause()
 			}
 
 			var err error
 			switch tt.to {
-			case measurement.StateCollecting:
+			case domain.SessionStateCollecting:
 				err = svc.Start(context.Background(), []int{1})
-			case measurement.StatePaused:
+			case domain.SessionStatePaused:
 				err = svc.Pause()
-			case measurement.StateIdle:
+			case domain.SessionStateIdle:
 				err = svc.Stop()
 			}
 
@@ -569,7 +569,7 @@ func TestStateTransitions(t *testing.T) {
 
 func TestMeasurementAlarmConfig(t *testing.T) {
 	svc, _ := setupMeasurementService()
-	svc.SetAlarmConfig(measurement.AlarmConfig{
+	svc.SetAlarmConfig(domain.AlarmConfig{
 		Enabled:         true,
 		EnabledChannels: []int{1, 2},
 		ConfirmOnAlarm:  true,
@@ -591,14 +591,14 @@ func TestMeasurementAlarmConfig(t *testing.T) {
 
 func TestMeasurementAlarmCheckNoAlarm(t *testing.T) {
 	svc, _ := setupMeasurementService()
-	svc.SetAlarmConfig(measurement.AlarmConfig{
+	svc.SetAlarmConfig(domain.AlarmConfig{
 		Enabled:         true,
 		EnabledChannels: []int{1},
 		ConfirmOnAlarm:  true,
 		Threshold:       0.1,
 	})
 
-	point := measurement.Point{
+	point := domain.PressurePoint{
 		Index:          1,
 		TargetPressure: 100,
 		ActualPressure: 100.05,
@@ -615,14 +615,14 @@ func TestMeasurementAlarmCheckNoAlarm(t *testing.T) {
 
 func TestMeasurementAlarmCheckTriggersAlarm(t *testing.T) {
 	svc, _ := setupMeasurementService()
-	svc.SetAlarmConfig(measurement.AlarmConfig{
+	svc.SetAlarmConfig(domain.AlarmConfig{
 		Enabled:         true,
 		EnabledChannels: []int{1},
 		ConfirmOnAlarm:  true,
 		Threshold:       0.0004,
 	})
 
-	point := measurement.Point{
+	point := domain.PressurePoint{
 		Index:          1,
 		TargetPressure: 100,
 		ActualPressure: 100.05,
@@ -643,14 +643,14 @@ func TestMeasurementAlarmCheckTriggersAlarm(t *testing.T) {
 
 func TestMeasurementAlarmBlocksWhenConfirmRequired(t *testing.T) {
 	svc, _ := setupMeasurementService()
-	svc.SetAlarmConfig(measurement.AlarmConfig{
+	svc.SetAlarmConfig(domain.AlarmConfig{
 		Enabled:         true,
 		EnabledChannels: []int{1},
 		ConfirmOnAlarm:  true,
 		Threshold:       0.0004,
 	})
 
-	point := measurement.Point{
+	point := domain.PressurePoint{
 		Index:          1,
 		TargetPressure: 100,
 		ActualPressure: 100.05,

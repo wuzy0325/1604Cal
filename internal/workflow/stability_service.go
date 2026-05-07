@@ -3,6 +3,8 @@ package workflow
 import (
 	"math"
 	"time"
+
+	"cal1604/internal/events"
 )
 
 // StabilityAccumulator 用于累计稳定时间。
@@ -105,20 +107,20 @@ func (m *StabilityMonitor) FeedSample(target, actual float64) StabilityStatus {
 
 	// 检测进入/离开稳定范围
 	if isInRange && !m.wasInRange {
-		m.publisher("calibration.stability.changed", status)
+		m.publisher(events.EventCalibrationStabilityChanged, status)
 	}
 	if !isInRange && m.wasInRange && !stable {
-		m.publisher("calibration.stability.lost", status)
+		m.publisher(events.EventCalibrationStabilityLost, status)
 	}
 
 	// 进度更新（在范围内但未达稳）
 	if isInRange && !stable {
-		m.publisher("calibration.stability.progress", status)
+		m.publisher(events.EventCalibrationStabilityProgress, status)
 	}
 
 	// 达到稳定
 	if stable && !m.wasStable {
-		m.publisher("calibration.stability.achieved", status)
+		m.publisher(events.EventCalibrationStabilityAchieved, status)
 	}
 
 	m.wasInRange = isInRange

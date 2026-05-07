@@ -1,4 +1,4 @@
-import type { HealthResponse, StreamEventPayload } from '@/types/api'
+import type { ApiResponse, HealthResponse, StreamEventPayload } from '@/types/api'
 
 // ---------------------------------------------------------------------------
 // API 基础路径：桌面模式下指向内嵌 HTTP 服务器，Web 模式下使用相对路径。
@@ -43,6 +43,27 @@ export async function fetchHealth(): Promise<HealthResponse> {
   }
 
   return (await resp.json()) as HealthResponse
+}
+
+// ---------------------------------------------------------------------------
+// 通用请求辅助函数
+// ---------------------------------------------------------------------------
+
+/** GET 请求，自动解包 ApiResponse.data */
+export async function apiGet<T>(path: string): Promise<T> {
+  const resp = await requestJSON<ApiResponse<T>>(path)
+  return resp.data
+}
+
+/** POST 请求，自动序列化 JSON body 并解包 ApiResponse.data */
+export async function apiPost<T>(path: string, body?: unknown): Promise<T> {
+  const init: RequestInit = { method: 'POST' }
+  if (body !== undefined) {
+    init.headers = { 'Content-Type': 'application/json' }
+    init.body = JSON.stringify(body)
+  }
+  const resp = await requestJSON<ApiResponse<T>>(path, init)
+  return resp.data
 }
 
 export async function requestJSON<T>(path: string, init?: RequestInit): Promise<T> {

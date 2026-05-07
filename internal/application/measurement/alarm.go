@@ -3,16 +3,10 @@ package measurement
 import (
 	"fmt"
 	"math"
-)
 
-type AlarmConfig struct {
-	Enabled         bool    `json:"enabled"`
-	EnabledChannels []int   `json:"enabledChannels"`
-	ConfirmOnAlarm  bool    `json:"confirmOnAlarm"`
-	SoundEnabled    bool    `json:"soundEnabled"`
-	Threshold       float64 `json:"threshold"`
-	IsRelative      bool    `json:"isRelative"`
-}
+	"cal1604/internal/domain"
+	"cal1604/internal/events"
+)
 
 type Alarm struct {
 	PointID          string  `json:"pointId"`
@@ -24,19 +18,19 @@ type Alarm struct {
 	OverLimitChannels []int  `json:"overLimitChannels"`
 }
 
-func (s *Service) SetAlarmConfig(cfg AlarmConfig) {
+func (s *Service) SetAlarmConfig(cfg domain.AlarmConfig) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.alarmConfig = cfg
 }
 
-func (s *Service) GetAlarmConfig() AlarmConfig {
+func (s *Service) GetAlarmConfig() domain.AlarmConfig {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.alarmConfig
 }
 
-func (s *Service) CheckAlarm(point Point) (*Alarm, error) {
+func (s *Service) CheckAlarm(point domain.PressurePoint) (*Alarm, error) {
 	s.mu.Lock()
 	cfg := s.alarmConfig
 	s.mu.Unlock()
@@ -97,7 +91,7 @@ func (s *Service) CheckAlarm(point Point) (*Alarm, error) {
 		s.currentAlarm = alarm
 		s.mu.Unlock()
 
-		s.publish("measurement.alarm.triggered", alarm)
+		s.publish(events.EventMeasurementAlarmTriggered, alarm)
 
 		return alarm, nil
 	}
@@ -119,7 +113,7 @@ func (s *Service) ResolveAlarm(decision string) error {
 		return fmt.Errorf("no alarm pending")
 	}
 
-	s.publish("measurement.alarm.resolved", map[string]string{
+	s.publish(events.EventMeasurementAlarmResolved, map[string]string{
 		"decision": decision,
 		"pointId":  s.currentAlarm.PointID,
 	})

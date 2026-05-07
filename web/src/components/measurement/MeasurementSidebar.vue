@@ -220,13 +220,10 @@ const handleMeasureUnitChange = async () => {
   await checkUnitConsistency()
 }
 
-const handleSetPressure = async (_deviceId: string, pressure: number) => {
-  console.debug('设定压力:', pressure)
-}
-
-const handleExhaust = async (_deviceId: string) => {
-  console.debug('排空:', _deviceId)
-}
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+const handleSetPressure = async (_deviceId: string, _pressure: number) => {}
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+const handleExhaust = async (_deviceId: string) => {}
 
 const prerequisites = computed(() => [
   { label: '设备已选择', satisfied: measurementStore.deviceBound },
@@ -341,10 +338,10 @@ $amber: #f59e0b;
     left: 0;
     top: 50%;
     transform: translateY(-50%);
-    width: 3px;
+    width: 1px;
     height: 14px;
-    background: linear-gradient(180deg, $mint, $mint-dark);
-    border-radius: 2px;
+    background: $mint;
+    border-radius: 0;
   }
 
   .el-icon { color: $mint; font-size: 14px; }

@@ -193,7 +193,7 @@ func (s *Service) SetTargetPressure(ctx context.Context, deviceID string, target
 	}
 
 	// 启动压力控制（ConST 系列支持 StartControl）
-	if ctrl, ok := entry.driver.(interface{ StartControl(context.Context) error }); ok {
+	if ctrl, ok := entry.driver.(device.PressureControlCapable); ok {
 		if err := ctrl.StartControl(ctx); err != nil {
 			entry.state.Status = "error"
 			entry.state.ErrorMessage = err.Error()

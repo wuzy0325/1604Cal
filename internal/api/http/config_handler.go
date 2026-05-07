@@ -6,8 +6,6 @@ import (
 	"net/http"
 	"time"
 
-	"cal1604/internal/application/calibration"
-	"cal1604/internal/application/measurement"
 	"cal1604/internal/config"
 	"cal1604/internal/domain"
 	apperrors "cal1604/internal/errors"
@@ -26,12 +24,7 @@ type deviceConnectConfigPayload struct {
 
 // deviceConnectConfigHandler 返回当前生效的连接可靠性配置。
 // 该接口用于前端设备面板可视化 timeout/retry 策略，便于现场排障与参数核对。
-func (s *apiServer) deviceConnectConfigHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		w.WriteHeader(http.StatusMethodNotAllowed)
-		return
-	}
-
+func (s *apiServer) deviceConnectConfigHandler(w http.ResponseWriter, _ *http.Request) {
 	payload := deviceConnectConfigPayload{
 		ConnectAttemptTimeoutMs:    durationToMilliseconds(s.connectConfig.ConnectAttemptTimeout),
 		ConnectMaxAttempts:         s.connectConfig.ConnectMaxAttempts,
@@ -53,113 +46,96 @@ func durationToMilliseconds(value time.Duration) int {
 	return int(value / time.Millisecond)
 }
 
-// calibrationConfigHandler 处理校准参数配置的读取和更新。
-// GET 返回当前校准参数，POST 更新参数并持久化到配置文件。
-func (s *apiServer) calibrationConfigHandler(w http.ResponseWriter, r *http.Request) {
-	switch r.Method {
-	case http.MethodGet:
-		if s.appConfig != nil {
-			writeSuccess(w, http.StatusOK, s.appConfig.CalibrationParams)
-			return
-		}
-		writeSuccess(w, http.StatusOK, config.Default().CalibrationParams)
-
-	case http.MethodPost:
-		var params config.CalibrationParamsConfig
-		if err := json.NewDecoder(r.Body).Decode(&params); err != nil {
-			writeError(w, apperrors.ErrInvalidArgument)
-			return
-		}
-		if s.appConfig != nil {
-			s.appConfig.CalibrationParams = params
-			s.persistConfig()
-		}
-		// 同步到校准服务
-		s.calibrationService.SetConfig(calibrationConfigFromParams(params))
-		writeSuccess(w, http.StatusOK, map[string]string{"status": "ok"})
-
-	default:
-		w.WriteHeader(http.StatusMethodNotAllowed)
+// calibrationReadConfigHandler 返回当前校准参数。
+func (s *apiServer) calibrationReadConfigHandler(w http.ResponseWriter, _ *http.Request) {
+	if s.appConfig != nil {
+		writeSuccess(w, http.StatusOK, s.appConfig.CalibrationParams)
+		return
 	}
+	writeSuccess(w, http.StatusOK, config.Default().CalibrationParams)
 }
 
-// measurementConfigHandler 处理计量参数配置的读取和更新。
-// GET 返回当前计量参数，POST 更新参数并持久化到配置文件。
-func (s *apiServer) measurementConfigHandler(w http.ResponseWriter, r *http.Request) {
-	switch r.Method {
-	case http.MethodGet:
-		if s.appConfig != nil {
-			writeSuccess(w, http.StatusOK, s.appConfig.MeasurementParams)
-			return
-		}
-		writeSuccess(w, http.StatusOK, config.Default().MeasurementParams)
-
-	case http.MethodPost:
-		var params config.MeasurementParamsConfig
-		if err := json.NewDecoder(r.Body).Decode(&params); err != nil {
-			writeError(w, apperrors.ErrInvalidArgument)
-			return
-		}
-		if err := validateMeasurementParams(params); err != nil {
-			writeError(w, err)
-			return
-		}
-
-		if s.appConfig != nil {
-			s.appConfig.MeasurementParams = params
-			s.persistConfig()
-		}
-
-		s.measurementService.SetConfig(measurementConfigFromParams(params))
-
-		writeSuccess(w, http.StatusOK, map[string]string{"status": "ok"})
-
-	default:
-		w.WriteHeader(http.StatusMethodNotAllowed)
+// calibrationSaveConfigHandler 更新校准参数并持久化到配置文件。
+func (s *apiServer) calibrationSaveConfigHandler(w http.ResponseWriter, r *http.Request) {
+	var params config.CalibrationParamsConfig
+	if err := json.NewDecoder(r.Body).Decode(&params); err != nil {
+		writeError(w, apperrors.ErrInvalidArgument)
+		return
 	}
+	if s.appConfig != nil {
+		s.appConfig.CalibrationParams = params
+		s.persistConfig()
+	}
+	s.calibrationService.SetConfig(calibrationConfigFromParams(params))
+	writeSuccess(w, http.StatusOK, map[string]string{"status": "ok"})
 }
 
-// alarmConfigHandler 处理报警配置的读取和更新。
-// GET 返回当前报警配置，POST 更新配置并持久化到配置文件。
-func (s *apiServer) alarmConfigHandler(w http.ResponseWriter, r *http.Request) {
-	switch r.Method {
-	case http.MethodGet:
-		if s.appConfig != nil {
-			writeSuccess(w, http.StatusOK, s.appConfig.Alarm)
-			return
-		}
-		writeSuccess(w, http.StatusOK, config.Default().Alarm)
-
-	case http.MethodPost:
-		var alarmCfg struct {
-			Enabled            bool    `json:"enabled"`
-			PrecisionThreshold float64 `json:"precisionThreshold"`
-			SoundEnabled       bool    `json:"soundEnabled"`
-			ConfirmOnAlarm     bool    `json:"confirmOnAlarm"`
-			EnabledChannels    []int   `json:"enabledChannels"`
-		}
-		if err := json.NewDecoder(r.Body).Decode(&alarmCfg); err != nil {
-			writeError(w, apperrors.ErrInvalidArgument)
-			return
-		}
-		cfg := domain.AlarmConfig{
-			Enabled:            alarmCfg.Enabled,
-			PrecisionThreshold: alarmCfg.PrecisionThreshold,
-			SoundEnabled:       alarmCfg.SoundEnabled,
-			ConfirmOnAlarm:     alarmCfg.ConfirmOnAlarm,
-			EnabledChannels:    alarmCfg.EnabledChannels,
-		}
-		if s.appConfig != nil {
-			s.appConfig.Alarm = cfg
-			s.persistConfig()
-		}
-		// 同步到校准服务
-		s.calibrationService.SetAlarmConfig(cfg)
-		writeSuccess(w, http.StatusOK, map[string]string{"status": "ok"})
-
-	default:
-		w.WriteHeader(http.StatusMethodNotAllowed)
+// measurementReadConfigHandler 返回当前计量参数。
+func (s *apiServer) measurementReadConfigHandler(w http.ResponseWriter, _ *http.Request) {
+	if s.appConfig != nil {
+		writeSuccess(w, http.StatusOK, s.appConfig.MeasurementParams)
+		return
 	}
+	writeSuccess(w, http.StatusOK, config.Default().MeasurementParams)
+}
+
+// measurementSaveConfigHandler 更新计量参数并持久化到配置文件。
+func (s *apiServer) measurementSaveConfigHandler(w http.ResponseWriter, r *http.Request) {
+	var params config.MeasurementParamsConfig
+	if err := json.NewDecoder(r.Body).Decode(&params); err != nil {
+		writeError(w, apperrors.ErrInvalidArgument)
+		return
+	}
+	if err := validateMeasurementParams(params); err != nil {
+		writeError(w, err)
+		return
+	}
+
+	if s.appConfig != nil {
+		s.appConfig.MeasurementParams = params
+		s.persistConfig()
+	}
+
+	s.measurementService.SetConfig(measurementConfigFromParams(params))
+
+	writeSuccess(w, http.StatusOK, map[string]string{"status": "ok"})
+}
+
+// alarmReadConfigHandler 返回当前报警配置。
+func (s *apiServer) alarmReadConfigHandler(w http.ResponseWriter, _ *http.Request) {
+	if s.appConfig != nil {
+		writeSuccess(w, http.StatusOK, s.appConfig.Alarm)
+		return
+	}
+	writeSuccess(w, http.StatusOK, config.Default().Alarm)
+}
+
+// alarmSaveConfigHandler 更新报警配置并持久化到配置文件。
+func (s *apiServer) alarmSaveConfigHandler(w http.ResponseWriter, r *http.Request) {
+	var alarmCfg struct {
+		Enabled            bool    `json:"enabled"`
+		PrecisionThreshold float64 `json:"precisionThreshold"`
+		SoundEnabled       bool    `json:"soundEnabled"`
+		ConfirmOnAlarm     bool    `json:"confirmOnAlarm"`
+		EnabledChannels    []int   `json:"enabledChannels"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&alarmCfg); err != nil {
+		writeError(w, apperrors.ErrInvalidArgument)
+		return
+	}
+	cfg := domain.AlarmConfig{
+		Enabled:            alarmCfg.Enabled,
+		PrecisionThreshold: alarmCfg.PrecisionThreshold,
+		SoundEnabled:       alarmCfg.SoundEnabled,
+		ConfirmOnAlarm:     alarmCfg.ConfirmOnAlarm,
+		EnabledChannels:    alarmCfg.EnabledChannels,
+	}
+	if s.appConfig != nil {
+		s.appConfig.Alarm = cfg
+		s.persistConfig()
+	}
+	s.calibrationService.SetAlarmConfig(cfg)
+	writeSuccess(w, http.StatusOK, map[string]string{"status": "ok"})
 }
 
 // persistConfig 将当前配置持久化到文件（如果配置了路径）。
@@ -170,11 +146,11 @@ func (s *apiServer) persistConfig() {
 }
 
 // calibrationConfigFromParams 将持久化参数转换为校准服务配置。
-func calibrationConfigFromParams(params config.CalibrationParamsConfig) calibration.CalibrationConfig {
-	return calibration.CalibrationConfig{
+func calibrationConfigFromParams(params config.CalibrationParamsConfig) domain.WorkflowConfig {
+	return domain.WorkflowConfig{
 		MinPressure:    params.MinPressure,
 		MaxPressure:    params.MaxPressure,
-		PressurePoints: params.PointCount,
+		PointCount:     params.PointCount,
 		Precision:      params.Precision,
 		AverageCount:   params.AverageCount,
 		StableWaitMs:   params.StableDurationMs,
@@ -185,8 +161,8 @@ func calibrationConfigFromParams(params config.CalibrationParamsConfig) calibrat
 }
 
 // measurementConfigFromParams 将持久化参数转换为计量服务配置。
-func measurementConfigFromParams(params config.MeasurementParamsConfig) measurement.Config {
-	return measurement.Config{
+func measurementConfigFromParams(params config.MeasurementParamsConfig) domain.WorkflowConfig {
+	return domain.WorkflowConfig{
 		MinPressure:    params.MinPressure,
 		MaxPressure:    params.MaxPressure,
 		PointCount:     params.PointCount,

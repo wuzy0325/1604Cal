@@ -1,76 +1,76 @@
 <template>
   <PageLayout>
-    <!-- 页面头部 -->
-    <header class="page-header">
-      <div class="header-left">
+    <!-- ═══ 仪表盘头部 ═══ -->
+    <header class="instrument-header">
+      <div class="header-nav">
         <button class="back-btn" @click="goBack">
           <el-icon><ArrowLeft /></el-icon>
         </button>
-        <div class="header-title">
-          <h1>多设备打压控制</h1>
-          <p>并发控制多台打压设备</p>
-        </div>
+      </div>
+      <div class="header-identity">
+        <h1 class="header-title">多设备打压控制</h1>
+        <span class="header-sub">并发控制多台打压设备</span>
       </div>
       <div class="header-actions">
-        <el-button
-          type="danger"
-          size="small"
+        <button
+          class="danger-btn"
           :disabled="store.registeredCount === 0"
           @click="handleStopAll"
         >
           全部停止
-        </el-button>
+        </button>
       </div>
     </header>
 
     <!-- 统计栏 -->
     <div class="stats-bar">
       <StatCard label="注册设备" :value="store.registeredCount" />
-      <StatCard label="打压中" :value="store.pressurizingCount" color="#ffd700" />
+      <StatCard label="打压中" :value="store.pressurizingCount" color="#f59e0b" />
     </div>
 
-    <!-- 未注册打压设备 -->
-    <section v-if="store.availableDevices.length > 0" class="available-section">
-      <h3 class="section-title">可用打压设备</h3>
-      <div class="available-grid">
-        <div
-          v-for="dev in store.availableDevices"
-          :key="dev.id"
-          class="available-card"
-        >
-          <div class="available-info">
-            <span class="available-name">{{ dev.name }}</span>
-            <span class="available-detail">{{ dev.host }}:{{ dev.port }}</span>
+    <!-- ═══ 内容区域 ═══ -->
+    <div class="content-scroll">
+      <!-- 未注册打压设备 -->
+      <section v-if="store.availableDevices.length > 0" class="content-section">
+        <h3 class="section-title">可用打压设备</h3>
+        <div class="available-grid">
+          <div
+            v-for="dev in store.availableDevices"
+            :key="dev.id"
+            class="available-card"
+          >
+            <div class="available-info">
+              <span class="available-name">{{ dev.name }}</span>
+              <span class="available-detail">{{ dev.host }}:{{ dev.port }}</span>
+            </div>
+            <button class="reg-btn" @click="handleRegister(dev.id)">注册</button>
           </div>
-          <el-button size="small" type="primary" @click="handleRegister(dev.id)">
-            注册
-          </el-button>
         </div>
-      </div>
-    </section>
+      </section>
 
-    <!-- 已注册设备卡片网格 -->
-    <section v-if="store.registeredDevices.length > 0" class="registered-section">
-      <h3 class="section-title">已注册设备</h3>
-      <div class="registered-grid">
-        <PressureControlCard
-          v-for="devState in store.registeredDevices"
-          :key="devState.deviceId"
-          :state="devState"
-          :metadata="store.getMeta(devState.deviceId)"
-          @set-pressure="handleSetPressure"
-          @stop="handleStop"
-          @exhaust="handleExhaust"
-          @unregister="handleUnregister"
-          @set-unit="handleSetUnit"
-        />
-      </div>
-    </section>
+      <!-- 已注册设备卡片网格 -->
+      <section v-if="store.registeredDevices.length > 0" class="content-section">
+        <h3 class="section-title">已注册设备</h3>
+        <div class="registered-grid">
+          <PressureControlCard
+            v-for="devState in store.registeredDevices"
+            :key="devState.deviceId"
+            :state="devState"
+            :metadata="store.getMeta(devState.deviceId)"
+            @set-pressure="handleSetPressure"
+            @stop="handleStop"
+            @exhaust="handleExhaust"
+            @unregister="handleUnregister"
+            @set-unit="handleSetUnit"
+          />
+        </div>
+      </section>
 
-    <!-- 空状态 -->
-    <section v-if="store.registeredDevices.length === 0 && store.availableDevices.length === 0" class="empty-state">
-      <p class="empty-text">暂无打压设备</p>
-    </section>
+      <!-- 空状态 -->
+      <section v-if="store.registeredDevices.length === 0 && store.availableDevices.length === 0" class="empty-state">
+        <p class="empty-text">暂无打压设备</p>
+      </section>
+    </div>
   </PageLayout>
 </template>
 
@@ -87,9 +87,7 @@ import PressureControlCard from './PressureControlCard.vue'
 const router = useRouter()
 const store = useMultiPressStore()
 
-function goBack(): void {
-  router.push('/')
-}
+function goBack(): void { router.push('/') }
 
 async function handleRegister(deviceId: string): Promise<void> {
   await store.registerDevice(deviceId)
@@ -124,17 +122,11 @@ async function handleStopAll(): Promise<void> {
   await store.stopAll()
 }
 
-onMounted(() => {
-  store.setupListeners()
-})
-
-onUnmounted(() => {
-  store.cleanup()
-})
+onMounted(() => { store.setupListeners() })
+onUnmounted(() => { store.cleanup() })
 </script>
 
 <style scoped lang="scss">
-/* ── 设计系统令牌 ── */
 $font-sans: 'Inter', 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
 $font-mono: 'JetBrains Mono', 'Fira Code', 'SF Mono', Consolas, monospace;
 $mint: #10b981;
@@ -147,76 +139,112 @@ $slate-500: #6b7280;
 $slate-600: #4b5563;
 $slate-700: #374151;
 $slate-800: #1f2937;
+$slate-900: #111827;
+$red: #ef4444;
 
-.page-header {
+/* ═══ 仪表盘头部 ═══ */
+.instrument-header {
   display: flex;
-  justify-content: space-between;
   align-items: center;
+  gap: 16px;
   flex-shrink: 0;
-  height: 48px;
+  height: 56px;
   padding: 0 24px;
-  background: #ffffff;
+  background: $slate-50;
   border-bottom: 1px solid $slate-200;
   font-family: $font-sans;
 }
 
-.header-left {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
+.header-nav { display: flex; align-items: center; }
 
 .back-btn {
-  width: 28px;
-  height: 28px;
-  background: transparent;
+  width: 32px; height: 32px;
+  background: #fff;
   border: 1px solid $slate-200;
   border-radius: 8px;
-  color: $slate-400;
+  color: $slate-500;
   cursor: pointer;
-  transition: all 0.2s ease;
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 16px;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
 
   &:hover {
-    background: $slate-50;
-    color: $slate-600;
-    border-color: $slate-300;
+    background: #fff;
+    color: $mint;
+    border-color: $mint;
   }
 }
 
-.header-title {
-  h1 {
-    font-size: 18px;
-    font-weight: 700;
-    color: $slate-800;
-    margin: 0;
-    letter-spacing: -0.01em;
-  }
+.header-identity { display: flex; align-items: center; gap: 12px; }
 
-  p {
-    font-size: 12px;
-    color: $slate-500;
-    margin: 2px 0 0;
-  }
+.header-title {
+  font-size: 20px;
+  font-weight: 600;
+  color: $slate-800;
+  margin: 0;
+  font-family: $font-sans;
+}
+
+.header-sub {
+  font-size: 12px;
+  color: $slate-400;
+  font-weight: 400;
 }
 
 .header-actions {
+  margin-left: auto;
   display: flex;
   gap: 10px;
 }
 
+.danger-btn {
+  height: 30px;
+  padding: 0 14px;
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  border-radius: 6px;
+  background: rgba(239, 68, 68, 0.1);
+  color: #f87171;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: $font-sans;
+  transition: all 0.15s ease;
+
+  &:hover:not(:disabled) {
+    background: rgba(239, 68, 68, 0.2);
+    border-color: rgba(239, 68, 68, 0.5);
+  }
+
+  &:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+}
+
+/* ═══ 统计栏 ═══ */
 .stats-bar {
   display: flex;
   gap: 12px;
   flex-shrink: 0;
-  padding: 0 24px;
+  padding: 16px 24px 0;
+}
+
+/* ═══ 内容滚动区 ═══ */
+.content-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 16px 24px 24px;
+}
+
+.content-section {
+  margin-bottom: 24px;
 }
 
 .section-title {
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 600;
   color: $slate-700;
   margin: 0 0 12px;
@@ -232,23 +260,18 @@ $slate-800: #1f2937;
     left: 0;
     top: 50%;
     transform: translateY(-50%);
-    width: 3px;
+    width: 1px;
     height: 14px;
-    background: linear-gradient(180deg, $mint, #059669);
-    border-radius: 2px;
+    background: $mint;
+    border-radius: 0;
   }
 }
 
-.available-section,
-.registered-section {
-  flex-shrink: 0;
-  padding: 0 24px;
-}
-
+/* 可用设备 */
 .available-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: 12px;
+  gap: 10px;
 }
 
 .available-card {
@@ -260,12 +283,12 @@ $slate-800: #1f2937;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  transition: all 0.2s ease;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  transition: all 0.2s ease;
 
   &:hover {
     border-color: rgba($mint, 0.3);
-    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.07), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.07);
   }
 }
 
@@ -279,6 +302,7 @@ $slate-800: #1f2937;
   font-size: 14px;
   font-weight: 500;
   color: $slate-700;
+  font-family: $font-sans;
 }
 
 .available-detail {
@@ -287,12 +311,33 @@ $slate-800: #1f2937;
   font-family: $font-mono;
 }
 
+.reg-btn {
+  height: 28px;
+  padding: 0 12px;
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  border-radius: 6px;
+  background: rgba(16, 185, 129, 0.08);
+  color: $mint;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: $font-sans;
+  transition: all 0.15s ease;
+
+  &:hover {
+    background: rgba(16, 185, 129, 0.15);
+    border-color: rgba(16, 185, 129, 0.5);
+  }
+}
+
+/* 已注册设备 */
 .registered-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-  gap: 16px;
+  gap: 14px;
 }
 
+/* 空状态 */
 .empty-state {
   flex: 1;
   display: flex;
@@ -303,31 +348,17 @@ $slate-800: #1f2937;
 .empty-text {
   font-size: 14px;
   color: $slate-400;
+  font-family: $font-sans;
 }
 
-// 响应式适配
+/* 响应式 */
 @media (max-width: 768px) {
-  .page-header {
-    padding: 0 16px;
+  .instrument-header {
+    height: auto; flex-wrap: wrap; padding: 10px 16px;
   }
-
-  .header-title h1 {
-    font-size: 16px;
-  }
-
-  .stats-bar {
-    flex-direction: column;
-    padding: 0 16px;
-  }
-
-  .available-section,
-  .registered-section {
-    padding: 0 16px;
-  }
-
-  .available-grid,
-  .registered-grid {
-    grid-template-columns: 1fr;
-  }
+  .header-sub { display: none; }
+  .stats-bar { flex-direction: column; padding: 12px 16px 0; }
+  .content-scroll { padding: 12px 16px 16px; }
+  .available-grid, .registered-grid { grid-template-columns: 1fr; }
 }
 </style>

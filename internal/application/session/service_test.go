@@ -8,6 +8,7 @@ import (
 	"cal1604/internal/application/session"
 	"cal1604/internal/device"
 	"cal1604/internal/domain"
+	"cal1604/internal/events"
 	"cal1604/internal/infrastructure/driver"
 )
 
@@ -137,7 +138,7 @@ func TestBindDevicesSuccess(t *testing.T) {
 	if err := svc.BindDevices("m1", "p1"); err != nil {
 		t.Fatalf("BindDevices: %v", err)
 	}
-	if len(pub.events) != 1 || pub.events[0] != "session.device_bound" {
+	if len(pub.events) != 1 || pub.events[0] != events.EventSessionDeviceBound {
 		t.Fatalf("expected session.device_bound, got %v", pub.events)
 	}
 	if svc.MeasureDriver() == nil {

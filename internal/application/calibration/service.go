@@ -10,6 +10,7 @@ import (
 	"cal1604/internal/application/session"
 	"cal1604/internal/device"
 	"cal1604/internal/domain"
+	"cal1604/internal/events"
 	"cal1604/internal/infrastructure/driver"
 	"cal1604/internal/workflow"
 )
@@ -17,41 +18,8 @@ import (
 // defaultAlarmService 用于报警判定的服务实例。
 var defaultAlarmService = workflow.NewAlarmService()
 
-// PressurePoint 表示一个压力点及其采集状态。
-type PressurePoint struct {
-	Index          int       `json:"index"`
-	TargetPressure float64   `json:"targetPressure"`
-	Status         string    `json:"status"`    // pending, pressurizing, stabilizing, collecting, completed, skipped, error
-	Direction      string    `json:"direction"` // forward | backward（回程模式标记正程/回程）
-	CollectedData  []float64 `json:"collectedData,omitempty"`
-	ActualPressure float64   `json:"actualPressure,omitempty"`
-}
-
-// CalibrationConfig 校准配置。
-type CalibrationConfig struct {
-	Channels       []int   `json:"channels"`
-	PressurePoints int     `json:"pressurePoints"`
-	AverageCount   int     `json:"averageCount"`
-	MinPressure    float64 `json:"minPressure"`
-	MaxPressure    float64 `json:"maxPressure"`
-	StableWaitMs   int     `json:"stableWaitMs"`
-	ControlMode    string  `json:"controlMode"`    // auto | manual
-	Precision      int     `json:"precision"`      // 小数位数
-	PrecisionLevel float64 `json:"precisionLevel"` // 精度等级（如 0.0005）
-	PressureMode   string  `json:"pressureMode"`   // single | roundTrip
-}
-
-// CalibrationSession 校准会话，记录一次完整校准流程的全部状态。
-type CalibrationSession struct {
-	ID               string            `json:"id"`
-	StartTime        time.Time         `json:"startTime"`
-	EndTime          *time.Time        `json:"endTime,omitempty"`
-	Config           CalibrationConfig `json:"config"`
-	PressurePoints   []PressurePoint   `json:"pressurePoints"`
-	MeasureDeviceID  string            `json:"measureDeviceId"`
-	PressureDeviceID string            `json:"pressureDeviceId"`
-	Status           string            `json:"status"` // running | completed | error
-}
+// CalibrationSession 是 domain.WorkflowSession 的类型别名，保持外部包向后兼容。
+type CalibrationSession = domain.WorkflowSession
 
 // FittingResult 拟合结果。
 type FittingResult struct {
@@ -111,9 +79,9 @@ type Service struct {
 	measureDevID   string
 	pressureDevID  string
 
-	config             CalibrationConfig
+	config             domain.WorkflowConfig
 	alarmConfig        domain.AlarmConfig
-	pressurePoints     []PressurePoint
+	pressurePoints     []domain.PressurePoint
 	currentPoint       int
 	calibrationSession *CalibrationSession
 
@@ -162,18 +130,20 @@ func (s *Service) SetStartPrerequisiteConfig(cfg StartPrerequisiteConfig) {
 	s.startPrerequisiteConfig = cfg
 }
 
-// syncDriversFromSessionLocked 在持有 mu 锁时，从共享会话同步当前驱动引用。
-// 这样标定流程不依赖独立的设备绑定端点，避免出现会话已绑定但标定服务仍为空指针的问题。
-func (s *Service) syncDriversFromSessionLocked() {
-	if s.sessionService == nil {
-		return
+// getMeasureDriver 从 session 服务获取计量驱动；session 为 nil 时回退到本地字段。
+func (s *Service) getMeasureDriver() device.MeasureDriver {
+	if s.sessionService != nil {
+		return s.sessionService.MeasureDriver()
 	}
-	if drv := s.sessionService.MeasureDriver(); drv != nil {
-		s.measureDriver = drv
+	return s.measureDriver
+}
+
+// getPressureDriver 从 session 服务获取打压驱动；session 为 nil 时回退到本地字段。
+func (s *Service) getPressureDriver() device.PressureDriver {
+	if s.sessionService != nil {
+		return s.sessionService.PressureDriver()
 	}
-	if drv := s.sessionService.PressureDriver(); drv != nil {
-		s.pressureDriver = drv
-	}
+	return s.pressureDriver
 }
 
 // StartCalibration 开始校准流程（WTN1604 多点校准模式）。
@@ -181,8 +151,8 @@ func (s *Service) syncDriversFromSessionLocked() {
 // 是否校验阀门状态由 startPrerequisiteConfig.EnforceValveCalibration 控制。
 func (s *Service) StartCalibration(ctx context.Context) error {
 	s.mu.Lock()
-	s.syncDriversFromSessionLocked()
-	if s.measureDriver == nil {
+	
+	if s.getMeasureDriver() == nil {
 		s.mu.Unlock()
 		return ErrMeasureDeviceNotSet
 	}
@@ -205,7 +175,7 @@ func (s *Service) StartCalibration(ctx context.Context) error {
 	}
 
 	if enforceValveGate {
-		valveStatus, err := s.measureDriver.ReadValveStatus(ctx)
+		valveStatus, err := s.getMeasureDriver().ReadValveStatus(ctx)
 		if err != nil {
 			s.mu.Unlock()
 			return fmt.Errorf("read valve status: %w", err)
@@ -217,13 +187,13 @@ func (s *Service) StartCalibration(ctx context.Context) error {
 	}
 
 	// WTN1604 开始多点校准
-	wtn, ok := s.measureDriver.(*driver.WTN1604Driver)
+	calDev, ok := s.getMeasureDriver().(device.CalibrationCapable)
 	if ok {
 		avgCount := s.config.AverageCount
 		if avgCount < 1 {
 			avgCount = 1
 		}
-		if err := wtn.StartCalibration(ctx, s.config.Channels, s.config.PressurePoints, avgCount); err != nil {
+		if err := calDev.StartCalibration(ctx, s.config.Channels, s.config.PointCount, avgCount); err != nil {
 			s.mu.Unlock()
 			return fmt.Errorf("start WTN1604 calibration: %w", err)
 		}
@@ -234,7 +204,7 @@ func (s *Service) StartCalibration(ctx context.Context) error {
 		ID:               fmt.Sprintf("cal-%d", time.Now().UnixMilli()),
 		StartTime:        time.Now(),
 		Config:           s.config,
-		PressurePoints:   s.pressurePoints,
+		Points:   s.pressurePoints,
 		MeasureDeviceID:  s.measureDevID,
 		PressureDeviceID: s.pressureDevID,
 		Status:           "running",
@@ -257,9 +227,9 @@ func (s *Service) StartCalibration(ctx context.Context) error {
 // 用于 session/start 端点在状态迁移前进行门禁拦截。
 func (s *Service) ValidateStartPrerequisites(ctx context.Context) error {
 	s.mu.Lock()
-	s.syncDriversFromSessionLocked()
-	measureDriver := s.measureDriver
-	pressureDriver := s.pressureDriver
+	
+	measureDriver := s.getMeasureDriver()
+	pressureDriver := s.getPressureDriver()
 	channels := s.config.Channels
 	config := s.config
 	enforceValveGate := s.startPrerequisiteConfig.EnforceValveCalibration
@@ -273,8 +243,8 @@ func (s *Service) ValidateStartPrerequisites(ctx context.Context) error {
 		return fmt.Errorf("no channels selected")
 	}
 
-	if config.PressurePoints < 2 || config.PressurePoints > 6 {
-		return fmt.Errorf("pressure points must be between 2 and 6, got %d", config.PressurePoints)
+	if config.PointCount < 2 || config.PointCount > 6 {
+		return fmt.Errorf("pressure points must be between 2 and 6, got %d", config.PointCount)
 	}
 
 	// 按模式化门禁校验打压设备
@@ -303,17 +273,17 @@ func (s *Service) EndCalibration(ctx context.Context) error {
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.syncDriversFromSessionLocked()
+	
 
 	// WTN1604 结束校准
-	wtn, ok := s.measureDriver.(*driver.WTN1604Driver)
+	calDev, ok := s.getMeasureDriver().(device.CalibrationCapable)
 	if ok {
-		_ = wtn.EndCalibration(ctx)
+		_ = calDev.EndCalibration(ctx)
 	}
 
 	// 停止压力控制
-	if s.pressureDriver != nil {
-		_ = s.pressureDriver.Stop(ctx)
+	if s.getPressureDriver() != nil {
+		_ = s.getPressureDriver().Stop(ctx)
 	}
 
 	// 关闭校准会话记录
@@ -321,7 +291,7 @@ func (s *Service) EndCalibration(ctx context.Context) error {
 		now := time.Now()
 		s.calibrationSession.EndTime = &now
 		s.calibrationSession.Status = "completed"
-		s.calibrationSession.PressurePoints = s.pressurePoints
+		s.calibrationSession.Points = s.pressurePoints
 	}
 
 	return nil
@@ -353,7 +323,7 @@ func (s *Service) RunAutoCollection(ctx context.Context) error {
 		s.currentPoint = startIndex
 		s.mu.Unlock()
 
-		s.publish("autoCollection.started", map[string]any{
+		s.publish(events.EventAutoCollectionStarted, map[string]any{
 			"pointCount": totalPoints,
 			"mode":       mode,
 			"startIndex": startIndex + 1,
@@ -377,13 +347,13 @@ func (s *Service) RunAutoCollection(ctx context.Context) error {
 				}
 
 				if errors.Is(err, errAutoCollectionStopped) {
-					s.publish("autoCollection.stopped", map[string]any{
+					s.publish(events.EventAutoCollectionStopped, map[string]any{
 						"pointIndex": i + 1,
 					})
 					return
 				}
 
-				s.publish("autoCollection.error", map[string]any{
+				s.publish(events.EventAutoCollectionError, map[string]any{
 					"pointIndex": i + 1,
 					"error":      err.Error(),
 				})
@@ -405,7 +375,7 @@ func (s *Service) RunAutoCollection(ctx context.Context) error {
 		ctx := s.autoCollectionCtx
 		s.autoCollectionMu.Unlock()
 		if ctx != nil && ctx.Err() == nil {
-			s.publish("autoCollection.completed", map[string]any{
+			s.publish(events.EventAutoCollectionCompleted, map[string]any{
 				"totalPoints": totalPoints,
 			})
 		}
@@ -416,7 +386,7 @@ func (s *Service) RunAutoCollection(ctx context.Context) error {
 
 // collectPoint 采集单个压力点：打压 -> 稳定监控 -> 采集 -> 报警检查。
 func (s *Service) collectPoint(ctx context.Context, pointIndex int) error {
-	s.publish("point.started", map[string]any{"pointIndex": pointIndex})
+	s.publish(events.EventPointStarted, map[string]any{"pointIndex": pointIndex})
 
 	if err := s.Pressurize(ctx, pointIndex); err != nil {
 		return fmt.Errorf("pressurize point %d: %w", pointIndex, err)
@@ -448,7 +418,7 @@ func (s *Service) collectPoint(ctx context.Context, pointIndex int) error {
 			return ctx.Err()
 		}
 
-		actual, err := s.pressureDriver.ReadCurrentPressure(ctx)
+		actual, err := s.getPressureDriver().ReadCurrentPressure(ctx)
 		if err != nil {
 			return fmt.Errorf("read pressure for stability check: %w", err)
 		}
@@ -476,12 +446,12 @@ func (s *Service) collectPoint(ctx context.Context, pointIndex int) error {
 	case workflow.AlarmDecisionRecollect:
 		s.mu.Lock()
 		if pointIndex >= 1 && pointIndex <= len(s.pressurePoints) {
-			s.pressurePoints[pointIndex-1].Status = "pending"
+			s.pressurePoints[pointIndex-1].Status = domain.PointStatusPending
 			s.pressurePoints[pointIndex-1].CollectedData = nil
 			s.pressurePoints[pointIndex-1].ActualPressure = 0
 		}
 		s.mu.Unlock()
-		s.publish("point.recollect", map[string]any{"pointIndex": pointIndex})
+		s.publish(events.EventPointRecollect, map[string]any{"pointIndex": pointIndex})
 		return s.collectPoint(ctx, pointIndex)
 
 	case workflow.AlarmDecisionSkip:
@@ -490,16 +460,16 @@ func (s *Service) collectPoint(ctx context.Context, pointIndex int) error {
 			s.pressurePoints[pointIndex-1].CollectedData = nil
 		}
 		s.mu.Unlock()
-		s.updatePointStatus(pointIndex, "skipped")
-		s.publish("point.skipped", map[string]any{"pointIndex": pointIndex})
+		s.updatePointStatus(pointIndex, domain.PointStatusSkipped)
+		s.publish(events.EventPointSkipped, map[string]any{"pointIndex": pointIndex})
 		return nil
 
 	case workflow.AlarmDecisionStop:
-		s.publish("point.stopped", map[string]any{"pointIndex": pointIndex})
+		s.publish(events.EventPointStopped, map[string]any{"pointIndex": pointIndex})
 		return errAutoCollectionStopped
 	}
 
-	s.publish("point.completed", map[string]any{"pointIndex": pointIndex, "data": data})
+	s.publish(events.EventPointCompleted, map[string]any{"pointIndex": pointIndex, "data": data})
 	return nil
 }
 
@@ -562,7 +532,7 @@ func (s *Service) checkAlarm(ctx context.Context, pointIndex int, data []float64
 			return "", err
 		}
 
-		s.publish("calibration.alarm.resolved", map[string]any{
+		s.publish(events.EventCalibrationAlarmResolved, map[string]any{
 			"pointIndex": pointIndex,
 			"decision":   decision,
 			"triggered":  true,
@@ -610,7 +580,7 @@ func (s *Service) ResolveAlarm(decision string) error {
 
 	select {
 	case s.alarmCh <- decision:
-		s.publish("calibration.alarm.resolved", map[string]any{
+		s.publish(events.EventCalibrationAlarmResolved, map[string]any{
 			"pointIndex": s.currentPoint + 1,
 			"decision":   decision,
 			"triggered":  true,
@@ -628,15 +598,15 @@ func (s *Service) RetryPoint(ctx context.Context, pointIndex int) error {
 		s.mu.Unlock()
 		return fmt.Errorf("invalid point index: %d", pointIndex)
 	}
-	s.pressurePoints[pointIndex-1].Status = "pending"
+	s.pressurePoints[pointIndex-1].Status = domain.PointStatusPending
 	s.pressurePoints[pointIndex-1].CollectedData = nil
 	s.pressurePoints[pointIndex-1].ActualPressure = 0
 	s.currentPoint = pointIndex - 1
 	controlMode := s.config.ControlMode
-	hasPressureDriver := s.pressureDriver != nil
+	hasPressureDriver := s.getPressureDriver() != nil
 	s.mu.Unlock()
 
-	s.publish("point.retry", map[string]any{"pointIndex": pointIndex})
+	s.publish(events.EventPointRetry, map[string]any{"pointIndex": pointIndex})
 
 	// 手动模式且未连接打压设备时，仅重置为待确认，
 	// 由操作者再次确认后执行采集，不自动触发打压链路。
@@ -702,11 +672,11 @@ func (s *Service) IsAutoCollectionRunning() bool {
 
 func (s *Service) markPointError(pointIndex int, reason string) {
 	_ = reason
-	s.updatePointStatus(pointIndex, "error")
+	s.updatePointStatus(pointIndex, domain.PointStatusError)
 }
 
 func (s *Service) publishSessionState() {
-	s.publish("session.state.changed", map[string]any{
+	s.publish(events.EventSessionStateChanged, map[string]any{
 		"state": string(s.sessionMachine.State()),
 	})
 }
@@ -726,7 +696,7 @@ func (s *Service) updatePointStatus(pointIndex int, status string) {
 	}
 	s.mu.Unlock()
 
-	s.publish("calibration.point_status", pointSnapshot)
+	s.publish(events.EventCalibrationPointStatus, pointSnapshot)
 }
 
 // resumePointIndexLocked 计算恢复自动采集时的起始压力点下标（0-based）。
@@ -759,5 +729,5 @@ func (s *Service) resumePointIndexLocked() int {
 }
 
 func isPointTerminalStatus(status string) bool {
-	return status == "completed" || status == "skipped"
+	return status == domain.PointStatusCompleted || status == domain.PointStatusSkipped
 }

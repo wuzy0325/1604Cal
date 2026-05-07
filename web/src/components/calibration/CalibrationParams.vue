@@ -1,7 +1,6 @@
 <template>
   <section class="params-card">
     <div class="params-grid">
-      <!-- 压力范围 -->
       <div class="param-group">
         <span class="group-label">压力范围</span>
         <div class="group-body">
@@ -32,19 +31,16 @@
           <input v-model.number="calibrationStore.calibrationParams.precision" type="number" min="0" max="4" class="compact-input narrow" />
           <label class="input-label">平均</label>
           <input v-model.number="calibrationStore.calibrationParams.averageCount" type="number" min="1" max="100" class="compact-input narrow" />
-          <div class="label-input-group">
-            <label class="input-label">等级</label>
-            <select v-model="calibrationStore.calibrationParams.precisionLevel" class="compact-select">
-              <option value="0.01">0.01%</option>
-              <option value="0.05">0.05%</option>
-              <option value="0.1">0.1%</option>
-              <option value="0.2">0.2%</option>
-            </select>
-          </div>
+          <label class="input-label">等级</label>
+          <select v-model="calibrationStore.calibrationParams.precisionLevel" class="compact-select">
+            <option value="0.01">0.01%</option>
+            <option value="0.05">0.05%</option>
+            <option value="0.1">0.1%</option>
+            <option value="0.2">0.2%</option>
+          </select>
         </div>
       </div>
 
-      <!-- 稳定设置 -->
       <div class="param-group">
         <span class="group-label">稳定设置</span>
         <div class="group-body">
@@ -58,7 +54,7 @@
         </div>
       </div>
 
-      <!-- 打压模式 / 控制模式 / 采集通道 并列 -->
+      <!-- 打压 / 控制 / 通道 并列 -->
       <div class="param-group">
         <span class="group-label">打压模式</span>
         <div class="group-body">
@@ -205,18 +201,12 @@ $blue: #3b82f6;
   }
 }
 
-.label-input-group {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
 /* ── 输入控件 ── */
 .compact-input {
   height: 30px;
   font-size: 13px;
   border: 1px solid $slate-300;
-  border-radius: 6px;
+  border-radius: 8px;
   padding: 0 8px;
   width: 56px;
   text-align: center;
@@ -246,7 +236,7 @@ $blue: #3b82f6;
   height: 30px;
   font-size: 12px;
   border: 1px solid $slate-300;
-  border-radius: 6px;
+  border-radius: 8px;
   padding: 0 22px 0 8px;
   color: $slate-700;
   background: #fff;
@@ -272,7 +262,7 @@ $blue: #3b82f6;
   height: 28px;
   padding: 0 10px;
   border: 1px solid $slate-300;
-  border-radius: 6px;
+  border-radius: 8px;
   background: #fff;
   color: $blue;
   font-size: 12px;
@@ -298,7 +288,7 @@ $blue: #3b82f6;
   display: flex;
   padding: 2px;
   background: $slate-200;
-  border-radius: 6px;
+  border-radius: 8px;
 }
 
 .segment-btn {

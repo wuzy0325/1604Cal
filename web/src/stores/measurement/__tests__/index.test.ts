@@ -4,8 +4,6 @@ import { createPinia, setActivePinia } from 'pinia'
 import { useMeasurementStore } from '../index'
 import * as sessionApi from '@/api/session'
 import * as measurementApi from '@/api/measurement'
-import type { StreamEventPayload } from '@/types/api'
-import * as clientApi from '@/api/client'
 
 // ── Mock API 层 ──
 
@@ -32,10 +30,6 @@ vi.mock('@/api/measurement', () => ({
   getMeasurementExportUrl: vi.fn(() => '/api/v1/measurement/export?format=csv')
 }))
 
-vi.mock('@/api/client', () => ({
-  createEventStream: vi.fn()
-}))
-
 vi.mock('element-plus', async () => {
   const actual = await vi.importActual<typeof import('element-plus')>('element-plus')
   return {
@@ -57,7 +51,7 @@ describe('useMeasurementStore', () => {
       const store = useMeasurementStore()
       expect(store.state).toBe('idle')
       expect(store.rows).toEqual([])
-      expect(store.channels).toEqual([])
+      expect(store.channels).toHaveLength(16)
       expect(store.measureDeviceId).toBe('')
       expect(store.pressureDeviceId).toBe('')
       expect(store.currentPressure).toBe(0)
@@ -301,80 +295,6 @@ describe('useMeasurementStore', () => {
       const store = useMeasurementStore()
       await store.refreshData()
       expect(store.rows).toEqual(mockRows)
-    })
-  })
-
-  // ── SSE ──
-
-  describe('setupSSE', () => {
-    it('creates event stream and handles state_changed event', () => {
-      let capturedCallback: ((payload: StreamEventPayload) => void) | null = null
-      vi.mocked(clientApi.createEventStream).mockImplementation((cb) => {
-        capturedCallback = cb
-        return { close: vi.fn() } as unknown as EventSource
-      })
-
-      const store = useMeasurementStore()
-      store.setupSSE()
-
-      expect(clientApi.createEventStream).toHaveBeenCalledTimes(1)
-      capturedCallback!({
-        type: 'measurement.state_changed',
-        data: { state: 'collecting' }
-      })
-      expect(store.state).toBe('collecting')
-    })
-
-    it('handles data_updated event by appending row', () => {
-      let capturedCallback: ((payload: StreamEventPayload) => void) | null = null
-      vi.mocked(clientApi.createEventStream).mockImplementation((cb) => {
-        capturedCallback = cb
-        return { close: vi.fn() } as unknown as EventSource
-      })
-
-      const store = useMeasurementStore()
-      store.setupSSE()
-
-      capturedCallback!({
-        type: 'measurement.data_updated',
-        data: { timestamp: '2026-04-21T10:00:01Z', channels: { '1': 5.5 } }
-      })
-      expect(store.rows).toHaveLength(1)
-      expect(store.rows[0]).toEqual({
-        timestamp: '2026-04-21T10:00:01Z',
-        channels: { '1': 5.5 }
-      })
-    })
-
-    it('does not create duplicate event stream', () => {
-      vi.mocked(clientApi.createEventStream).mockReturnValue({
-        close: vi.fn()
-      } as unknown as EventSource)
-
-      const store = useMeasurementStore()
-      store.setupSSE()
-      store.setupSSE()
-      expect(clientApi.createEventStream).toHaveBeenCalledTimes(1)
-    })
-  })
-
-  describe('teardownSSE', () => {
-    it('closes and clears event source', () => {
-      const mockClose = vi.fn()
-      vi.mocked(clientApi.createEventStream).mockReturnValue({
-        close: mockClose
-      } as unknown as EventSource)
-
-      const store = useMeasurementStore()
-      store.setupSSE()
-      store.teardownSSE()
-
-      expect(mockClose).toHaveBeenCalled()
-    })
-
-    it('is safe to call without setup', () => {
-      const store = useMeasurementStore()
-      expect(() => store.teardownSSE()).not.toThrow()
     })
   })
 

@@ -13,6 +13,7 @@ import (
 
 	"cal1604/internal/api/dto"
 	"cal1604/internal/application/deviceconnect"
+	"cal1604/internal/events"
 	"cal1604/internal/device"
 	"cal1604/internal/device/manager"
 	"cal1604/internal/domain"
@@ -337,7 +338,7 @@ func TestConnectEndpointReturnsErrorReasonAndStreamsSSE(t *testing.T) {
 	}
 
 	body := streamRec.Body.String()
-	if !strings.Contains(body, "device.status.changed") {
+	if !strings.Contains(body, events.EventDeviceStatusChanged) {
 		t.Fatalf("expected status changed event in stream body, got %q", body)
 	}
 

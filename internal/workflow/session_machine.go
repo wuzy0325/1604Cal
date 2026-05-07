@@ -20,10 +20,16 @@ func NewSessionMachine() *SessionMachine {
 		state: domain.SessionStateIdle,
 		transitions: map[domain.SessionState]map[domain.SessionState]struct{}{
 			domain.SessionStateIdle: {
-				domain.SessionStateReady: {},
+				domain.SessionStateReady:        {},
+				domain.SessionStatePressurizing: {},
+				domain.SessionStateCollecting:   {},
 			},
 			domain.SessionStateReady: {
 				domain.SessionStatePressurizing: {},
+				domain.SessionStateCollecting:   {},
+				domain.SessionStatePaused:       {},
+				domain.SessionStateIdle:         {},
+				domain.SessionStateError:        {},
 				domain.SessionStateStopped:      {},
 			},
 			domain.SessionStatePressurizing: {
@@ -45,6 +51,8 @@ func NewSessionMachine() *SessionMachine {
 				domain.SessionStateStopped:    {},
 			},
 			domain.SessionStateCollecting: {
+				domain.SessionStateReady:                {},
+				domain.SessionStateCompleted:            {},
 				domain.SessionStatePointDone:            {},
 				domain.SessionStateAwaitAlarmResolution: {},
 				domain.SessionStatePaused:               {},
@@ -70,11 +78,15 @@ func NewSessionMachine() *SessionMachine {
 				domain.SessionStateStopped:   {},
 			},
 			domain.SessionStateCompleted: {
-				domain.SessionStateReady:   {},
-				domain.SessionStateStopped: {},
+				domain.SessionStateReady:      {},
+				domain.SessionStateIdle:       {},
+				domain.SessionStateCollecting: {},
+				domain.SessionStateStopped:    {},
 			},
 			domain.SessionStatePaused: {
 				domain.SessionStatePressurizing: {},
+				domain.SessionStateCollecting:   {},
+				domain.SessionStateIdle:         {},
 				domain.SessionStateStopped:      {},
 			},
 			domain.SessionStateRecovering: {
@@ -83,6 +95,7 @@ func NewSessionMachine() *SessionMachine {
 				domain.SessionStateStopped:      {},
 			},
 			domain.SessionStateError: {
+				domain.SessionStateIdle:      {},
 				domain.SessionStateRecovering: {},
 				domain.SessionStateStopped:    {},
 			},
@@ -90,6 +103,18 @@ func NewSessionMachine() *SessionMachine {
 				domain.SessionStateReady: {},
 			},
 		},
+	}
+}
+
+// ForceStop 强制迁移到 stopped 状态。
+// 若直接迁移失败，尝试经由中间状态（如 pressurizing→paused→stopped）逐步抵达。
+func (m *SessionMachine) ForceStop() {
+	if m.Transition(domain.SessionStateStopped) == nil {
+		return
+	}
+	// pressurizing → paused → stopped
+	if m.Transition(domain.SessionStatePaused) == nil {
+		_ = m.Transition(domain.SessionStateStopped)
 	}
 }
 

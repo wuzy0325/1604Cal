@@ -6,21 +6,16 @@ import (
 	"math"
 	"time"
 
+	"cal1604/internal/device"
 	"cal1604/internal/domain"
-	"cal1604/internal/infrastructure/driver"
+	"cal1604/internal/events"
 )
-
-// calibrationPointCollector 定义支持“按校准点采集”的驱动能力。
-// 例如 WTN1604 在进入 C00 校准流程后，需使用 C01 命令采集单点数据。
-type calibrationPointCollector interface {
-	CollectCalibrationPoint(ctx context.Context, pointIndex int, targetPressure float64) ([]float64, error)
-}
 
 // Collect 从计量设备采集数据。
 func (s *Service) Collect(ctx context.Context, pointIndex int) ([]float64, error) {
 	s.mu.Lock()
-	s.syncDriversFromSessionLocked()
-	if s.measureDriver == nil {
+	
+	if s.getMeasureDriver() == nil {
 		s.mu.Unlock()
 		return nil, ErrMeasureDeviceNotSet
 	}
@@ -28,7 +23,7 @@ func (s *Service) Collect(ctx context.Context, pointIndex int) ([]float64, error
 		s.mu.Unlock()
 		return nil, fmt.Errorf("invalid point index: %d", pointIndex)
 	}
-	measureDriver := s.measureDriver
+	measureDriver := s.getMeasureDriver()
 	targetPressure := s.pressurePoints[pointIndex-1].TargetPressure
 	channels := s.config.Channels
 	avgCount := s.config.AverageCount
@@ -37,7 +32,7 @@ func (s *Service) Collect(ctx context.Context, pointIndex int) ([]float64, error
 	}
 	s.mu.Unlock()
 
-	s.updatePointStatus(pointIndex, "collecting")
+	s.updatePointStatus(pointIndex, domain.PointStatusCollecting)
 
 	// 状态迁移: -> collecting
 	if err := s.sessionMachine.Transition(domain.SessionStateCollecting); err != nil {
@@ -47,10 +42,10 @@ func (s *Service) Collect(ctx context.Context, pointIndex int) ([]float64, error
 
 	var averaged []float64
 
-	// WTN1604 等设备在校准模式下需要走“按点采集”命令，
-	// 不能继续复用普通实时采集命令，否则会出现“设备已连接但采集失败”。
-	if pointCollector, ok := measureDriver.(calibrationPointCollector); ok {
-		// 校准点采集同样遵循“多次采样取平均”配置，
+	// WTN1604 等设备在校准模式下需要走"按点采集"命令，
+	// 不能继续复用普通实时采集命令，否则会出现"设备已连接但采集失败"。
+	if pointCollector, ok := measureDriver.(device.CalibrationCapable); ok {
+		// 校准点采集同样遵循"多次采样取平均"配置，
 		// 仅将单次采样命令从普通采集切换为 C01 校准点采集。
 		allSamples := make([][]float64, 0, avgCount)
 		for i := 0; i < avgCount; i++ {
@@ -62,7 +57,7 @@ func (s *Service) Collect(ctx context.Context, pointIndex int) ([]float64, error
 			allSamples = append(allSamples, data)
 			time.Sleep(100 * time.Millisecond)
 		}
-		averaged = averageSamples(allSamples)
+		averaged = domain.AverageSamples(allSamples)
 	} else {
 		// 多次采集求平均（非校准点采集驱动的通用路径）
 		allSamples := make([][]float64, 0, avgCount)
@@ -77,7 +72,7 @@ func (s *Service) Collect(ctx context.Context, pointIndex int) ([]float64, error
 		}
 
 		// 计算平均值
-		averaged = averageSamples(allSamples)
+		averaged = domain.AverageSamples(allSamples)
 	}
 
 	s.mu.Lock()
@@ -85,7 +80,7 @@ func (s *Service) Collect(ctx context.Context, pointIndex int) ([]float64, error
 	s.currentPoint = pointIndex
 	s.mu.Unlock()
 
-	s.updatePointStatus(pointIndex, "completed")
+	s.updatePointStatus(pointIndex, domain.PointStatusCompleted)
 
 	// 状态迁移: collecting -> point_done
 	if err := s.sessionMachine.Transition(domain.SessionStatePointDone); err != nil {
@@ -93,7 +88,7 @@ func (s *Service) Collect(ctx context.Context, pointIndex int) ([]float64, error
 	}
 	s.publishSessionState()
 
-	s.publish("data.collected", map[string]any{
+	s.publish(events.EventDataCollected, map[string]any{
 		"pointIndex": pointIndex,
 		"channels":   channels,
 		"data":       averaged,
@@ -105,7 +100,8 @@ func (s *Service) Collect(ctx context.Context, pointIndex int) ([]float64, error
 // Fit 执行数据拟合。
 func (s *Service) Fit(ctx context.Context) (*FittingResult, error) {
 	s.mu.Lock()
-	if s.measureDriver == nil {
+	measureDriver := s.getMeasureDriver()
+	if measureDriver == nil {
 		s.mu.Unlock()
 		return nil, ErrMeasureDeviceNotSet
 	}
@@ -118,17 +114,17 @@ func (s *Service) Fit(ctx context.Context) (*FittingResult, error) {
 	s.publishSessionState()
 
 	// WTN1604 执行拟合
-	wtn, ok := s.measureDriver.(*driver.WTN1604Driver)
+	calDev, ok := measureDriver.(device.CalibrationCapable)
 	if !ok {
 		// 如果不是 WTN1604，使用软件拟合
 		return s.softwareFit(ctx)
 	}
 
-	if err := wtn.PerformFitting(ctx); err != nil {
+	if err := calDev.PerformFitting(ctx); err != nil {
 		return nil, fmt.Errorf("perform fitting: %w", err)
 	}
 
-	if err := wtn.SaveCoefficients(ctx); err != nil {
+	if err := calDev.SaveCoefficients(ctx); err != nil {
 		return nil, fmt.Errorf("save coefficients: %w", err)
 	}
 
@@ -153,7 +149,7 @@ func (s *Service) softwareFit(ctx context.Context) (*FittingResult, error) {
 	var sumX, sumY, sumXY, sumX2 float64
 	n := 0
 	for _, p := range points {
-		if p.Status == "completed" && len(p.CollectedData) > 0 {
+		if p.Status == domain.PointStatusCompleted && len(p.CollectedData) > 0 {
 			x := p.TargetPressure
 			y := p.CollectedData[0] // 使用第一个通道的数据
 			sumX += x
@@ -180,7 +176,7 @@ func (s *Service) softwareFit(ctx context.Context) (*FittingResult, error) {
 	meanY := sumY / float64(n)
 	var ssTot, ssRes float64
 	for _, p := range points {
-		if p.Status == "completed" && len(p.CollectedData) > 0 {
+		if p.Status == domain.PointStatusCompleted && len(p.CollectedData) > 0 {
 			y := p.CollectedData[0]
 			yPred := a*p.TargetPressure + b
 			ssTot += (y - meanY) * (y - meanY)
@@ -199,7 +195,7 @@ func (s *Service) softwareFit(ctx context.Context) (*FittingResult, error) {
 		Points:    n,
 	}
 
-	s.publish("fitting.completed", map[string]any{
+	s.publish(events.EventFittingCompleted, map[string]any{
 		"slope":     a,
 		"intercept": b,
 		"r2":        r2,
@@ -218,18 +214,18 @@ func (s *Service) softwareFit(ctx context.Context) (*FittingResult, error) {
 // ManualPressurize 手动打压：设置目标压力并启动压力控制。
 func (s *Service) ManualPressurize(ctx context.Context, target float64) error {
 	s.mu.Lock()
-	s.syncDriversFromSessionLocked()
-	if s.pressureDriver == nil {
+	pressureDriver := s.getPressureDriver()
+	if pressureDriver == nil {
 		s.mu.Unlock()
 		return ErrPressureDeviceNotSet
 	}
 	s.mu.Unlock()
 
-	if err := s.pressureDriver.SetTargetPressure(ctx, target); err != nil {
+	if err := pressureDriver.SetTargetPressure(ctx, target); err != nil {
 		return fmt.Errorf("set target pressure: %w", err)
 	}
 
-	if ctrl, ok := s.pressureDriver.(interface{ StartControl(context.Context) error }); ok {
+	if ctrl, ok := pressureDriver.(device.PressureControlCapable); ok {
 		if err := ctrl.StartControl(ctx); err != nil {
 			return fmt.Errorf("start pressure control: %w", err)
 		}
@@ -241,15 +237,15 @@ func (s *Service) ManualPressurize(ctx context.Context, target float64) error {
 // ManualCollect 手动采集：对当前压力点执行一次完整采集（含多样本平均）。
 func (s *Service) ManualCollect(ctx context.Context) ([]float64, error) {
 	s.mu.Lock()
-	s.syncDriversFromSessionLocked()
-	if s.measureDriver == nil {
+	
+	if s.getMeasureDriver() == nil {
 		s.mu.Unlock()
 		return nil, ErrMeasureDeviceNotSet
 	}
 	// 找到下一个 pending 点作为当前采集点
 	pointIndex := 0
 	for i, p := range s.pressurePoints {
-		if p.Status == "pending" {
+		if p.Status == domain.PointStatusPending {
 			pointIndex = i + 1
 			break
 		}
@@ -261,32 +257,4 @@ func (s *Service) ManualCollect(ctx context.Context) ([]float64, error) {
 	s.mu.Unlock()
 
 	return s.Collect(ctx, pointIndex)
-}
-
-func averageSamples(samples [][]float64) []float64 {
-	if len(samples) == 0 {
-		return nil
-	}
-	if len(samples) == 1 {
-		return samples[0]
-	}
-
-	// 找到最短的样本长度
-	minLen := len(samples[0])
-	for _, s := range samples[1:] {
-		if len(s) < minLen {
-			minLen = len(s)
-		}
-	}
-
-	result := make([]float64, minLen)
-	for i := 0; i < minLen; i++ {
-		var sum float64
-		for _, s := range samples {
-			sum += s[i]
-		}
-		result[i] = sum / float64(len(samples))
-	}
-
-	return result
 }

@@ -16,11 +16,6 @@ type reportTemplateSelection struct {
 }
 
 func (s *apiServer) reportTemplateSelectHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		w.WriteHeader(http.StatusMethodNotAllowed)
-		return
-	}
-
 	pointsText := strings.TrimSpace(r.URL.Query().Get("points"))
 	mode := strings.TrimSpace(r.URL.Query().Get("mode"))
 	if pointsText == "" || mode == "" {
@@ -49,11 +44,6 @@ type exportReportRequest struct {
 
 // exportReportHandler 根据当前校准会话导出校准报告。
 func (s *apiServer) exportReportHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		w.WriteHeader(http.StatusMethodNotAllowed)
-		return
-	}
-
 	var req exportReportRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, apperrors.ErrInvalidArgument)
@@ -79,12 +69,7 @@ func (s *apiServer) exportReportHandler(w http.ResponseWriter, r *http.Request) 
 }
 
 // listTemplatesHandler 返回可用的报告模板列表。
-func (s *apiServer) listTemplatesHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		w.WriteHeader(http.StatusMethodNotAllowed)
-		return
-	}
-
+func (s *apiServer) listTemplatesHandler(w http.ResponseWriter, _ *http.Request) {
 	templates, err := s.reportService.GetTemplates()
 	if err != nil {
 		writeError(w, err)

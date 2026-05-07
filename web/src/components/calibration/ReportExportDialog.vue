@@ -34,8 +34,7 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
 import { ElMessage } from 'element-plus'
-import { requestJSON } from '@/api/client'
-import type { ApiResponse } from '@/types/api'
+import { apiPost } from '@/api/client'
 
 const visible = defineModel<boolean>('visible', { default: false })
 
@@ -64,11 +63,7 @@ async function handleExport() {
 
   try {
     progress.value = 30
-    await requestJSON<ApiResponse<{ status: string; path: string }>>('/reports/export', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ outputPath: outputPath.value })
-    })
+    await apiPost<{ status: string; path: string }>('/reports/export', { outputPath: outputPath.value })
     progress.value = 100
     ElMessage.success('报告导出成功')
     visible.value = false

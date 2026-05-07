@@ -2,10 +2,8 @@ package http
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"log"
-	"net"
 	"net/http"
 	"strings"
 
@@ -15,6 +13,7 @@ import (
 	"cal1604/internal/application/multipress"
 	"cal1604/internal/application/session"
 	"cal1604/internal/config"
+	"cal1604/internal/events"
 	"cal1604/internal/domain"
 	apperrors "cal1604/internal/errors"
 	"cal1604/internal/report"
@@ -41,7 +40,7 @@ type apiServer struct {
 	multipressService  *multipress.Service
 	sessionService     *session.Service
 	measurementService *measurement.Service
-	reportService     *report.Service
+	reportService      *report.Service
 	configPath         string
 	appConfig          *config.AppConfig
 }
@@ -72,41 +71,27 @@ type unitConsistencyPayload struct {
 	Conflicts  []string `json:"conflicts"`
 }
 
-func (s *apiServer) devicesHandler(w http.ResponseWriter, r *http.Request) {
-	switch r.Method {
-	case http.MethodGet:
-		devices := s.deviceManager.List()
-		if devices == nil {
-			devices = make([]domain.Device, 0)
-		}
-		for _, d := range devices {
-			log.Printf("[API devices] %s status=%q unit=%q", d.ID, d.Status, d.Unit)
-		}
-		writeSuccess(w, http.StatusOK, devices)
-	case http.MethodPost:
-		s.handleUpsertDevice(w, r)
-	default:
-		w.WriteHeader(http.StatusMethodNotAllowed)
+func (s *apiServer) listDevicesHandler(w http.ResponseWriter, _ *http.Request) {
+	devices := s.deviceManager.List()
+	if devices == nil {
+		devices = make([]domain.Device, 0)
 	}
+	for _, d := range devices {
+		log.Printf("[API devices] %s status=%q unit=%q", d.ID, d.Status, d.Unit)
+	}
+	writeSuccess(w, http.StatusOK, devices)
 }
 
 func (s *apiServer) deviceStatusHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		w.WriteHeader(http.StatusMethodNotAllowed)
-		return
-	}
-
-	var req setDeviceStatusRequest
-	decoder := json.NewDecoder(r.Body)
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&req); err != nil {
-		writeError(w, apperrors.ErrInvalidArgument)
+	req, err := decodeJSON[setDeviceStatusRequest](r)
+	if err != nil {
+		writeError(w, err)
 		return
 	}
 
 	id := strings.TrimSpace(req.ID)
 	status := domain.DeviceStatus(strings.TrimSpace(req.Status))
-	if id == "" || !isValidDeviceStatus(status) {
+	if id == "" || !status.IsValid() {
 		writeError(w, apperrors.ErrInvalidArgument)
 		return
 	}
@@ -128,11 +113,6 @@ func (s *apiServer) deviceStatusHandler(w http.ResponseWriter, r *http.Request) 
 }
 
 func (s *apiServer) deviceConnectHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		w.WriteHeader(http.StatusMethodNotAllowed)
-		return
-	}
-
 	id, ok := decodeDeviceIDRequest(r, w)
 	if !ok {
 		return
@@ -159,11 +139,6 @@ func (s *apiServer) deviceConnectHandler(w http.ResponseWriter, r *http.Request)
 }
 
 func (s *apiServer) deviceDisconnectHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		w.WriteHeader(http.StatusMethodNotAllowed)
-		return
-	}
-
 	id, ok := decodeDeviceIDRequest(r, w)
 	if !ok {
 		return
@@ -190,11 +165,9 @@ func (s *apiServer) deviceDisconnectHandler(w http.ResponseWriter, r *http.Reque
 }
 
 func (s *apiServer) handleUpsertDevice(w http.ResponseWriter, r *http.Request) {
-	var req upsertDeviceRequest
-	decoder := json.NewDecoder(r.Body)
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&req); err != nil {
-		writeError(w, apperrors.ErrInvalidArgument)
+	req, err := decodeJSON[upsertDeviceRequest](r)
+	if err != nil {
+		writeError(w, err)
 		return
 	}
 
@@ -203,31 +176,14 @@ func (s *apiServer) handleUpsertDevice(w http.ResponseWriter, r *http.Request) {
 	host := strings.TrimSpace(req.Host)
 	unit := strings.TrimSpace(req.Unit)
 
-	if id == "" || !isValidDeviceType(deviceType) {
-		writeError(w, apperrors.ErrInvalidArgument)
-		return
-	}
-
-	if net.ParseIP(host) == nil || req.Port < 1 || req.Port > 65535 || unit == "" {
-		writeError(w, apperrors.ErrInvalidArgument)
-		return
-	}
-
 	requestedStatus := domain.DeviceStatus(strings.TrimSpace(req.Status))
-	if req.Status != "" && !isValidDeviceStatus(requestedStatus) {
+	if req.Status != "" && !requestedStatus.IsValid() {
 		writeError(w, apperrors.ErrInvalidArgument)
 		return
 	}
 
-	status := requestedStatus
 	old, existed := s.deviceManager.Get(id)
-	if status == "" {
-		if existed && old.Status != "" {
-			status = old.Status
-		} else {
-			status = domain.DeviceStatusDisconnected
-		}
-	}
+	status := domain.ResolveStatus(requestedStatus, old, existed)
 
 	dev := domain.Device{
 		ID:     id,
@@ -239,6 +195,12 @@ func (s *apiServer) handleUpsertDevice(w http.ResponseWriter, r *http.Request) {
 		Unit:   unit,
 		Status: status,
 	}
+
+	if err := dev.Validate(); err != nil {
+		writeError(w, apperrors.ErrInvalidArgument)
+		return
+	}
+
 	if existed {
 		dev.LastErrorReason = old.LastErrorReason
 		dev.LastErrorAt = old.LastErrorAt
@@ -262,15 +224,10 @@ func (s *apiServer) publishDeviceStatusChanged(dev domain.Device) {
 		payload["lastErrorAt"] = dev.LastErrorAt
 	}
 
-	publishEvent("device.status.changed", payload)
+	publishEvent(events.EventDeviceStatusChanged, payload)
 }
 
-func (s *apiServer) unitConsistencyHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		w.WriteHeader(http.StatusMethodNotAllowed)
-		return
-	}
-
+func (s *apiServer) unitConsistencyHandler(w http.ResponseWriter, _ *http.Request) {
 	consistent, conflicts := s.deviceManager.CheckUnitConsistency()
 	writeSuccess(w, http.StatusOK, unitConsistencyPayload{
 		Consistent: consistent,
@@ -278,23 +235,10 @@ func (s *apiServer) unitConsistencyHandler(w http.ResponseWriter, r *http.Reques
 	})
 }
 
-func isValidDeviceType(deviceType domain.DeviceType) bool {
-	return deviceType == domain.DeviceTypeMeasure || deviceType == domain.DeviceTypePressure
-}
-
-func isValidDeviceStatus(status domain.DeviceStatus) bool {
-	return status == domain.DeviceStatusDisconnected ||
-		status == domain.DeviceStatusConnecting ||
-		status == domain.DeviceStatusConnected ||
-		status == domain.DeviceStatusError
-}
-
 func decodeDeviceIDRequest(r *http.Request, w http.ResponseWriter) (string, bool) {
-	var req setDeviceStatusRequest
-	decoder := json.NewDecoder(r.Body)
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&req); err != nil {
-		writeError(w, apperrors.ErrInvalidArgument)
+	req, err := decodeJSON[setDeviceStatusRequest](r)
+	if err != nil {
+		writeError(w, err)
 		return "", false
 	}
 

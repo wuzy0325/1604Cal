@@ -3,16 +3,18 @@ package measurement
 import (
 	"context"
 	"fmt"
-	"math"
 	"time"
 
 	"cal1604/internal/application/session"
 	"cal1604/internal/device"
+	"cal1604/internal/domain"
+	"cal1604/internal/events"
+	"cal1604/internal/workflow"
 )
 
 // RunAutoCollection 按测点顺序执行 measurement 自己的自动采集流程。
 func (s *Service) RunAutoCollection(ctx context.Context) error {
-	if st := s.State(); st != StateReady {
+	if st := s.State(); st != domain.SessionStateReady {
 		return fmt.Errorf("auto collection requires ready state, got %s", st)
 	}
 
@@ -40,16 +42,16 @@ func (s *Service) RunAutoCollection(ctx context.Context) error {
 		return collectErr
 	}
 
-	if s.State() != StateCompleted {
+	if s.State() != domain.SessionStateCompleted {
 		s.mu.Lock()
-		if err := s.setStateLocked(StateCompleted); err != nil {
+		if err := s.sessionMachine.Transition(domain.SessionStateCompleted); err != nil {
 			s.mu.Unlock()
 			return fmt.Errorf("complete auto collection: %w", err)
 		}
-		s.syncSessionStatusLocked(StateCompleted)
+		s.syncSessionStatusLocked(domain.SessionStateCompleted)
 		s.mu.Unlock()
 
-		s.publish("measurement.state_changed", map[string]any{"state": string(StateCompleted)})
+		s.publish(events.EventMeasurementStateChanged, map[string]any{"state": string(domain.SessionStateCompleted)})
 	}
 	return nil
 }
@@ -61,22 +63,22 @@ func (s *Service) ManualPressurize(ctx context.Context, pointIndex int) error {
 		return err
 	}
 
-	s.updatePointStatus(pointIndex, "pressurizing")
-	if err := s.transitionTo(StatePressurizing); err != nil {
+	s.updatePointStatus(pointIndex, domain.PointStatusPressurizing)
+	if err := s.transitionTo(domain.SessionStatePressurizing); err != nil {
 		return err
 	}
 
 	if err := pressureDriver.SetTargetPressure(ctx, point.TargetPressure); err != nil {
 		return fmt.Errorf("set target pressure: %w", err)
 	}
-	if ctrl, ok := pressureDriver.(interface{ StartControl(context.Context) error }); ok {
+	if ctrl, ok := pressureDriver.(device.PressureControlCapable); ok {
 		if err := ctrl.StartControl(ctx); err != nil {
 			return fmt.Errorf("start pressure control: %w", err)
 		}
 	}
 
-	s.updatePointStatus(pointIndex, "stabilizing")
-	if err := s.transitionTo(StateStabilizing); err != nil {
+	s.updatePointStatus(pointIndex, domain.PointStatusStabilizing)
+	if err := s.transitionTo(domain.SessionStateStabilizing); err != nil {
 		return err
 	}
 
@@ -100,8 +102,8 @@ func (s *Service) ManualCollect(ctx context.Context, pointIndex int) error {
 		return err
 	}
 
-	s.updatePointStatus(pointIndex, "collecting")
-	if err := s.transitionTo(StateCollecting); err != nil {
+	s.updatePointStatus(pointIndex, domain.PointStatusCollecting)
+	if err := s.transitionTo(domain.SessionStateCollecting); err != nil {
 		return err
 	}
 
@@ -117,9 +119,9 @@ func (s *Service) ManualCollect(ctx context.Context, pointIndex int) error {
 		}
 	}
 
-	averaged := averageMeasurementSamples(samples)
+	averaged := domain.AverageSamples(samples)
 	s.updatePointCollectedData(pointIndex, averaged, time.Now())
-	s.publish("measurement.data.collected", map[string]any{
+	s.publish(events.EventMeasurementDataCollected, map[string]any{
 		"pointIndex": point.Index,
 		"channels":   channels,
 		"data":       averaged,
@@ -128,12 +130,12 @@ func (s *Service) ManualCollect(ctx context.Context, pointIndex int) error {
 	// 采集后自动检查报警。
 	updatedPoint := s.getPoint(pointIndex)
 	if alarm, _ := s.CheckAlarm(updatedPoint); alarm != nil {
-		s.publish("measurement.alarm.triggered", alarm)
+		s.publish(events.EventMeasurementAlarmTriggered, alarm)
 	}
 
-	nextState := StateReady
+	nextState := domain.SessionStateReady
 	if pointIndex >= totalPoints {
-		nextState = StateCompleted
+		nextState = domain.SessionStateCompleted
 	}
 	if err := s.transitionTo(nextState); err != nil {
 		return err
@@ -142,16 +144,16 @@ func (s *Service) ManualCollect(ctx context.Context, pointIndex int) error {
 	return nil
 }
 
-func (s *Service) preparePressureStep(pointIndex int) (device.PressureDriver, Point, int, int, error) {
+func (s *Service) preparePressureStep(pointIndex int) (device.PressureDriver, domain.PressurePoint, int, int, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	pressureDriver := s.sess.PressureDriver()
 	if pressureDriver == nil {
-		return nil, Point{}, 0, 0, session.ErrPressureDeviceNotSet
+		return nil, domain.PressurePoint{}, 0, 0, session.ErrPressureDeviceNotSet
 	}
 	if pointIndex < 1 || pointIndex > len(s.points) {
-		return nil, Point{}, 0, 0, fmt.Errorf("invalid point index: %d", pointIndex)
+		return nil, domain.PressurePoint{}, 0, 0, fmt.Errorf("invalid point index: %d", pointIndex)
 	}
 
 	stableWaitMs := s.config.StableWaitMs
@@ -167,16 +169,16 @@ func (s *Service) preparePressureStep(pointIndex int) (device.PressureDriver, Po
 	return pressureDriver, s.points[pointIndex-1], stableWaitMs, stabilityTimeoutMs, nil
 }
 
-func (s *Service) prepareCollectStep(pointIndex int) (device.MeasureDriver, Point, []int, int, int, error) {
+func (s *Service) prepareCollectStep(pointIndex int) (device.MeasureDriver, domain.PressurePoint, []int, int, int, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	measureDriver := s.sess.MeasureDriver()
 	if measureDriver == nil {
-		return nil, Point{}, nil, 0, 0, session.ErrMeasureDeviceNotSet
+		return nil, domain.PressurePoint{}, nil, 0, 0, session.ErrMeasureDeviceNotSet
 	}
 	if pointIndex < 1 || pointIndex > len(s.points) {
-		return nil, Point{}, nil, 0, 0, fmt.Errorf("invalid point index: %d", pointIndex)
+		return nil, domain.PressurePoint{}, nil, 0, 0, fmt.Errorf("invalid point index: %d", pointIndex)
 	}
 
 	channels := append([]int(nil), s.channels...)
@@ -184,7 +186,7 @@ func (s *Service) prepareCollectStep(pointIndex int) (device.MeasureDriver, Poin
 		channels = append([]int(nil), s.config.Channels...)
 	}
 	if len(channels) == 0 {
-		return nil, Point{}, nil, 0, 0, fmt.Errorf("no measurement channels configured")
+		return nil, domain.PressurePoint{}, nil, 0, 0, fmt.Errorf("no measurement channels configured")
 	}
 
 	averageCount := s.config.AverageCount
@@ -195,24 +197,24 @@ func (s *Service) prepareCollectStep(pointIndex int) (device.MeasureDriver, Poin
 	return measureDriver, s.points[pointIndex-1], channels, averageCount, len(s.points), nil
 }
 
-func (s *Service) transitionTo(state State) error {
+func (s *Service) transitionTo(state domain.SessionState) error {
 	s.mu.Lock()
-	if err := s.setStateLocked(state); err != nil {
+	if err := s.sessionMachine.Transition(state); err != nil {
 		s.mu.Unlock()
 		return fmt.Errorf("transition to %s: %w", state, err)
 	}
 	s.syncSessionStatusLocked(state)
 	s.mu.Unlock()
 
-	s.publish("measurement.state_changed", map[string]any{"state": string(state)})
+	s.publish(events.EventMeasurementStateChanged, map[string]any{"state": string(state)})
 	return nil
 }
 
-func (s *Service) getPoint(pointIndex int) Point {
+func (s *Service) getPoint(pointIndex int) domain.PressurePoint {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if pointIndex < 1 || pointIndex > len(s.points) {
-		return Point{}
+		return domain.PressurePoint{}
 	}
 	return s.points[pointIndex-1]
 }
@@ -230,7 +232,7 @@ func (s *Service) updatePointStatus(pointIndex int, status string) {
 	point := s.points[pointIndex-1]
 	s.mu.Unlock()
 
-	s.publish("measurement.point.status", point)
+	s.publish(events.EventMeasurementPointStatus, point)
 }
 
 func (s *Service) updatePointActualPressure(pointIndex int, actualPressure float64) {
@@ -246,7 +248,7 @@ func (s *Service) updatePointActualPressure(pointIndex int, actualPressure float
 	point := s.points[pointIndex-1]
 	s.mu.Unlock()
 
-	s.publish("measurement.point.status", point)
+	s.publish(events.EventMeasurementPointStatus, point)
 }
 
 func (s *Service) updatePointCollectedData(pointIndex int, data []float64, collectedAt time.Time) {
@@ -259,19 +261,19 @@ func (s *Service) updatePointCollectedData(pointIndex int, data []float64, colle
 	clonedData := append([]float64(nil), data...)
 	s.points[pointIndex-1].CollectedData = clonedData
 	s.points[pointIndex-1].CollectTime = timestamp
-	s.points[pointIndex-1].Status = "completed"
+	s.points[pointIndex-1].Status = domain.PointStatusCompleted
 	if s.session != nil && pointIndex <= len(s.session.Points) {
 		s.session.Points[pointIndex-1].CollectedData = append([]float64(nil), data...)
 		s.session.Points[pointIndex-1].CollectTime = timestamp
-		s.session.Points[pointIndex-1].Status = "completed"
+		s.session.Points[pointIndex-1].Status = domain.PointStatusCompleted
 	}
 	point := s.points[pointIndex-1]
 	s.mu.Unlock()
 
-	s.publish("measurement.point.status", point)
+	s.publish(events.EventMeasurementPointStatus, point)
 }
 
-// waitForMeasurementStability 等待压力稳定，期间通过 SSE 推送稳定进度。
+// waitForMeasurementStability 等待压力稳定，通过 StabilityMonitor 判定并发布 SSE 进度事件。
 func (s *Service) waitForMeasurementStability(
 	ctx context.Context,
 	pointIndex int,
@@ -281,8 +283,7 @@ func (s *Service) waitForMeasurementStability(
 	stabilityTimeoutMs int,
 ) error {
 	deadline := time.Now().Add(time.Duration(stabilityTimeoutMs) * time.Millisecond)
-	stableStart := time.Time{}
-	wasInRange := false
+	monitor := workflow.NewStabilityMonitor(0.001, time.Duration(stableWaitMs)*time.Millisecond, nil)
 
 	ticker := time.NewTicker(200 * time.Millisecond)
 	defer ticker.Stop()
@@ -293,88 +294,32 @@ func (s *Service) waitForMeasurementStability(
 			return ctx.Err()
 		case <-ticker.C:
 			if time.Now().After(deadline) {
-				s.publishStabilityUpdate(pointIndex, false, false, 0, 0, stableWaitMs, 0)
+				s.publish(events.EventMeasurementStabilityUpdate, map[string]any{
+					"pointIndex": pointIndex, "isStable": false, "isInRange": false,
+					"currentValue": 0, "stableDurationMs": 0, "requiredDurationMs": stableWaitMs, "progress": 0,
+				})
 				return fmt.Errorf("stability timeout")
 			}
 
 			currentVal, valErr := pressureDriver.ReadCurrentPressure(ctx)
-			isInRange := false
-			if valErr == nil {
-				stable, err := pressureDriver.ReadStability(ctx)
-				if err == nil {
-					isInRange = stable
-				} else {
-					deviation := math.Abs(currentVal - targetPressure)
-					isInRange = deviation <= 0.001
-				}
+			if valErr != nil {
+				continue
 			}
 
-			if isInRange {
-				if !wasInRange {
-					stableStart = time.Now()
-					wasInRange = true
-					s.publishStabilityUpdate(pointIndex, false, true, currentVal, 0, stableWaitMs, 0)
-				} else {
-					elapsed := int(time.Since(stableStart).Milliseconds())
-					if elapsed >= stableWaitMs {
-						s.publishStabilityUpdate(pointIndex, true, true, currentVal, elapsed, stableWaitMs, 100)
-						return nil
-					}
-					progress := elapsed * 100 / stableWaitMs
-					if progress > 100 {
-						progress = 100
-					}
-					s.publishStabilityUpdate(pointIndex, false, true, currentVal, elapsed, stableWaitMs, progress)
-				}
-			} else {
-				if wasInRange {
-					wasInRange = false
-					s.publishStabilityUpdate(pointIndex, false, false, currentVal, 0, stableWaitMs, 0)
-				}
-				stableStart = time.Time{}
+			status := monitor.FeedSample(targetPressure, currentVal)
+			s.publish(events.EventMeasurementStabilityUpdate, map[string]any{
+				"pointIndex":         pointIndex,
+				"isStable":           status.IsStable,
+				"isInRange":          status.IsInRange,
+				"currentValue":       status.CurrentValue,
+				"stableDurationMs":   status.StableDurationMs,
+				"requiredDurationMs": status.RequiredDurationMs,
+				"progress":           status.Progress,
+			})
+
+			if status.IsStable {
+				return nil
 			}
 		}
 	}
-}
-
-// publishStabilityUpdate 广播稳定进度 SSE 事件。
-func (s *Service) publishStabilityUpdate(
-	pointIndex int,
-	isStable bool,
-	isInRange bool,
-	currentValue float64,
-	stableDuration int,
-	requiredDuration int,
-	progress int,
-) {
-	s.publish("measurement.stability.update", map[string]any{
-		"pointIndex":       pointIndex,
-		"isStable":         isStable,
-		"isInRange":        isInRange,
-		"currentValue":     currentValue,
-		"stableDurationMs": stableDuration,
-		"requiredDurationMs": requiredDuration,
-		"progress":         progress,
-	})
-}
-
-func averageMeasurementSamples(samples [][]float64) []float64 {
-	if len(samples) == 0 {
-		return nil
-	}
-	width := len(samples[0])
-	result := make([]float64, width)
-	counts := make([]int, width)
-	for _, sample := range samples {
-		for i := 0; i < len(sample) && i < width; i++ {
-			result[i] += sample[i]
-			counts[i]++
-		}
-	}
-	for i := range result {
-		if counts[i] > 0 {
-			result[i] /= float64(counts[i])
-		}
-	}
-	return result
 }

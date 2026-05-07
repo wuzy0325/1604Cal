@@ -9,34 +9,10 @@ import (
 	"time"
 
 	"cal1604/internal/application/session"
+	"cal1604/internal/domain"
+	"cal1604/internal/events"
+	"cal1604/internal/workflow"
 )
-
-// State 计量模块状态。
-type State string
-
-const (
-	StateIdle        State = "idle"
-	StateReady       State = "ready"
-	StatePressurizing State = "pressurizing"
-	StateStabilizing State = "stabilizing"
-	StateCollecting  State = "collecting"
-	StateCompleted   State = "completed"
-	StateError       State = "error"
-	StatePaused      State = "paused"
-	StateStopped     State = "stopped"
-)
-
-// 获取状态迁移表。
-var transitions = map[State]map[State]struct{}{
-	StateIdle:        {StateReady: {}, StatePressurizing: {}, StateCollecting: {}},
-	StateReady:       {StatePressurizing: {}, StateCollecting: {}, StatePaused: {}, StateIdle: {}, StateError: {}},
-	StatePressurizing: {StateStabilizing: {}, StateError: {}, StatePaused: {}},
-	StateStabilizing: {StateCollecting: {}, StateError: {}, StatePaused: {}},
-	StateCollecting:  {StateReady: {}, StateCompleted: {}, StateError: {}, StatePaused: {}},
-	StateCompleted:   {StateIdle: {}, StateCollecting: {}},
-	StateError:       {StateIdle: {}},
-	StatePaused:      {StatePressurizing: {}, StateCollecting: {}, StateIdle: {}},
-}
 
 // CollectedRow 单次采集的数据行。
 type CollectedRow struct {
@@ -49,13 +25,13 @@ type EventPublisher func(eventType string, data any)
 
 // Service 计量模块服务，管理简化的采集工作流。
 type Service struct {
-	mu      sync.Mutex
-	state   State
-	sess    *session.Service
+	mu             sync.Mutex
+	sessionMachine *workflow.SessionMachine
+	sess           *session.Service
 	publish EventPublisher
 
-	config  Config
-	points  []Point
+	config  domain.WorkflowConfig
+	points  []domain.PressurePoint
 	session *Session
 
 	channels []int
@@ -64,7 +40,7 @@ type Service struct {
 	measureDeviceID  string
 	pressureDeviceID string
 
-	alarmConfig  AlarmConfig
+	alarmConfig  domain.AlarmConfig
 	alarmPending bool
 	currentAlarm *Alarm
 
@@ -84,9 +60,9 @@ func NewService(sess *session.Service, publisher EventPublisher) *Service {
 		publisher = func(string, any) {}
 	}
 	return &Service{
-		state:   StateIdle,
-		sess:    sess,
-		publish: publisher,
+		sessionMachine: workflow.NewSessionMachine(),
+		sess:           sess,
+		publish:        publisher,
 	}
 }
 
@@ -98,10 +74,8 @@ func (s *Service) SetSessionStore(store *SessionStore) {
 }
 
 // State 返回当前计量状态。
-func (s *Service) State() State {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.state
+func (s *Service) State() domain.SessionState {
+	return s.sessionMachine.State()
 }
 
 // Start 启动计量采集。
@@ -113,39 +87,40 @@ func (s *Service) Start(ctx context.Context, channels []int) error {
 		return session.ErrMeasureDeviceNotSet
 	}
 
-	stateChanges := make([]State, 0, 3)
+	stateChanges := make([]domain.SessionState, 0, 3)
+	currentState := s.sessionMachine.State()
 
 	// 从暂停恢复时保留已采集数据；其他入口重置数据。
-	if s.state != StatePaused {
+	if currentState != domain.SessionStatePaused {
 		s.rows = nil
 	}
 	s.channels = append([]int(nil), channels...)
 	s.sess.SetChannels(channels)
 
-	switch s.state {
-	case StateIdle, StateCompleted, StateError, StateReady:
-		if err := s.setStateLocked(StateCollecting); err != nil {
+	switch currentState {
+	case domain.SessionStateIdle, domain.SessionStateCompleted, domain.SessionStateError, domain.SessionStateReady:
+		if err := s.sessionMachine.Transition(domain.SessionStateCollecting); err != nil {
 			s.mu.Unlock()
 			return fmt.Errorf("start measurement: %w", err)
 		}
-		stateChanges = append(stateChanges, StateCollecting)
-	case StatePaused:
-		if err := s.setStateLocked(StateCollecting); err != nil {
+		stateChanges = append(stateChanges, domain.SessionStateCollecting)
+	case domain.SessionStatePaused:
+		if err := s.sessionMachine.Transition(domain.SessionStateCollecting); err != nil {
 			s.mu.Unlock()
 			return fmt.Errorf("resume measurement: %w", err)
 		}
-		stateChanges = append(stateChanges, StateCollecting)
+		stateChanges = append(stateChanges, domain.SessionStateCollecting)
 	default:
-		err := fmt.Errorf("invalid transition: %s -> %s", s.state, StateCollecting)
+		err := fmt.Errorf("invalid transition: %s -> %s", currentState, domain.SessionStateCollecting)
 		s.mu.Unlock()
 		return fmt.Errorf("start measurement: %w", err)
 	}
-	s.syncSessionStatusLocked(s.state)
+	s.syncSessionStatusLocked(s.sessionMachine.State())
 
 	s.mu.Unlock()
 
 	for _, state := range stateChanges {
-		s.publish("measurement.state_changed", map[string]any{"state": string(state)})
+		s.publish(events.EventMeasurementStateChanged, map[string]any{"state": string(state)})
 	}
 
 	// 启动后台采集循环
@@ -157,15 +132,15 @@ func (s *Service) Start(ctx context.Context, channels []int) error {
 // Pause 暂停计量采集。
 func (s *Service) Pause() error {
 	s.mu.Lock()
-	if err := s.setStateLocked(StatePaused); err != nil {
+	if err := s.sessionMachine.Transition(domain.SessionStatePaused); err != nil {
 		s.mu.Unlock()
 		return fmt.Errorf("pause measurement: %w", err)
 	}
-	s.syncSessionStatusLocked(StatePaused)
+	s.syncSessionStatusLocked(domain.SessionStatePaused)
 	s.mu.Unlock()
 
 	s.stopCollectLoop()
-	s.publish("measurement.state_changed", map[string]any{"state": string(StatePaused)})
+	s.publish(events.EventMeasurementStateChanged, map[string]any{"state": string(domain.SessionStatePaused)})
 
 	return nil
 }
@@ -173,69 +148,69 @@ func (s *Service) Pause() error {
 // Stop 停止计量采集，重置为 idle。
 func (s *Service) Stop() error {
 	s.mu.Lock()
-	if s.state == StateIdle {
+	if s.sessionMachine.State() == domain.SessionStateIdle {
 		s.mu.Unlock()
 		return fmt.Errorf("not running")
 	}
 
-	stateChanges := make([]State, 0, 2)
-	switch s.state {
-	case StateCollecting:
-		if err := s.setStateLocked(StateCompleted); err != nil {
+	stateChanges := make([]domain.SessionState, 0, 2)
+	switch s.sessionMachine.State() {
+	case domain.SessionStateCollecting:
+		if err := s.sessionMachine.Transition(domain.SessionStateCompleted); err != nil {
 			s.mu.Unlock()
 			return fmt.Errorf("stop measurement: %w", err)
 		}
-		stateChanges = append(stateChanges, StateCompleted)
-		if err := s.setStateLocked(StateIdle); err != nil {
+		stateChanges = append(stateChanges, domain.SessionStateCompleted)
+		if err := s.sessionMachine.Transition(domain.SessionStateIdle); err != nil {
 			s.mu.Unlock()
 			return fmt.Errorf("stop measurement: %w", err)
 		}
-		stateChanges = append(stateChanges, StateIdle)
-	case StatePressurizing, StateStabilizing:
-		if err := s.setStateLocked(StatePaused); err != nil {
+		stateChanges = append(stateChanges, domain.SessionStateIdle)
+	case domain.SessionStatePressurizing, domain.SessionStateStabilizing:
+		if err := s.sessionMachine.Transition(domain.SessionStatePaused); err != nil {
 			s.mu.Unlock()
 			return fmt.Errorf("stop measurement: %w", err)
 		}
-		stateChanges = append(stateChanges, StatePaused)
-		if err := s.setStateLocked(StateIdle); err != nil {
+		stateChanges = append(stateChanges, domain.SessionStatePaused)
+		if err := s.sessionMachine.Transition(domain.SessionStateIdle); err != nil {
 			s.mu.Unlock()
 			return fmt.Errorf("stop measurement: %w", err)
 		}
-		stateChanges = append(stateChanges, StateIdle)
-	case StateReady, StatePaused, StateCompleted, StateError:
-		if err := s.setStateLocked(StateIdle); err != nil {
+		stateChanges = append(stateChanges, domain.SessionStateIdle)
+	case domain.SessionStateReady, domain.SessionStatePaused, domain.SessionStateCompleted, domain.SessionStateError:
+		if err := s.sessionMachine.Transition(domain.SessionStateIdle); err != nil {
 			s.mu.Unlock()
 			return fmt.Errorf("stop measurement: %w", err)
 		}
-		stateChanges = append(stateChanges, StateIdle)
+		stateChanges = append(stateChanges, domain.SessionStateIdle)
 	default:
 		s.mu.Unlock()
-		return fmt.Errorf("stop measurement: unsupported state %s", s.state)
+		return fmt.Errorf("stop measurement: unsupported state %s", s.sessionMachine.State())
 	}
 	now := time.Now()
-	s.finishSessionLocked(StateStopped, &now)
+	s.finishSessionLocked(domain.SessionStateStopped, &now)
 
 	s.mu.Unlock()
 
 	s.stopCollectLoop()
 	for _, state := range stateChanges {
-		s.publish("measurement.state_changed", map[string]any{"state": string(state)})
+		s.publish(events.EventMeasurementStateChanged, map[string]any{"state": string(state)})
 	}
 
 	return nil
 }
 
 // SetState 进行显式状态切换，并发布状态变化事件。
-func (s *Service) SetState(state State) error {
+func (s *Service) SetState(state domain.SessionState) error {
 	s.mu.Lock()
-	if err := s.setStateLocked(state); err != nil {
+	if err := s.sessionMachine.Transition(state); err != nil {
 		s.mu.Unlock()
 		return err
 	}
 	s.syncSessionStatusLocked(state)
 	s.mu.Unlock()
 
-	s.publish("measurement.state_changed", map[string]any{"state": string(state)})
+	s.publish(events.EventMeasurementStateChanged, map[string]any{"state": string(state)})
 	return nil
 }
 
@@ -338,7 +313,7 @@ func (s *Service) startCollectLoop(ctx context.Context) {
 				return
 			case <-ticker.C:
 				s.mu.Lock()
-				if s.state != StateCollecting {
+				if s.sessionMachine.State() != domain.SessionStateCollecting {
 					s.mu.Unlock()
 					return
 				}
@@ -367,7 +342,7 @@ func (s *Service) startCollectLoop(ctx context.Context) {
 				s.rows = append(s.rows, row)
 				s.mu.Unlock()
 
-				s.publish("measurement.data_updated", map[string]any{
+				s.publish(events.EventMeasurementDataUpdated, map[string]any{
 					"timestamp": row.Timestamp,
 					"channels":  chMap,
 				})
@@ -390,35 +365,14 @@ func (s *Service) stopCollectLoop() {
 	}
 }
 
-// canTransition 检查从当前状态是否可迁移到目标状态。
-func (s *Service) canTransition(target State) error {
-	allowed, ok := transitions[s.state]
-	if !ok {
-		return fmt.Errorf("state %s has no transitions", s.state)
-	}
-	if _, exists := allowed[target]; !exists {
-		return fmt.Errorf("invalid transition: %s -> %s", s.state, target)
-	}
-	return nil
-}
-
-// setStateLocked 在持有 mu 时更新状态。
-func (s *Service) setStateLocked(target State) error {
-	if err := s.canTransition(target); err != nil {
-		return err
-	}
-	s.state = target
-	return nil
-}
-
-func (s *Service) syncSessionStatusLocked(state State) {
+func (s *Service) syncSessionStatusLocked(state domain.SessionState) {
 	if s.session == nil {
 		return
 	}
 	s.session.Status = state
 }
 
-func (s *Service) finishSessionLocked(state State, endTime *time.Time) {
+func (s *Service) finishSessionLocked(state domain.SessionState, endTime *time.Time) {
 	if s.session == nil {
 		return
 	}

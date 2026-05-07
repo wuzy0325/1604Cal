@@ -6,6 +6,12 @@ import type { SessionState } from '@/types/calibration'
 import type { StreamEventPayload } from '@/types/api'
 import { useCalibrationStore } from '@/stores/calibration'
 import { useDeviceInventoryStore } from '@/stores/device/inventoryStore'
+import {
+  EVENT_SESSION_STATE_CHANGED,
+  EVENT_DEVICE_STATUS_CHANGED,
+  EVENT_CALIBRATION_STABILITY_PREFIX,
+  EVENT_ALARM_TRIGGERED,
+} from '@/shared/events'
 
 // 稳定性 SSE 事件数据结构
 export interface StabilityEventData {
@@ -108,21 +114,21 @@ export function useCalibrationSync() {
 
   function setupSSE() {
     eventSource = createEventStream((payload: StreamEventPayload) => {
-      if (payload.type === 'session.state.changed') {
+      if (payload.type === EVENT_SESSION_STATE_CHANGED) {
         const data = payload.data as { state: SessionState }
         if (data?.state) {
           calibrationStore.syncSessionState(data.state)
         }
       }
-      if (payload.type === 'device.status.changed') {
+      if (payload.type === EVENT_DEVICE_STATUS_CHANGED) {
         void deviceStore.loadDevices(true).then(bindConnectedMeasureDevice)
       }
       // 稳定性 SSE 事件
-      if (payload.type?.startsWith('calibration.stability.')) {
+      if (payload.type?.startsWith(EVENT_CALIBRATION_STABILITY_PREFIX)) {
         stabilityStatus.value = payload.data as StabilityEventData
       }
       // 报警事件
-      if (payload.type === 'alarm.triggered') {
+      if (payload.type === EVENT_ALARM_TRIGGERED) {
         alarmEvent.value = payload.data as AlarmEventData
       }
     })

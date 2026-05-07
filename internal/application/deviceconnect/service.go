@@ -160,6 +160,14 @@ func (s *Service) Connect(ctx context.Context, id string) (domain.Device, error)
 	}
 
 	s.setActiveDriver(id, drv)
+
+	// 连接成功后从硬件读取实际单位，确保显示单位与设备真实单位一致。
+	if reader, ok := drv.(interface{ ReadUnit(context.Context) (string, error) }); ok {
+		if unit, err := reader.ReadUnit(ctx); err == nil {
+			dev.Unit = unit
+		}
+	}
+
 	dev.Status = domain.DeviceStatusConnected
 	dev.LastErrorReason = ""
 	dev.LastErrorAt = nil

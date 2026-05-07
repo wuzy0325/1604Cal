@@ -86,7 +86,26 @@
       "Bash(npm --prefix web run test -- --run)",
       "Bash(python3:*)",
       "Bash(npx --prefix web vue-tsc --noEmit --project web/tsconfig.json)",
-      "Bash(go mod:*)"
+      "Bash(go mod:*)",
+      "Bash(node *)",
+      "Bash(tasklist /FI \"PID eq 6880\")",
+      "Bash(cat \"C:\\\\\\\\Users\\\\\\\\wuzyn\\\\\\\\AppData\\\\\\\\Local\\\\\\\\Temp\\\\\\\\claude\\\\\\\\D--wtn-1604Cal\\\\\\\\6e6fc649-7b6a-437b-b783-f97b4d6c4182\\\\\\\\tasks\\\\\\\\bkkpywr78.output\")",
+      "Bash(tail -40 \"C:\\\\\\\\Users\\\\\\\\wuzyn\\\\\\\\AppData\\\\\\\\Local\\\\\\\\Temp\\\\\\\\claude\\\\\\\\D--wtn-1604Cal\\\\\\\\6e6fc649-7b6a-437b-b783-f97b4d6c4182\\\\\\\\tasks\\\\\\\\bewamthrl.output\")",
+      "Bash(tail -20 \"C:\\\\\\\\Users\\\\\\\\wuzyn\\\\\\\\AppData\\\\\\\\Local\\\\\\\\Temp\\\\\\\\claude\\\\\\\\D--wtn-1604Cal\\\\\\\\6e6fc649-7b6a-437b-b783-f97b4d6c4182\\\\\\\\tasks\\\\\\\\be2dboo8r.output\")",
+      "Bash(tail -15 \"C:\\\\\\\\Users\\\\\\\\wuzyn\\\\\\\\AppData\\\\\\\\Local\\\\\\\\Temp\\\\\\\\claude\\\\\\\\D--wtn-1604Cal\\\\\\\\6e6fc649-7b6a-437b-b783-f97b4d6c4182\\\\\\\\tasks\\\\\\\\be2dboo8r.output\")",
+      "Bash(tail -30 \"C:\\\\\\\\Users\\\\\\\\wuzyn\\\\\\\\AppData\\\\\\\\Local\\\\\\\\Temp\\\\\\\\claude\\\\\\\\D--wtn-1604Cal\\\\\\\\6e6fc649-7b6a-437b-b783-f97b4d6c4182\\\\\\\\tasks\\\\\\\\be2dboo8r.output\")",
+      "Bash(wc *)",
+      "Bash(tail -15 \"C:\\\\\\\\Users\\\\\\\\wuzyn\\\\\\\\AppData\\\\\\\\Local\\\\\\\\Temp\\\\\\\\claude\\\\\\\\D--wtn-1604Cal\\\\\\\\6e6fc649-7b6a-437b-b783-f97b4d6c4182\\\\\\\\tasks\\\\\\\\b6inkdh4f.output\")",
+      "Bash(grep -E \"startup|error|ERROR|ready|failed\" \"C:\\\\\\\\Users\\\\\\\\wuzyn\\\\\\\\AppData\\\\\\\\Local\\\\\\\\Temp\\\\\\\\claude\\\\\\\\D--wtn-1604Cal\\\\\\\\6e6fc649-7b6a-437b-b783-f97b4d6c4182\\\\\\\\tasks\\\\\\\\btx6s2p04.output\")",
+      "Bash(tail -50 \"C:\\\\\\\\Users\\\\\\\\wuzyn\\\\\\\\AppData\\\\\\\\Local\\\\\\\\Temp\\\\\\\\claude\\\\\\\\D--wtn-1604Cal\\\\\\\\6e6fc649-7b6a-437b-b783-f97b4d6c4182\\\\\\\\tasks\\\\\\\\btx6s2p04.output\")",
+      "Bash(grep -i \"unit\\\\|811A\" \"C:\\\\\\\\Users\\\\\\\\wuzyn\\\\\\\\AppData\\\\\\\\Local\\\\\\\\Temp\\\\\\\\claude\\\\\\\\D--wtn-1604Cal\\\\\\\\6e6fc649-7b6a-437b-b783-f97b4d6c4182\\\\\\\\tasks\\\\\\\\btx6s2p04.output\")",
+      "Bash(grep -E \"startup|error|ERROR|failed|811A.*Unit|ReadUnit|unit\" \"C:\\\\\\\\Users\\\\\\\\wuzyn\\\\\\\\AppData\\\\\\\\Local\\\\\\\\Temp\\\\\\\\claude\\\\\\\\D--wtn-1604Cal\\\\\\\\6e6fc649-7b6a-437b-b783-f97b4d6c4182\\\\\\\\tasks\\\\\\\\bjp83z4mq.output\")",
+      "Bash(grep -E \"811A|ReadUnit|unit|API devices\" \"C:\\\\\\\\Users\\\\\\\\wuzyn\\\\\\\\AppData\\\\\\\\Local\\\\\\\\Temp\\\\\\\\claude\\\\\\\\D--wtn-1604Cal\\\\\\\\6e6fc649-7b6a-437b-b783-f97b4d6c4182\\\\\\\\tasks\\\\\\\\bjp83z4mq.output\")",
+      "Bash(tail -10 \"C:\\\\\\\\Users\\\\\\\\wuzyn\\\\\\\\AppData\\\\\\\\Local\\\\\\\\Temp\\\\\\\\claude\\\\\\\\D--wtn-1604Cal\\\\\\\\6e6fc649-7b6a-437b-b783-f97b4d6c4182\\\\\\\\tasks\\\\\\\\bjp83z4mq.output\")",
+      "Bash(grep -E \"811A|ReadUnit|unit\" \"C:\\\\\\\\Users\\\\\\\\wuzyn\\\\\\\\AppData\\\\\\\\Local\\\\\\\\Temp\\\\\\\\claude\\\\\\\\D--wtn-1604Cal\\\\\\\\6e6fc649-7b6a-437b-b783-f97b4d6c4182\\\\\\\\tasks\\\\\\\\bjp83z4mq.output\")",
+      "Bash(grep -E \"unit|811A|startup|ReadUnit|ready\" \"C:\\\\\\\\Users\\\\\\\\wuzyn\\\\\\\\AppData\\\\\\\\Local\\\\\\\\Temp\\\\\\\\claude\\\\\\\\D--wtn-1604Cal\\\\\\\\6e6fc649-7b6a-437b-b783-f97b4d6c4182\\\\\\\\tasks\\\\\\\\bydhcn5at.output\")",
+      "Bash(git commit -m ' *)",
+      "Bash(git add *)"
     ]
   }
 }

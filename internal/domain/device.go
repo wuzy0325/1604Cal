@@ -1,6 +1,10 @@
 package domain
 
-import "time"
+import (
+	"errors"
+	"net"
+	"time"
+)
 
 // DeviceType 表示设备类型。
 type DeviceType string
@@ -12,6 +16,13 @@ const (
 	DeviceTypeMeasure DeviceType = "measure"
 )
 
+var ErrInvalidDevice = errors.New("invalid device parameters")
+
+// IsValid 报告设备类型是否合法。
+func (t DeviceType) IsValid() bool {
+	return t == DeviceTypePressure || t == DeviceTypeMeasure
+}
+
 // DeviceStatus 表示设备连接状态。
 type DeviceStatus string
 
@@ -21,6 +32,38 @@ const (
 	DeviceStatusConnected    DeviceStatus = "connected"
 	DeviceStatusError        DeviceStatus = "error"
 )
+
+// IsValid 报告设备状态是否合法。
+func (s DeviceStatus) IsValid() bool {
+	return s == DeviceStatusDisconnected || s == DeviceStatusConnecting ||
+		s == DeviceStatusConnected || s == DeviceStatusError
+}
+
+// Validate 校验设备实体字段是否满足基本约束。
+func (d Device) Validate() error {
+	if d.ID == "" || !d.Type.IsValid() {
+		return ErrInvalidDevice
+	}
+	if net.ParseIP(d.Host) == nil || d.Port < 1 || d.Port > 65535 {
+		return ErrInvalidDevice
+	}
+	if d.Unit == "" {
+		return ErrInvalidDevice
+	}
+	return nil
+}
+
+// ResolveStatus 根据请求状态和已有设备记录确定最终状态。
+// 若请求未指定状态，则继承已有设备的状态，或默认为 Disconnected。
+func ResolveStatus(requested DeviceStatus, existing Device, existed bool) DeviceStatus {
+	if requested != "" {
+		return requested
+	}
+	if existed && existing.Status != "" {
+		return existing.Status
+	}
+	return DeviceStatusDisconnected
+}
 
 // Device 表示系统维护的设备配置实体。
 type Device struct {

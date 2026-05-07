@@ -318,13 +318,5 @@ $z-tooltip: 1070;
 $z-toast: 1080;
 
 // ============================================
-// 玻璃拟态效果
+// 玻璃拟态效果已移除，遵循DESIGN.md禁止glassmorphism规定
 // ============================================
-
-$glass-bg: rgba(255, 255, 255, 0.8);
-$glass-bg-light: rgba(255, 255, 255, 0.5);
-$glass-border: rgba(0, 0, 0, 0.05);
-$glass-backdrop: blur(12px);
-
-// 快捷引用
-$backdrop-blur: blur(12px);

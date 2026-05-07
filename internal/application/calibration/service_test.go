@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"cal1604/internal/domain"
+	"cal1604/internal/events"
 	"cal1604/internal/workflow"
 )
 
@@ -57,9 +58,9 @@ func (d *valveGateFakeMeasureDriver) CalibrateFullScale(_ context.Context, _ []i
 func newValveGateTestService() *Service {
 	svc := NewService(workflow.NewSessionMachine(), nil, nil, nil, nil, nil)
 	svc.measureDriver = &valveGateFakeMeasureDriver{valveStatus: "measurement"}
-	svc.config = CalibrationConfig{
+	svc.config = domain.WorkflowConfig{
 		Channels:       []int{1},
-		PressurePoints: 2,
+		PointCount: 2,
 		ControlMode:    "manual",
 	}
 	return svc
@@ -150,6 +151,22 @@ func (d *calibrationCollectFakeMeasureDriver) CalibrateFullScale(_ context.Conte
 	return nil, nil
 }
 
+func (d *calibrationCollectFakeMeasureDriver) StartCalibration(_ context.Context, _ []int, _, _ int) error {
+	return nil
+}
+
+func (d *calibrationCollectFakeMeasureDriver) PerformFitting(_ context.Context) error {
+	return nil
+}
+
+func (d *calibrationCollectFakeMeasureDriver) SaveCoefficients(_ context.Context) error {
+	return nil
+}
+
+func (d *calibrationCollectFakeMeasureDriver) EndCalibration(_ context.Context) error {
+	return nil
+}
+
 type calibrationPressureDriverForStatusTest struct {
 	target float64
 }
@@ -190,10 +207,10 @@ type calibrationEventRecorder struct {
 
 func (r *calibrationEventRecorder) Publish(eventType string, data any) {
 	r.events = append(r.events, eventType)
-	if eventType != "calibration.point_status" {
+	if eventType != events.EventCalibrationPointStatus {
 		return
 	}
-	point, ok := data.(PressurePoint)
+	point, ok := data.(domain.PressurePoint)
 	if !ok {
 		return
 	}
@@ -275,16 +292,16 @@ func TestCollectUsesCalibrationPointCommandWhenSupported(t *testing.T) {
 	drv := &calibrationCollectFakeMeasureDriver{}
 	svc := NewService(workflow.NewSessionMachine(), nil, nil, nil, nil, nil)
 	svc.measureDriver = drv
-	svc.config = CalibrationConfig{
+	svc.config = domain.WorkflowConfig{
 		Channels:       []int{1, 2},
 		AverageCount:   5,
-		PressurePoints: 2,
+		PointCount: 2,
 	}
-	svc.pressurePoints = []PressurePoint{
+	svc.pressurePoints = []domain.PressurePoint{
 		{
 			Index:          1,
 			TargetPressure: 10,
-			Status:         "stabilizing",
+			Status:         domain.PointStatusStabilizing,
 		},
 	}
 
@@ -307,19 +324,19 @@ func TestCollectUsesCalibrationPointCommandWhenSupported(t *testing.T) {
 		t.Fatalf("unexpected collect result: %#v", data)
 	}
 
-	if svc.pressurePoints[0].Status != "completed" {
+	if svc.pressurePoints[0].Status != domain.PointStatusCompleted {
 		t.Fatalf("expected point status completed, got %s", svc.pressurePoints[0].Status)
 	}
 }
 
 func TestRetryPointManualModeWithoutPressureDeviceResetsOnly(t *testing.T) {
 	svc := NewService(workflow.NewSessionMachine(), nil, nil, nil, nil, nil)
-	svc.config = CalibrationConfig{ControlMode: "manual"}
-	svc.pressurePoints = []PressurePoint{
+	svc.config = domain.WorkflowConfig{ControlMode: "manual"}
+	svc.pressurePoints = []domain.PressurePoint{
 		{
 			Index:          1,
 			TargetPressure: 10,
-			Status:         "completed",
+			Status:         domain.PointStatusCompleted,
 			CollectedData:  []float64{10.12, 10.23},
 			ActualPressure: 10.15,
 		},
@@ -330,7 +347,7 @@ func TestRetryPointManualModeWithoutPressureDeviceResetsOnly(t *testing.T) {
 	}
 
 	point := svc.pressurePoints[0]
-	if point.Status != "pending" {
+	if point.Status != domain.PointStatusPending {
 		t.Fatalf("expected point status pending after retry reset, got %s", point.Status)
 	}
 	if point.CollectedData != nil {
@@ -348,26 +365,26 @@ func TestPressurizePublishesPointStatusEvents(t *testing.T) {
 	if err := svc.sessionMachine.Transition(domain.SessionStateReady); err != nil {
 		t.Fatalf("transition to ready: %v", err)
 	}
-	svc.pressurePoints = []PressurePoint{{
+	svc.pressurePoints = []domain.PressurePoint{{
 		Index:          1,
 		TargetPressure: 10,
-		Status:         "pending",
+		Status:         domain.PointStatusPending,
 	}}
-	svc.config = CalibrationConfig{StableWaitMs: 1}
+	svc.config = domain.WorkflowConfig{StableWaitMs: 1}
 
 	if err := svc.Pressurize(context.Background(), 1); err != nil {
 		t.Fatalf("Pressurize should succeed, got %v", err)
 	}
 
 	point := svc.pressurePoints[0]
-	if point.Status != "stabilizing" {
+	if point.Status != domain.PointStatusStabilizing {
 		t.Fatalf("expected point status stabilizing after pressurize, got %s", point.Status)
 	}
 
-	if !containsStatus(recorder.statuses, "pressurizing") {
+	if !containsStatus(recorder.statuses, domain.PointStatusPressurizing) {
 		t.Fatalf("expected pressurizing status event, got %v", recorder.statuses)
 	}
-	if !containsStatus(recorder.statuses, "stabilizing") {
+	if !containsStatus(recorder.statuses, domain.PointStatusStabilizing) {
 		t.Fatalf("expected stabilizing status event, got %v", recorder.statuses)
 	}
 }
@@ -377,25 +394,25 @@ func TestCollectPublishesPointStatusEvents(t *testing.T) {
 	drv := &calibrationCollectFakeMeasureDriver{}
 	svc := NewService(workflow.NewSessionMachine(), nil, nil, recorder.Publish, nil, nil)
 	svc.measureDriver = drv
-	svc.config = CalibrationConfig{
+	svc.config = domain.WorkflowConfig{
 		Channels:       []int{1, 2},
 		AverageCount:   1,
-		PressurePoints: 2,
+		PointCount: 2,
 	}
-	svc.pressurePoints = []PressurePoint{{
+	svc.pressurePoints = []domain.PressurePoint{{
 		Index:          1,
 		TargetPressure: 10,
-		Status:         "stabilizing",
+		Status:         domain.PointStatusStabilizing,
 	}}
 
 	if _, err := svc.Collect(context.Background(), 1); err != nil {
 		t.Fatalf("Collect should succeed, got %v", err)
 	}
 
-	if !containsStatus(recorder.statuses, "collecting") {
+	if !containsStatus(recorder.statuses, domain.PointStatusCollecting) {
 		t.Fatalf("expected collecting status event, got %v", recorder.statuses)
 	}
-	if !containsStatus(recorder.statuses, "completed") {
+	if !containsStatus(recorder.statuses, domain.PointStatusCompleted) {
 		t.Fatalf("expected completed status event, got %v", recorder.statuses)
 	}
 }
@@ -425,11 +442,11 @@ func TestPauseAutoCollectionStopsRunningLoop(t *testing.T) {
 
 func TestResumePointIndexLocked(t *testing.T) {
 	svc := NewService(workflow.NewSessionMachine(), nil, nil, nil, nil, nil)
-	svc.pressurePoints = []PressurePoint{
-		{Index: 1, Status: "completed"},
-		{Index: 2, Status: "completed"},
-		{Index: 3, Status: "pending"},
-		{Index: 4, Status: "pending"},
+	svc.pressurePoints = []domain.PressurePoint{
+		{Index: 1, Status: domain.PointStatusCompleted,},
+		{Index: 2, Status: domain.PointStatusCompleted,},
+		{Index: 3, Status: domain.PointStatusPending,},
+		{Index: 4, Status: domain.PointStatusPending,},
 	}
 	svc.currentPoint = 0
 
@@ -465,7 +482,7 @@ func TestResolveAlarmSupportsNewDecisions(t *testing.T) {
 
 	hasResolvedEvent := false
 	for _, eventType := range recorder.events {
-		if eventType == "calibration.alarm.resolved" {
+		if eventType == events.EventCalibrationAlarmResolved {
 			hasResolvedEvent = true
 			break
 		}
@@ -479,9 +496,9 @@ func TestCollectPointAlarmDecisionSkip(t *testing.T) {
 	svc := NewService(workflow.NewSessionMachine(), nil, nil, nil, nil, nil)
 	svc.measureDriver = &alarmDecisionMeasureDriver{samples: [][]float64{{20}}}
 	svc.pressureDriver = &calibrationPressureDriverForStatusTest{}
-	svc.config = CalibrationConfig{
+	svc.config = domain.WorkflowConfig{
 		Channels:       []int{1},
-		PressurePoints: 2,
+		PointCount: 2,
 		AverageCount:   1,
 		StableWaitMs:   1,
 		MaxPressure:    10,
@@ -491,7 +508,7 @@ func TestCollectPointAlarmDecisionSkip(t *testing.T) {
 		PrecisionThreshold: 0.5,
 		EnabledChannels:    []int{1},
 	}
-	svc.pressurePoints = []PressurePoint{{Index: 1, TargetPressure: 10, Status: "pending"}}
+	svc.pressurePoints = []domain.PressurePoint{{Index: 1, TargetPressure: 10, Status: domain.PointStatusPending,}}
 
 	if err := svc.sessionMachine.Transition(domain.SessionStateReady); err != nil {
 		t.Fatalf("transition to ready: %v", err)
@@ -514,7 +531,7 @@ func TestCollectPointAlarmDecisionSkip(t *testing.T) {
 		t.Fatalf("collectPoint with skip should succeed, got %v", err)
 	}
 
-	if got := svc.pressurePoints[0].Status; got != "skipped" {
+	if got := svc.pressurePoints[0].Status; got != domain.PointStatusSkipped {
 		t.Fatalf("expected skipped status, got %s", got)
 	}
 }
@@ -523,9 +540,9 @@ func TestCollectPointAlarmDecisionStop(t *testing.T) {
 	svc := NewService(workflow.NewSessionMachine(), nil, nil, nil, nil, nil)
 	svc.measureDriver = &alarmDecisionMeasureDriver{samples: [][]float64{{20}}}
 	svc.pressureDriver = &calibrationPressureDriverForStatusTest{}
-	svc.config = CalibrationConfig{
+	svc.config = domain.WorkflowConfig{
 		Channels:       []int{1},
-		PressurePoints: 2,
+		PointCount: 2,
 		AverageCount:   1,
 		StableWaitMs:   1,
 		MaxPressure:    10,
@@ -535,7 +552,7 @@ func TestCollectPointAlarmDecisionStop(t *testing.T) {
 		PrecisionThreshold: 0.5,
 		EnabledChannels:    []int{1},
 	}
-	svc.pressurePoints = []PressurePoint{{Index: 1, TargetPressure: 10, Status: "pending"}}
+	svc.pressurePoints = []domain.PressurePoint{{Index: 1, TargetPressure: 10, Status: domain.PointStatusPending,}}
 
 	if err := svc.sessionMachine.Transition(domain.SessionStateReady); err != nil {
 		t.Fatalf("transition to ready: %v", err)
@@ -565,9 +582,9 @@ func TestCollectPointAlarmDecisionRecollect(t *testing.T) {
 	svc := NewService(workflow.NewSessionMachine(), nil, nil, nil, nil, nil)
 	svc.measureDriver = measureDriver
 	svc.pressureDriver = &calibrationPressureDriverForStatusTest{}
-	svc.config = CalibrationConfig{
+	svc.config = domain.WorkflowConfig{
 		Channels:       []int{1},
-		PressurePoints: 2,
+		PointCount: 2,
 		AverageCount:   1,
 		StableWaitMs:   1,
 		MaxPressure:    10,
@@ -577,7 +594,7 @@ func TestCollectPointAlarmDecisionRecollect(t *testing.T) {
 		PrecisionThreshold: 0.5,
 		EnabledChannels:    []int{1},
 	}
-	svc.pressurePoints = []PressurePoint{{Index: 1, TargetPressure: 10, Status: "pending"}}
+	svc.pressurePoints = []domain.PressurePoint{{Index: 1, TargetPressure: 10, Status: domain.PointStatusPending,}}
 
 	if err := svc.sessionMachine.Transition(domain.SessionStateReady); err != nil {
 		t.Fatalf("transition to ready: %v", err)
@@ -603,7 +620,7 @@ func TestCollectPointAlarmDecisionRecollect(t *testing.T) {
 	if measureDriver.idx < 2 {
 		t.Fatalf("expected recollect to perform at least 2 collections, got %d", measureDriver.idx)
 	}
-	if got := svc.pressurePoints[0].Status; got != "completed" {
+	if got := svc.pressurePoints[0].Status; got != domain.PointStatusCompleted {
 		t.Fatalf("expected completed status after recollect flow, got %s", got)
 	}
 }

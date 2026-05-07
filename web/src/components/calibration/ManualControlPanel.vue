@@ -49,8 +49,7 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
 import { ElMessage } from 'element-plus'
-import { requestJSON } from '@/api/client'
-import type { ApiResponse } from '@/types/api'
+import { apiPost } from '@/api/client'
 import type { StabilityEventData } from '@/composables/useCalibrationSync'
 
 const props = defineProps<{
@@ -72,11 +71,7 @@ async function handlePressurize() {
   if (!targetPressure.value) return
   pressurizing.value = true
   try {
-    await requestJSON<ApiResponse<{ status: string }>>('/calibration/manual-pressurize', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ targetPressure: targetPressure.value })
-    })
+    await apiPost<{ status: string }>('/calibration/manual-pressurize', { targetPressure: targetPressure.value })
     ElMessage.success('已开始打压')
   } catch (e) {
     ElMessage.error(e instanceof Error ? e.message : '打压失败')
@@ -88,10 +83,8 @@ async function handlePressurize() {
 async function handleCollect() {
   collecting.value = true
   try {
-    const resp = await requestJSON<ApiResponse<{ data: number[] }>>('/calibration/manual-collect', {
-      method: 'POST'
-    })
-    emit('collected', resp.data.data)
+    const resp = await apiPost<{ data: number[] }>('/calibration/manual-collect')
+    emit('collected', resp.data)
     ElMessage.success('采集完成')
   } catch (e) {
     ElMessage.error(e instanceof Error ? e.message : '采集失败')

@@ -7,19 +7,12 @@ import (
 
 	"cal1604/internal/application/session"
 	apperrors "cal1604/internal/errors"
+	"cal1604/internal/domain"
+	"cal1604/internal/events"
 )
 
-// Session 表示 measurement 自己的流程会话。
-type Session struct {
-	ID               string     `json:"id"`
-	StartTime        time.Time  `json:"startTime"`
-	EndTime          *time.Time `json:"endTime,omitempty"`
-	Config           Config     `json:"config"`
-	Points           []Point    `json:"points"`
-	MeasureDeviceID  string     `json:"measureDeviceId"`
-	PressureDeviceID string     `json:"pressureDeviceId"`
-	Status           State      `json:"status"`
-}
+// Session 是 domain.WorkflowSession 的类型别名。
+type Session = domain.WorkflowSession
 
 // StartWorkflow 启动 measurement 自己的业务流程会话。
 // 当前阶段仅完成“参数 + 点位计划 -> ready 会话”的收口，
@@ -45,7 +38,7 @@ func (s *Service) StartWorkflow(_ context.Context, channels []int) error {
 	s.rows = nil
 	s.sess.SetChannels(channels)
 
-	if err := s.setStateLocked(StateReady); err != nil {
+	if err := s.sessionMachine.Transition(domain.SessionStateReady); err != nil {
 		return fmt.Errorf("start measurement workflow: %w", err)
 	}
 
@@ -53,13 +46,13 @@ func (s *Service) StartWorkflow(_ context.Context, channels []int) error {
 		ID:               fmt.Sprintf("measurement-%d", time.Now().UnixMilli()),
 		StartTime:        time.Now(),
 		Config:           s.config,
-		Points:           append([]Point(nil), s.points...),
+		Points:           append([]domain.PressurePoint(nil), s.points...),
 		MeasureDeviceID:  s.sess.MeasureDeviceID(),
 		PressureDeviceID: s.sess.PressureDeviceID(),
-		Status:           s.state,
+		Status:           s.sessionMachine.State(),
 	}
 
-	s.publish("measurement.state_changed", map[string]any{"state": string(StateReady)})
+	s.publish(events.EventMeasurementStateChanged, map[string]any{"state": string(domain.SessionStateReady)})
 	return nil
 }
 
@@ -72,7 +65,7 @@ func (s *Service) GetSession() *Session {
 	}
 
 	cloned := *s.session
-	cloned.Points = make([]Point, len(s.session.Points))
+	cloned.Points = make([]domain.PressurePoint, len(s.session.Points))
 	for i, point := range s.session.Points {
 		cloned.Points[i] = point
 		if point.CollectedData != nil {

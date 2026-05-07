@@ -8,8 +8,7 @@ import (
 
 // PressureDriver 抽象打压设备能力。
 type PressureDriver interface {
-	Connect(ctx context.Context) error
-	Disconnect(ctx context.Context) error
+	ConnectionDriver
 	SetTargetPressure(ctx context.Context, target float64) error
 	Stop(ctx context.Context) error
 	Exhaust(ctx context.Context) error
@@ -19,10 +18,14 @@ type PressureDriver interface {
 	ReadStability(ctx context.Context) (bool, error)
 }
 
+// PressureControlCapable 可选能力：打压设备支持自动压力控制。
+type PressureControlCapable interface {
+	StartControl(ctx context.Context) error
+}
+
 // MeasureDriver 抽象计量设备能力。
 type MeasureDriver interface {
-	Connect(ctx context.Context) error
-	Disconnect(ctx context.Context) error
+	ConnectionDriver
 	ReadValveStatus(ctx context.Context) (string, error)
 	SetValveStatus(ctx context.Context, status string) error
 	ReadUnit(ctx context.Context) (string, error)
@@ -34,6 +37,16 @@ type MeasureDriver interface {
 	CalibrateFullScale(ctx context.Context, channels []int, fullScaleValue float64) ([]float64, error)
 	ReadDeviceInfo(ctx context.Context) (map[string]string, error)
 	Reset(ctx context.Context) error
+}
+
+// CalibrationCapable 可选能力：计量设备支持多点校准流程。
+// WTN1604 等设备在校准模式下使用专用的按点采集和拟合命令。
+type CalibrationCapable interface {
+	StartCalibration(ctx context.Context, channels []int, pressurePoints int, avgPoints int) error
+	CollectCalibrationPoint(ctx context.Context, pointIndex int, targetPressure float64) ([]float64, error)
+	PerformFitting(ctx context.Context) error
+	SaveCoefficients(ctx context.Context) error
+	EndCalibration(ctx context.Context) error
 }
 
 // DeviceStore 抽象设备配置存储能力。

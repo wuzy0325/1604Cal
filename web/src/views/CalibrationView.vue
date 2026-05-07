@@ -1,6 +1,6 @@
 <template>
   <PageLayout>
-    <!-- ═══ 仪表盘头部 — 深色仪器面板 ═══ -->
+    <!-- ═══ 仪表盘头部 ═══ -->
     <header class="instrument-header">
       <div class="header-nav">
         <button class="back-btn" @click="goBack">
@@ -43,14 +43,11 @@
       </div>
     </header>
 
-    <!-- ═══ 工作台主体 ═══ -->
+    <!-- ═══ 工作台 ═══ -->
     <div class="workbench">
-      <!-- 左侧：设备面板 -->
       <CalibrationSidebar :collapsed="sidebarCollapsed" @toggle="sidebarCollapsed = !sidebarCollapsed" />
 
-      <!-- 中央：主工作区 -->
       <main class="workbench-main">
-        <!-- 报警横幅 -->
         <div v-if="alarmEvent" class="alarm-banner">
           <span class="alarm-dot" />
           <span>通道 {{ alarmEvent.overLimitChannels?.join(', ') }} 超限报警</span>
@@ -88,6 +85,7 @@
 import { ref, computed, provide } from 'vue'
 import { useRouter } from 'vue-router'
 import { ArrowLeft, DocumentChecked } from '@element-plus/icons-vue'
+import type { SessionState } from '@/types/calibration'
 import { useCalibrationStore } from '@/stores/calibration'
 import { useCalibrationSync, stabilityStatusKey } from '@/composables/useCalibrationSync'
 import { useConfigPersistence } from '@/composables/useConfigPersistence'
@@ -113,21 +111,42 @@ function goBack(): void {
 }
 
 /* ── 会话状态 ── */
-const stateLabel = computed(() => {
-  const m: Record<string, string> = {
-    idle: '空闲', preparing: '准备中', running: '运行中',
-    paused: '已暂停', completed: '已完成', error: '错误',
-  }
-  return m[calibrationStore.sessionState] || calibrationStore.sessionState
-})
+const STATE_LABELS: Record<SessionState, string> = {
+  idle: '空闲',
+  ready: '就绪',
+  pressurizing: '打压中',
+  stabilizing: '稳定中',
+  collecting: '采集中',
+  point_done: '点完成',
+  fitting: '拟合中',
+  completed: '已完成',
+  paused: '已暂停',
+  stopped: '已停止',
+  await_manual_collect: '等待手动采集',
+  await_alarm_resolution: '等待报警处理',
+  recovering: '恢复中',
+  error: '错误'
+}
+const STATE_CLASSES: Record<SessionState, string> = {
+  idle: 'chip-idle',
+  ready: 'chip-running',
+  pressurizing: 'chip-running',
+  stabilizing: 'chip-running',
+  collecting: 'chip-running',
+  point_done: 'chip-running',
+  fitting: 'chip-running',
+  completed: 'chip-completed',
+  paused: 'chip-paused',
+  stopped: 'chip-idle',
+  await_manual_collect: 'chip-running',
+  await_alarm_resolution: 'chip-running',
+  recovering: 'chip-running',
+  error: 'chip-error'
+}
 
-const stateClass = computed(() => {
-  const m: Record<string, string> = {
-    idle: 'chip-idle', preparing: 'chip-preparing', running: 'chip-running',
-    paused: 'chip-paused', completed: 'chip-completed', error: 'chip-error',
-  }
-  return m[calibrationStore.sessionState] || ''
-})
+const stateLabel = computed(() => STATE_LABELS[calibrationStore.sessionState] || calibrationStore.sessionState)
+
+const stateClass = computed(() => STATE_CLASSES[calibrationStore.sessionState] || '')
 
 /* ── 压力数据 ── */
 const displayPressure = computed(() => {
@@ -190,8 +209,8 @@ $amber: #f59e0b;
   flex-shrink: 0;
   height: 56px;
   padding: 0 24px;
-  background: linear-gradient(135deg, $slate-800 0%, $slate-900 100%);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  background: $slate-50;
+  border-bottom: 1px solid $slate-200;
   font-family: $font-sans;
 }
 
@@ -201,22 +220,22 @@ $amber: #f59e0b;
 }
 
 .back-btn {
-  width: 30px; height: 30px;
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  width: 32px; height: 32px;
+  background: #fff;
+  border: 1px solid $slate-200;
   border-radius: 8px;
-  color: rgba(255, 255, 255, 0.5);
+  color: $slate-500;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 16px;
-  transition: all 0.2s ease;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
 
   &:hover {
-    background: rgba(255, 255, 255, 0.12);
-    color: #fff;
-    border-color: rgba(255, 255, 255, 0.25);
+    background: #fff;
+    color: $mint;
+    border-color: $mint;
   }
 }
 
@@ -228,11 +247,10 @@ $amber: #f59e0b;
 }
 
 .header-title {
-  font-size: 16px;
-  font-weight: 700;
-  color: #fff;
+  font-size: 20px;
+  font-weight: 600;
+  color: $slate-800;
   margin: 0;
-  letter-spacing: 0.02em;
   font-family: $font-sans;
 }
 
@@ -250,10 +268,10 @@ $amber: #f59e0b;
 }
 
 .telem-label {
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 500;
-  color: rgba(255, 255, 255, 0.35);
-  letter-spacing: 0.06em;
+  color: $slate-400;
+  letter-spacing: 0.05em;
   text-transform: uppercase;
   white-space: nowrap;
 }
@@ -261,24 +279,22 @@ $amber: #f59e0b;
 .telem-value {
   font-size: 14px;
   font-weight: 600;
-  color: #fff;
-  letter-spacing: 0.01em;
+  color: $slate-800;
 
   &.mono { font-family: $font-mono; }
-  small { font-size: 10px; color: rgba(255, 255, 255, 0.4); margin-left: 1px; }
+  small { font-size: 10px; color: $slate-400; margin-left: 1px; }
 }
 
 .telem-unit {
-  font-size: 11px;
-  color: rgba(255, 255, 255, 0.4);
+  font-size: 12px;
+  color: $slate-400;
   font-weight: 500;
-  font-family: $font-sans;
 }
 
 .telem-divider {
   width: 1px;
   height: 24px;
-  background: rgba(255, 255, 255, 0.08);
+  background: $slate-200;
 }
 
 .telem-indicator {
@@ -286,34 +302,19 @@ $amber: #f59e0b;
   align-items: center;
   gap: 6px;
   font-size: 12px;
-  font-weight: 600;
-  padding: 2px 10px;
+  font-weight: 500;
+  padding: 2px 8px;
   border-radius: 4px;
 
-  &.on {
-    color: $mint-light;
-    background: rgba(16, 185, 129, 0.12);
-  }
-  &.off {
-    color: $amber;
-    background: rgba(245, 158, 11, 0.12);
-  }
+  &.on { color: $mint-dark; background: rgba(16, 185, 129, 0.08); }
+  &.off { color: $amber; background: rgba(245, 158, 11, 0.08); }
 }
 
 .telem-dot {
-  width: 6px; height: 6px;
-  border-radius: 50%;
+  width: 6px; height: 6px; border-radius: 50%;
 
-  .on & {
-    background: $mint-light;
-    box-shadow: 0 0 6px rgba(16, 185, 129, 0.6);
-    animation: pulse-dot 2s ease-in-out infinite;
-  }
-  .off & {
-    background: $amber;
-    box-shadow: 0 0 6px rgba(245, 158, 11, 0.6);
-    animation: pulse-dot 1.2s ease-in-out infinite;
-  }
+  .on & { background: $mint; box-shadow: 0 0 4px rgba(16, 185, 129, 0.4); animation: pulse-dot 2s ease-in-out infinite; }
+  .off & { background: $amber; box-shadow: 0 0 4px rgba(245, 158, 11, 0.4); animation: pulse-dot 1.2s ease-in-out infinite; }
 }
 
 @keyframes pulse-dot {
@@ -325,38 +326,20 @@ $amber: #f59e0b;
 .state-chip {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  padding: 2px 10px;
+  gap: 4px;
+  padding: 2px 8px;
   border-radius: 4px;
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.03em;
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.05em;
 
-  .chip-dot {
-    width: 5px; height: 5px;
-    border-radius: 50%;
-  }
+  .chip-dot { width: 5px; height: 5px; border-radius: 50%; }
 
-  &.chip-idle {
-    background: rgba(156, 163, 175, 0.15); color: $slate-400;
-    .chip-dot { background: $slate-400; }
-  }
-  &.chip-preparing, &.chip-running {
-    background: rgba(59, 130, 246, 0.15); color: #60a5fa;
-    .chip-dot { background: #60a5fa; box-shadow: 0 0 5px rgba(96, 165, 250, 0.5); }
-  }
-  &.chip-paused {
-    background: rgba(245, 158, 11, 0.15); color: $amber;
-    .chip-dot { background: $amber; }
-  }
-  &.chip-completed {
-    background: rgba(16, 185, 129, 0.15); color: $mint-light;
-    .chip-dot { background: $mint-light; }
-  }
-  &.chip-error {
-    background: rgba(239, 68, 68, 0.15); color: #f87171;
-    .chip-dot { background: #f87171; }
-  }
+  &.chip-idle { background: rgba(156,163,175,0.1); color: $slate-500; .chip-dot { background: $slate-400; } }
+  &.chip-preparing, &.chip-running { background: rgba(16,185,129,0.08); color: $mint-dark; .chip-dot { background: $mint; box-shadow: 0 0 4px rgba(16,185,129,0.3); } }
+  &.chip-paused { background: rgba(245,158,11,0.08); color: $amber; .chip-dot { background: $amber; } }
+  &.chip-completed { background: rgba(16,185,129,0.08); color: $mint-dark; .chip-dot { background: $mint; } }
+  &.chip-error { background: rgba(239,68,68,0.08); color: $red; .chip-dot { background: $red; } }
 }
 
 /* ════════════════════════════════════════
@@ -420,7 +403,7 @@ $amber: #f59e0b;
 /* ── 卡片区块 ── */
 .card-block {
   background: #ffffff;
-  border-radius: 10px;
+  border-radius: 12px;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.04);
   position: relative;
   overflow: hidden;
@@ -433,8 +416,8 @@ $amber: #f59e0b;
 .card-accent {
   position: absolute;
   top: 0; left: 0; right: 0;
-  height: 3px;
-  background: linear-gradient(90deg, $mint, $mint-light, rgba(16, 185, 129, 0.3));
+  height: 1px;
+  background: $mint;
 }
 
 @keyframes card-enter {

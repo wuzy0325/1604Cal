@@ -3,11 +3,13 @@ package calibration
 import (
 	"context"
 	"fmt"
-	"math"
 	"time"
 
+	"cal1604/internal/application/session"
 	"cal1604/internal/device"
 	"cal1604/internal/domain"
+	"cal1604/internal/events"
+	"cal1604/internal/workflow"
 )
 
 // SetDevices 设置校准使用的设备。
@@ -20,21 +22,25 @@ func (s *Service) SetDevices(measureDevID, pressureDevID string) error {
 		s.mu.Lock()
 		s.measureDevID = measureDevID
 		s.pressureDevID = pressureDevID
-		s.measureDriver = s.sessionService.MeasureDriver()
-		s.pressureDriver = s.sessionService.PressureDriver()
 		s.mu.Unlock()
 		return nil
 	}
 
+	// 无 sessionService 时，使用 DriverResolver 直接解析驱动。
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	mDrv, err := s.resolveMeasureDriver(measureDevID)
+	resolver := &session.DriverResolver{
+		DeviceManager:  s.deviceManager,
+		DriverProvider: s.driverProvider,
+		Factory:        s.factory,
+	}
+	mDrv, err := resolver.ResolveMeasureDriver(measureDevID)
 	if err != nil {
 		return err
 	}
 	var pDrv device.PressureDriver
 	if pressureDevID != "" {
-		pDrv, err = s.resolvePressureDriver(pressureDevID)
+		pDrv, err = resolver.ResolvePressureDriver(pressureDevID)
 		if err != nil {
 			return err
 		}
@@ -46,42 +52,8 @@ func (s *Service) SetDevices(measureDevID, pressureDevID string) error {
 	return nil
 }
 
-// resolveMeasureDriver 优先复用已连接的计量驱动，避免创建未连接的驱动实例。
-func (s *Service) resolveMeasureDriver(measureDevID string) (device.MeasureDriver, error) {
-	if s.driverProvider != nil {
-		if drv := s.driverProvider.GetActiveDriver(measureDevID); drv != nil {
-			if mDrv, ok := drv.(device.MeasureDriver); ok {
-				return mDrv, nil
-			}
-		}
-	}
-
-	measureDev, ok := s.deviceManager.Get(measureDevID)
-	if !ok {
-		return nil, fmt.Errorf("measure device %s not found", measureDevID)
-	}
-	return s.factory.CreateMeasureDriver(measureDev)
-}
-
-// resolvePressureDriver 优先复用已连接的打压驱动，避免创建未连接的驱动实例。
-func (s *Service) resolvePressureDriver(pressureDevID string) (device.PressureDriver, error) {
-	if s.driverProvider != nil {
-		if drv := s.driverProvider.GetActiveDriver(pressureDevID); drv != nil {
-			if pDrv, ok := drv.(device.PressureDriver); ok {
-				return pDrv, nil
-			}
-		}
-	}
-
-	pressureDev, ok := s.deviceManager.Get(pressureDevID)
-	if !ok {
-		return nil, fmt.Errorf("pressure device %s not found", pressureDevID)
-	}
-	return s.factory.CreatePressureDriver(pressureDev)
-}
-
 // SetConfig 设置校准配置。
-func (s *Service) SetConfig(config CalibrationConfig) {
+func (s *Service) SetConfig(config domain.WorkflowConfig) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.config = config
@@ -125,11 +97,11 @@ func (s *Service) GetChannels() []int {
 // GeneratePressurePoints 根据配置生成压力点。
 // 测点数范围统一为 2~6，超出范围返回错误，禁止隐式裁剪。
 // 当 PressureMode 为 roundTrip 时，在正程递增点后追加回程递降点（不含重复的极值点）。
-func (s *Service) GeneratePressurePoints() ([]PressurePoint, error) {
+func (s *Service) GeneratePressurePoints() ([]domain.PressurePoint, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	points := s.config.PressurePoints
+	points := s.config.PointCount
 	if points < 2 || points > 6 {
 		return nil, fmt.Errorf("pressure points must be between 2 and 6, got %d", points)
 	}
@@ -140,59 +112,23 @@ func (s *Service) GeneratePressurePoints() ([]PressurePoint, error) {
 		return nil, fmt.Errorf("maxPressure(%v) must be greater than minPressure(%v)", maxP, minP)
 	}
 
-	step := (maxP - minP) / float64(points-1)
 	prec := s.config.Precision
 	if prec < 0 {
 		prec = 0
 	}
 
-	// 正程：递增
-	forward := make([]PressurePoint, points)
-	for i := 0; i < points; i++ {
-		forward[i] = PressurePoint{
-			Index:          i + 1,
-			TargetPressure: roundToPrec(minP+step*float64(i), prec),
-			Status:         "pending",
-			Direction:      "forward",
-		}
-	}
-
-	if s.config.PressureMode != "roundTrip" {
-		s.pressurePoints = forward
-		s.currentPoint = 0
-		return s.pressurePoints, nil
-	}
-
-	// 回程：递降（从 maxP 到 minP+step，不含 minP），匹配参考模块语义
-	backward := make([]PressurePoint, points-1)
-	for i := 0; i < points-1; i++ {
-		backward[i] = PressurePoint{
-			Index:          points + i + 1,
-			TargetPressure: roundToPrec(maxP-step*float64(i), prec),
-			Status:         "pending",
-			Direction:      "backward",
-		}
-	}
-
-	s.pressurePoints = append(forward, backward...)
+	roundTrip := s.config.PressureMode == "roundTrip"
+	s.pressurePoints = domain.EquidistantPoints(minP, maxP, points, prec, roundTrip)
 	s.currentPoint = 0
 
 	return s.pressurePoints, nil
 }
 
-func roundToPrec(value float64, precision int) float64 {
-	if precision <= 0 {
-		return math.Round(value)
-	}
-	factor := math.Pow10(precision)
-	return math.Round(value*factor) / factor
-}
-
 // GetPressurePoints 获取当前压力点列表。
-func (s *Service) GetPressurePoints() []PressurePoint {
+func (s *Service) GetPressurePoints() []domain.PressurePoint {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	result := make([]PressurePoint, len(s.pressurePoints))
+	result := make([]domain.PressurePoint, len(s.pressurePoints))
 	copy(result, s.pressurePoints)
 	return result
 }
@@ -200,8 +136,8 @@ func (s *Service) GetPressurePoints() []PressurePoint {
 // Pressurize 对指定压力点执行打压。
 func (s *Service) Pressurize(ctx context.Context, pointIndex int) error {
 	s.mu.Lock()
-	s.syncDriversFromSessionLocked()
-	if s.pressureDriver == nil {
+	pressureDriver := s.getPressureDriver()
+	if pressureDriver == nil {
 		s.mu.Unlock()
 		return ErrPressureDeviceNotSet
 	}
@@ -212,7 +148,7 @@ func (s *Service) Pressurize(ctx context.Context, pointIndex int) error {
 	targetPressure := s.pressurePoints[pointIndex-1].TargetPressure
 	s.mu.Unlock()
 
-	s.updatePointStatus(pointIndex, "pressurizing")
+	s.updatePointStatus(pointIndex, domain.PointStatusPressurizing)
 
 	// 状态迁移: -> pressurizing
 	if err := s.sessionMachine.Transition(domain.SessionStatePressurizing); err != nil {
@@ -221,20 +157,20 @@ func (s *Service) Pressurize(ctx context.Context, pointIndex int) error {
 	s.publishSessionState()
 
 	// 设置目标压力
-	if err := s.pressureDriver.SetTargetPressure(ctx, targetPressure); err != nil {
+	if err := pressureDriver.SetTargetPressure(ctx, targetPressure); err != nil {
 		s.markPointError(pointIndex, err.Error())
 		return fmt.Errorf("set target pressure: %w", err)
 	}
 
 	// 启动压力控制
-	if ctrl, ok := s.pressureDriver.(interface{ StartControl(context.Context) error }); ok {
+	if ctrl, ok := pressureDriver.(device.PressureControlCapable); ok {
 		if err := ctrl.StartControl(ctx); err != nil {
 			s.markPointError(pointIndex, err.Error())
 			return fmt.Errorf("start pressure control: %w", err)
 		}
 	}
 
-	s.updatePointStatus(pointIndex, "stabilizing")
+	s.updatePointStatus(pointIndex, domain.PointStatusStabilizing)
 
 	// 状态迁移: pressurizing -> stabilizing
 	if err := s.sessionMachine.Transition(domain.SessionStateStabilizing); err != nil {
@@ -243,23 +179,19 @@ func (s *Service) Pressurize(ctx context.Context, pointIndex int) error {
 	s.publishSessionState()
 
 	// 等待压力稳定
-	stableWait := s.config.StableWaitMs
-	if stableWait <= 0 {
-		stableWait = 2000
-	}
-	if err := s.waitForStability(ctx, time.Duration(stableWait)*time.Millisecond); err != nil {
+	if err := s.waitForStabilityWithMonitor(ctx, targetPressure); err != nil {
 		return fmt.Errorf("wait for stability: %w", err)
 	}
 
 	// 读取实际压力
-	actual, err := s.pressureDriver.ReadCurrentPressure(ctx)
+	actual, err := s.getPressureDriver().ReadCurrentPressure(ctx)
 	if err == nil {
 		s.mu.Lock()
 		s.pressurePoints[pointIndex-1].ActualPressure = actual
 		s.mu.Unlock()
 	}
 
-	s.publish("pressure.applied", map[string]any{
+	s.publish(events.EventPressureApplied, map[string]any{
 		"pointIndex":     pointIndex,
 		"targetPressure": targetPressure,
 		"actualPressure": actual,
@@ -268,38 +200,39 @@ func (s *Service) Pressurize(ctx context.Context, pointIndex int) error {
 	return nil
 }
 
-// waitForStability 等待压力稳定。
-func (s *Service) waitForStability(ctx context.Context, minStableTime time.Duration) error {
-	deadline := time.Now().Add(60 * time.Second)
-	stableStart := time.Time{}
+// waitForStabilityWithMonitor 使用 StabilityMonitor 等待压力稳定。
+func (s *Service) waitForStabilityWithMonitor(ctx context.Context, targetPressure float64) error {
+	tolerance := s.config.PrecisionLevel
+	if tolerance <= 0 {
+		tolerance = 0.0005
+	}
+	stableWaitMs := s.config.StableWaitMs
+	if stableWaitMs <= 0 {
+		stableWaitMs = 5000
+	}
+	monitor := workflow.NewStabilityMonitor(
+		tolerance,
+		time.Duration(stableWaitMs)*time.Millisecond,
+		workflow.StabilityEventPublisher(s.publish),
+	)
 
+	deadline := time.Now().Add(60 * time.Second)
 	for {
 		if time.Now().After(deadline) {
 			return fmt.Errorf("stability timeout")
 		}
-
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
-
-		stable, err := s.pressureDriver.ReadStability(ctx)
+		actual, err := s.getPressureDriver().ReadCurrentPressure(ctx)
 		if err != nil {
-			// 如果设备不支持稳定状态查询，使用简单等待
-			time.Sleep(minStableTime)
+			time.Sleep(time.Duration(stableWaitMs) * time.Millisecond)
 			return nil
 		}
-
-		if stable {
-			if stableStart.IsZero() {
-				stableStart = time.Now()
-			}
-			if time.Since(stableStart) >= minStableTime {
-				return nil
-			}
-		} else {
-			stableStart = time.Time{}
+		status := monitor.FeedSample(targetPressure, actual)
+		if status.IsStable {
+			return nil
 		}
-
 		time.Sleep(200 * time.Millisecond)
 	}
 }

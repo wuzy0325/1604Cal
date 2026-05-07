@@ -1,81 +1,56 @@
-import type { ApiResponse } from '@/types/api'
-import { requestJSON } from './client'
+import { apiGet, apiPost } from './client'
 
 /** 绑定计量设备和打压设备到会话 */
 export async function bindDevices(measureDeviceId: string, pressureDeviceId: string): Promise<void> {
-  await requestJSON<ApiResponse<{ status: string }>>('/session/devices', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ measureDeviceId, pressureDeviceId })
-  })
+  await apiPost('/session/devices', { measureDeviceId, pressureDeviceId })
 }
 
 /** 仅绑定计量设备 */
 export async function bindMeasureDevice(measureDeviceId: string): Promise<void> {
-  await requestJSON<ApiResponse<{ status: string }>>('/session/measure-device', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ measureDeviceId })
-  })
+  await apiPost('/session/measure-device', { measureDeviceId })
 }
 
 /** 读取当前压力 */
 export async function readPressure(): Promise<number> {
-  const resp = await requestJSON<ApiResponse<{ pressure: number }>>('/session/pressure')
-  return resp.data.pressure
+  return (await apiGet<{ pressure: number }>('/session/pressure')).pressure
 }
 
 /** 读取稳定状态 */
 export async function readStability(): Promise<boolean> {
-  const resp = await requestJSON<ApiResponse<{ stable: boolean }>>('/session/stability')
-  return resp.data.stable
+  return (await apiGet<{ stable: boolean }>('/session/stability')).stable
 }
 
 /** 读取计量设备实时数据 */
 export async function readMeasureData(): Promise<number[]> {
-  const resp = await requestJSON<ApiResponse<{ data: number[] }>>('/session/measure-data')
-  return resp.data.data
+  return (await apiGet<{ data: number[] }>('/session/measure-data')).data
 }
 
 /** 读取阀门状态 */
 export async function readValveStatus(): Promise<string> {
-  const resp = await requestJSON<ApiResponse<{ status: string }>>('/session/valve')
-  return resp.data.status
+  return (await apiGet<{ status: string }>('/session/valve')).status
 }
 
 /** 设置阀门状态 */
 export async function setValveStatus(status: string): Promise<void> {
-  await requestJSON<ApiResponse<{ status: string }>>('/session/valve', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ status })
-  })
+  await apiPost('/session/valve', { status })
 }
 
 /** 读取压力单位 */
 export async function readMeasureUnit(): Promise<string> {
-  const resp = await requestJSON<ApiResponse<{ unit: string }>>('/session/measure-unit')
-  return resp.data.unit
+  return (await apiGet<{ unit: string }>('/session/measure-unit')).unit
 }
 
 /** 设置压力单位 */
 export async function setMeasureUnit(unit: string): Promise<void> {
-  await requestJSON<ApiResponse<{ unit: string }>>('/session/measure-unit', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ unit })
-  })
+  await apiPost('/session/measure-unit', { unit })
 }
 
 /** 读取设备信息 */
 export async function readDeviceInfo(): Promise<Record<string, string>> {
-  const resp = await requestJSON<ApiResponse<{ info: Record<string, string> }>>('/session/device-info')
-  return resp.data.info
+  return (await apiGet<{ info: Record<string, string> }>('/session/device-info')).info
 }
 
 /** 复位设备 */
 export async function resetDevice(): Promise<void> {
-  await requestJSON<ApiResponse<{ status: string }>>('/session/reset', {
-    method: 'POST'
-  })
+  await apiPost('/session/reset')
 }

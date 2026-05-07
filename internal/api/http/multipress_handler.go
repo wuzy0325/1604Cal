@@ -1,7 +1,6 @@
 package http
 
 import (
-	"encoding/json"
 	"log"
 	"net/http"
 
@@ -15,8 +14,8 @@ type multipressDeviceIDRequest struct {
 
 // multipressSetPressureRequest 设置目标压力请求。
 type multipressSetPressureRequest struct {
-	DeviceID        string  `json:"deviceId"`
-	TargetPressure  float64 `json:"targetPressure"`
+	DeviceID       string  `json:"deviceId"`
+	TargetPressure float64 `json:"targetPressure"`
 }
 
 // multipressSetUnitRequest 设置单位请求。
@@ -26,16 +25,9 @@ type multipressSetUnitRequest struct {
 }
 
 func (s *apiServer) multipressRegisterHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		w.WriteHeader(http.StatusMethodNotAllowed)
-		return
-	}
-
-	var req multipressDeviceIDRequest
-	decoder := json.NewDecoder(r.Body)
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&req); err != nil {
-		writeError(w, apperrors.ErrInvalidArgument)
+	req, err := decodeJSON[multipressDeviceIDRequest](r)
+	if err != nil {
+		writeError(w, err)
 		return
 	}
 
@@ -53,16 +45,9 @@ func (s *apiServer) multipressRegisterHandler(w http.ResponseWriter, r *http.Req
 }
 
 func (s *apiServer) multipressUnregisterHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		w.WriteHeader(http.StatusMethodNotAllowed)
-		return
-	}
-
-	var req multipressDeviceIDRequest
-	decoder := json.NewDecoder(r.Body)
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&req); err != nil {
-		writeError(w, apperrors.ErrInvalidArgument)
+	req, err := decodeJSON[multipressDeviceIDRequest](r)
+	if err != nil {
+		writeError(w, err)
 		return
 	}
 
@@ -80,16 +65,9 @@ func (s *apiServer) multipressUnregisterHandler(w http.ResponseWriter, r *http.R
 }
 
 func (s *apiServer) multipressSetPressureHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		w.WriteHeader(http.StatusMethodNotAllowed)
-		return
-	}
-
-	var req multipressSetPressureRequest
-	decoder := json.NewDecoder(r.Body)
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&req); err != nil {
-		writeError(w, apperrors.ErrInvalidArgument)
+	req, err := decodeJSON[multipressSetPressureRequest](r)
+	if err != nil {
+		writeError(w, err)
 		return
 	}
 
@@ -107,16 +85,9 @@ func (s *apiServer) multipressSetPressureHandler(w http.ResponseWriter, r *http.
 }
 
 func (s *apiServer) multipressStopHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		w.WriteHeader(http.StatusMethodNotAllowed)
-		return
-	}
-
-	var req multipressDeviceIDRequest
-	decoder := json.NewDecoder(r.Body)
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&req); err != nil {
-		writeError(w, apperrors.ErrInvalidArgument)
+	req, err := decodeJSON[multipressDeviceIDRequest](r)
+	if err != nil {
+		writeError(w, err)
 		return
 	}
 
@@ -134,16 +105,9 @@ func (s *apiServer) multipressStopHandler(w http.ResponseWriter, r *http.Request
 }
 
 func (s *apiServer) multipressExhaustHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		w.WriteHeader(http.StatusMethodNotAllowed)
-		return
-	}
-
-	var req multipressDeviceIDRequest
-	decoder := json.NewDecoder(r.Body)
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&req); err != nil {
-		writeError(w, apperrors.ErrInvalidArgument)
+	req, err := decodeJSON[multipressDeviceIDRequest](r)
+	if err != nil {
+		writeError(w, err)
 		return
 	}
 
@@ -161,11 +125,6 @@ func (s *apiServer) multipressExhaustHandler(w http.ResponseWriter, r *http.Requ
 }
 
 func (s *apiServer) multipressReadPressureHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		w.WriteHeader(http.StatusMethodNotAllowed)
-		return
-	}
-
 	deviceID := r.URL.Query().Get("deviceId")
 	if deviceID == "" {
 		writeError(w, apperrors.ErrInvalidArgument)
@@ -185,11 +144,6 @@ func (s *apiServer) multipressReadPressureHandler(w http.ResponseWriter, r *http
 }
 
 func (s *apiServer) multipressReadStabilityHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		w.WriteHeader(http.StatusMethodNotAllowed)
-		return
-	}
-
 	deviceID := r.URL.Query().Get("deviceId")
 	if deviceID == "" {
 		writeError(w, apperrors.ErrInvalidArgument)
@@ -208,73 +162,56 @@ func (s *apiServer) multipressReadStabilityHandler(w http.ResponseWriter, r *htt
 	})
 }
 
-func (s *apiServer) multipressUnitHandler(w http.ResponseWriter, r *http.Request) {
-	switch r.Method {
-	case http.MethodGet:
-		deviceID := r.URL.Query().Get("deviceId")
-		if deviceID == "" {
-			writeError(w, apperrors.ErrInvalidArgument)
-			return
-		}
-
-		unit, err := s.multipressService.ReadUnit(r.Context(), deviceID)
-		if err != nil {
-			log.Printf("[API multipressUnitHandler GET] %s error: %v", deviceID, err)
-			writeError(w, err)
-			return
-		}
-		log.Printf("[API multipressUnitHandler GET] %s → %q", deviceID, unit)
-
-		writeSuccess(w, http.StatusOK, map[string]any{
-			"unit":     unit,
-			"deviceId": deviceID,
-		})
-
-	case http.MethodPost:
-		var req multipressSetUnitRequest
-		decoder := json.NewDecoder(r.Body)
-		decoder.DisallowUnknownFields()
-		if err := decoder.Decode(&req); err != nil {
-			writeError(w, apperrors.ErrInvalidArgument)
-			return
-		}
-
-		if req.DeviceID == "" || req.Unit == "" {
-			writeError(w, apperrors.ErrInvalidArgument)
-			return
-		}
-		log.Printf("[API multipressUnitHandler POST] %s → %q", req.DeviceID, req.Unit)
-
-		if err := s.multipressService.SetUnit(r.Context(), req.DeviceID, req.Unit); err != nil {
-			log.Printf("[API multipressUnitHandler POST] %s error: %v", req.DeviceID, err)
-			writeError(w, err)
-			return
-		}
-
-		log.Printf("[API multipressUnitHandler POST] %s done", req.DeviceID)
-		writeSuccess(w, http.StatusOK, map[string]string{"status": "ok"})
-
-	default:
-		w.WriteHeader(http.StatusMethodNotAllowed)
-	}
-}
-
-func (s *apiServer) multipressDevicesHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		w.WriteHeader(http.StatusMethodNotAllowed)
+func (s *apiServer) multipressGetUnitHandler(w http.ResponseWriter, r *http.Request) {
+	deviceID := r.URL.Query().Get("deviceId")
+	if deviceID == "" {
+		writeError(w, apperrors.ErrInvalidArgument)
 		return
 	}
 
+	unit, err := s.multipressService.ReadUnit(r.Context(), deviceID)
+	if err != nil {
+		log.Printf("[API multipressUnitHandler GET] %s error: %v", deviceID, err)
+		writeError(w, err)
+		return
+	}
+	log.Printf("[API multipressUnitHandler GET] %s → %q", deviceID, unit)
+
+	writeSuccess(w, http.StatusOK, map[string]any{
+		"unit":     unit,
+		"deviceId": deviceID,
+	})
+}
+
+func (s *apiServer) multipressSetUnitHandler(w http.ResponseWriter, r *http.Request) {
+	req, err := decodeJSON[multipressSetUnitRequest](r)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+
+	if req.DeviceID == "" || req.Unit == "" {
+		writeError(w, apperrors.ErrInvalidArgument)
+		return
+	}
+	log.Printf("[API multipressUnitHandler POST] %s → %q", req.DeviceID, req.Unit)
+
+	if err := s.multipressService.SetUnit(r.Context(), req.DeviceID, req.Unit); err != nil {
+		log.Printf("[API multipressUnitHandler POST] %s error: %v", req.DeviceID, err)
+		writeError(w, err)
+		return
+	}
+
+	log.Printf("[API multipressUnitHandler POST] %s done", req.DeviceID)
+	writeSuccess(w, http.StatusOK, map[string]string{"status": "ok"})
+}
+
+func (s *apiServer) multipressDevicesHandler(w http.ResponseWriter, _ *http.Request) {
 	states := s.multipressService.ListDeviceStates()
 	writeSuccess(w, http.StatusOK, states)
 }
 
 func (s *apiServer) multipressStopAllHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		w.WriteHeader(http.StatusMethodNotAllowed)
-		return
-	}
-
 	if err := s.multipressService.StopAll(r.Context()); err != nil {
 		writeError(w, err)
 		return

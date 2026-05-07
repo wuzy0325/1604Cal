@@ -4,6 +4,7 @@ import (
 	"testing"
 	"time"
 
+	eventtypes "cal1604/internal/events"
 	"cal1604/internal/workflow"
 )
 
@@ -50,13 +51,13 @@ func TestStabilityMonitorPublishesProgressAndAchieved(t *testing.T) {
 	progressEvents := 0
 	achievedEvents := 0
 	for _, event := range events {
-		if event.eventType == "calibration.stability.progress" {
+		if event.eventType == eventtypes.EventCalibrationStabilityProgress {
 			progressEvents++
 			if event.status.Progress < 0 || event.status.Progress > 100 {
 				t.Fatalf("progress out of range: %d", event.status.Progress)
 			}
 		}
-		if event.eventType == "calibration.stability.achieved" {
+		if event.eventType == eventtypes.EventCalibrationStabilityAchieved {
 			achievedEvents++
 		}
 	}
@@ -80,7 +81,7 @@ func TestStabilityMonitorPublishesLostEvent(t *testing.T) {
 
 	hasLost := false
 	for _, eventType := range events {
-		if eventType == "calibration.stability.lost" {
+		if eventType == eventtypes.EventCalibrationStabilityLost {
 			hasLost = true
 			break
 		}

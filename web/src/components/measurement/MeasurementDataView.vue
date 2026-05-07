@@ -653,7 +653,7 @@ $amber: #f59e0b;
 
 .row-current {
   background: rgba(16, 185, 129, 0.06);
-  border-left: 2px solid $mint;
+  border-left: 1px solid $mint;
 }
 
 .empty-table-state {
