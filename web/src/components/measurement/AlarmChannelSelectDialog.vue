@@ -19,7 +19,7 @@
           :class="{ selected: selected.includes(ch) }"
           @click="toggle(ch)"
         >
-          <span class="channel-label">通道{{ ch + 1 }}</span>
+          <span class="channel-label">通道{{ ch }}</span>
           <el-icon v-if="selected.includes(ch)" class="check-icon"><Check /></el-icon>
         </div>
       </div>
@@ -47,7 +47,7 @@ const emit = defineEmits<{
   confirm: [channels: number[]]
 }>()
 
-const allChannels = Array.from({ length: 16 }, (_, i) => i)
+const allChannels = Array.from({ length: 16 }, (_, i) => i + 1)
 const selected = ref<number[]>([...allChannels])
 
 function toggle(ch: number) {
