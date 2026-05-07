@@ -55,6 +55,7 @@ export const usePressurePointStore = defineStore('pressurePoint', () => {
     pressureMode?: string
     channels?: number[]
     params?: { points: number; averageCount: number; minValue: number; maxValue: number; stableTime: number; precision: number; precisionLevel: string }
+    silent?: boolean
   }) => {
     try {
       const channels = opts?.channels ?? []
@@ -82,7 +83,9 @@ export const usePressurePointStore = defineStore('pressurePoint', () => {
         actualPressure: p.actualPressure
       }))
 
-      ElMessage.success(`已生成 ${points.length} 个压力点`)
+      if (!opts?.silent) {
+        ElMessage.success(`已生成 ${points.length} 个压力点`)
+      }
       savePoints(pressurePoints.value)
       return true
     } catch (error) {

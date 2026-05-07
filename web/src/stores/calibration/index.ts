@@ -104,12 +104,13 @@ export const useCalibrationStore = defineStore('calibration', () => {
 
   const setSelectedChannels = calibrationConfig.setSelectedChannels
 
-  const generatePressurePoints = async (opts?: { controlMode?: string; pressureMode?: string }) => {
+  const generatePressurePoints = async (opts?: { controlMode?: string; pressureMode?: string; silent?: boolean }) => {
     const activeControlMode: 'auto' | 'manual' = opts?.controlMode === 'manual' ? 'manual' : controlMode.value
     await pressurePointStore.generatePressurePoints({
       ...opts,
       controlMode: activeControlMode,
       channels: selectedChannels.value,
+      silent: opts?.silent,
       params: {
         points: calibrationParams.value.points,
         averageCount: calibrationParams.value.averageCount,
@@ -306,8 +307,7 @@ export const useCalibrationStore = defineStore('calibration', () => {
     currentCollectingPoint.value = 0
     setStep(CalibrationStep.DEVICE_CONNECT)
     sessionState.value = 'idle'
-    calibrationConfig.resetChannels()
-    pressurePointStore.clearPoints()
+    pressurePointStore.resetCollection()
     ElMessage.success('校准流程已重置')
   }
 
