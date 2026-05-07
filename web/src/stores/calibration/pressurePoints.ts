@@ -54,7 +54,7 @@ export const usePressurePointStore = defineStore('pressurePoint', () => {
     controlMode?: string
     pressureMode?: string
     channels?: number[]
-    params?: { points: number; averageCount: number; minValue: number; maxValue: number; stableTime: number }
+    params?: { points: number; averageCount: number; minValue: number; maxValue: number; stableTime: number; precision: number; precisionLevel: string }
   }) => {
     try {
       const channels = opts?.channels ?? []
@@ -67,7 +67,9 @@ export const usePressurePointStore = defineStore('pressurePoint', () => {
         minPressure: params?.minValue ?? 0,
         maxPressure: params?.maxValue ?? 100,
         stableWaitMs: (params?.stableTime ?? 3) * 1000,
-        controlMode: (opts?.controlMode as 'auto' | 'manual') || undefined
+        controlMode: (opts?.controlMode as 'auto' | 'manual') || undefined,
+        precision: params?.precision ?? 2,
+        precisionLevel: Number(params?.precisionLevel) || 0.05
       })
 
       const points = await apiGeneratePoints()

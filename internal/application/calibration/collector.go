@@ -30,6 +30,7 @@ func (s *Service) Collect(ctx context.Context, pointIndex int) ([]float64, error
 	if avgCount < 1 {
 		avgCount = 1
 	}
+	prec := s.config.Precision
 	s.mu.Unlock()
 
 	s.updatePointStatus(pointIndex, domain.PointStatusCollecting)
@@ -73,6 +74,13 @@ func (s *Service) Collect(ctx context.Context, pointIndex int) ([]float64, error
 
 		// 计算平均值
 		averaged = domain.AverageSamples(allSamples)
+	}
+
+	// 按配置精度截断采集数据
+	if prec > 0 {
+		for i := range averaged {
+			averaged[i] = domain.RoundToPrecision(averaged[i], prec)
+		}
 	}
 
 	s.mu.Lock()

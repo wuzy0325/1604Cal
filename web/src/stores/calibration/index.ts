@@ -115,7 +115,9 @@ export const useCalibrationStore = defineStore('calibration', () => {
         averageCount: calibrationParams.value.averageCount,
         minValue: calibrationParams.value.minValue,
         maxValue: calibrationParams.value.maxValue,
-        stableTime: calibrationParams.value.stableTime
+        stableTime: calibrationParams.value.stableTime,
+        precision: calibrationParams.value.precision,
+        precisionLevel: calibrationParams.value.precisionLevel
       }
     })
   }
@@ -148,7 +150,9 @@ export const useCalibrationStore = defineStore('calibration', () => {
         averageCount: calibrationParams.value.averageCount,
         minValue: calibrationParams.value.minValue,
         maxValue: calibrationParams.value.maxValue,
-        stableTime: calibrationParams.value.stableTime
+        stableTime: calibrationParams.value.stableTime,
+        precision: calibrationParams.value.precision,
+        precisionLevel: calibrationParams.value.precisionLevel
       }
     })
     if (!pointsReady || pressurePointStore.pressurePoints.length === 0) {
@@ -172,6 +176,8 @@ export const useCalibrationStore = defineStore('calibration', () => {
         maxPressure: calibrationParams.value.maxValue,
         stableWaitMs: calibrationParams.value.stableTime * 1000,
         controlMode: activeControlMode,
+        precision: calibrationParams.value.precision,
+        precisionLevel: Number(calibrationParams.value.precisionLevel) || 0.05,
         pressureMode: calibrationParams.value.pressureMode
       })
       const data = await triggerSessionAction('start')

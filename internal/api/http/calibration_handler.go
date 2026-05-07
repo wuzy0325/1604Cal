@@ -23,6 +23,8 @@ type setConfigRequest struct {
 	StableWaitMs   int     `json:"stableWaitMs"`
 	ControlMode    string  `json:"controlMode,omitempty"`
 	PressureMode   string  `json:"pressureMode,omitempty"`
+	Precision      int     `json:"precision,omitempty"`
+	PrecisionLevel float64 `json:"precisionLevel,omitempty"`
 }
 
 type setChannelsRequest struct {
@@ -77,6 +79,8 @@ func (s *apiServer) calibrationSetConfigHandler(w http.ResponseWriter, r *http.R
 		StableWaitMs:   req.StableWaitMs,
 		ControlMode:    req.ControlMode,
 		PressureMode:   req.PressureMode,
+		Precision:      req.Precision,
+		PrecisionLevel: req.PrecisionLevel,
 	}
 	s.calibrationService.SetConfig(config)
 

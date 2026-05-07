@@ -12,13 +12,7 @@
       </div>
 
       <div class="action-group">
-        <template v-if="calibrationStore.controlMode === 'manual' && isRunning">
-          <ManualControlPanel
-            :max-pressure="calibrationParams.maxValue"
-            :stability-status="stabilityStatus"
-          />
-        </template>
-        <template v-else-if="sessionState === 'await_alarm_resolution'">
+        <template v-if="sessionState === 'await_alarm_resolution'">
           <button
             type="button"
             class="ctrl-btn btn-warning"
@@ -98,7 +92,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, inject } from 'vue'
+import { computed } from 'vue'
 import {
   VideoPlay,
   VideoPause,
@@ -109,11 +103,8 @@ import {
   CircleCheck
 } from '@element-plus/icons-vue'
 import { useCalibrationStore } from '@/stores/calibration'
-import ManualControlPanel from './ManualControlPanel.vue'
-import { stabilityStatusKey } from '@/composables/useCalibrationSync'
 
 const calibrationStore = useCalibrationStore()
-const stabilityStatus = inject(stabilityStatusKey)!
 
 const sessionState = computed(() => calibrationStore.sessionState)
 const isRunning = computed(() => calibrationStore.isRunning)
@@ -126,8 +117,6 @@ const progressPercent = computed(() => {
   if (total === 0) return 0
   return Math.round((completedCount.value / total) * 100)
 })
-
-const calibrationParams = computed(() => calibrationStore.calibrationParams)
 
 </script>
 
@@ -170,14 +159,13 @@ $amber: #f59e0b;
 /* ── 进度 + 操作按钮 并列 ── */
 .control-main {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 16px;
   flex-wrap: wrap;
 }
 
 .progress-group {
-  flex: 1;
-  min-width: 180px;
+  flex: 0 0 200px;
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -220,9 +208,10 @@ $amber: #f59e0b;
 .action-group {
   display: flex;
   flex-wrap: wrap;
-  align-items: center;
+  align-items: flex-start;
   gap: 8px;
-  flex-shrink: 0;
+  flex: 1;
+  min-width: 280px;
 }
 
 .ctrl-btn {

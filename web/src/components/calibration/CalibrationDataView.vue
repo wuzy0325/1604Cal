@@ -199,7 +199,7 @@
           >
             <template #default="{ row }">
               <span :class="getChannelClass(row, ch - 1)">
-                {{ row.channelValues[ch - 1]?.toFixed(3) || '--' }}
+                {{ row.channelValues[ch - 1]?.toFixed(precision) || '--' }}
               </span>
             </template>
           </el-table-column>
@@ -251,6 +251,8 @@ defineEmits<{
 }>()
 
 const calibrationStore = useCalibrationStore()
+
+const precision = computed(() => calibrationStore.calibrationParams.precision || 2)
 
 // 测点状态
 const getPointStatusType = (status: string) => {
@@ -374,7 +376,7 @@ const exportCSV = () => {
     p.targetPressure.toFixed(2),
     p.actualPressure?.toFixed(2) || '--',
     getPointStatusText(p.status),
-    ...channels.map(ch => p.collectedData?.[ch - 1]?.toFixed(4) || '--')
+    ...channels.map(ch => p.collectedData?.[ch - 1]?.toFixed(precision.value) || '--')
   ])
 
   const csvContent = [headers.join(','), ...rows.map(r => r.join(','))].join('\n')
