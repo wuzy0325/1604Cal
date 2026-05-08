@@ -126,7 +126,7 @@
           重置
         </button>
         <button
-          v-if="measurementStore.totalRows > 0"
+          v-if="measurementStore.totalRows > 0 || hasCompletedPoints"
           type="button"
           class="ctrl-btn btn-export"
           @click="$emit('export')"
@@ -162,10 +162,6 @@
             <input v-model="measurementStore.alarmConfig.confirmOnAlarm" type="checkbox" />
             <span>报警确认</span>
           </label>
-          <button class="channel-select-btn" @click="$emit('select-channel')">
-            通道选择
-            <span class="channel-count">({{ enabledChannelsDesc }})</span>
-          </button>
         </div>
       </div>
     </div>
@@ -218,7 +214,6 @@ defineEmits<{
   stop: []
   reset: []
   export: []
-  'select-channel': []
   'manual-start': []
   'manual-pressurize': []
 }>()
@@ -261,13 +256,6 @@ const canManualStart = computed(() =>
   measurementStore.points.length > 0 &&
   ['idle', 'stopped', 'completed'].includes(measurementStore.state)
 )
-
-const enabledChannelsDesc = computed(() => {
-  const chs = measurementStore.channels
-  if (chs.length === 0) return '全部'
-  if (chs.length <= 3) return chs.join(',')
-  return `${chs[0]}-${chs[chs.length - 1]}`
-})
 
 const canStart = computed(() => {
   if (typeof props.canStart === 'boolean') {

@@ -81,6 +81,7 @@ export interface MeasurementAlarmConfig {
   confirmOnAlarm: boolean
   soundEnabled: boolean
   threshold: number
+  isRelative: boolean
 }
 
 export interface MeasurementAlarm {

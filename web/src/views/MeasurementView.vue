@@ -57,7 +57,6 @@
             @stop="handleStop"
             @reset="handleReset"
             @export="exportDialogVisible = true"
-            @select-channel="channelDialogVisible = true"
             @manual-start="handleManualStart"
             @manual-pressurize="handleManualPressurize"
           />
@@ -75,12 +74,6 @@
       </main>
     </div>
 
-    <AlarmChannelSelectDialog
-      :visible="channelDialogVisible"
-      @close="channelDialogVisible = false"
-      @confirm="onChannelConfirm"
-    />
-
     <ExportReportDialog
       :visible="exportDialogVisible"
       :template-name="reportTemplateName"
@@ -90,6 +83,13 @@
       @close="exportDialogVisible = false"
       @export="handleExport"
       @select-path="handleSelectPath"
+    />
+
+    <AlarmConfirmDialog
+      :visible="showAlarmDialog"
+      :point="alarmPoint"
+      :alarm="measurementStore.alarmData"
+      @decision="handleAlarmDecision"
     />
   </PageLayout>
 </template>
@@ -109,8 +109,8 @@ import MeasurementSidebar from '@/components/measurement/MeasurementSidebar.vue'
 import MeasurementControl from '@/components/measurement/MeasurementControl.vue'
 import MeasurementParamsPanel from '@/components/measurement/MeasurementParamsPanel.vue'
 import MeasurementDataView from '@/components/measurement/MeasurementDataView.vue'
-import AlarmChannelSelectDialog from '@/components/measurement/AlarmChannelSelectDialog.vue'
 import ExportReportDialog from '@/components/measurement/ExportReportDialog.vue'
+import AlarmConfirmDialog from '@/components/measurement/AlarmConfirmDialog.vue'
 
 const router = useRouter()
 const measurementStore = useMeasurementStore()
@@ -118,7 +118,6 @@ const deviceStore = useMeasurementDeviceStore()
 
 const sidebarCollapsed = ref(false)
 const sidebarRef = ref()
-const channelDialogVisible = ref(false)
 const exportDialogVisible = ref(false)
 const isExporting = ref(false)
 
@@ -217,12 +216,6 @@ async function handleCollectPoint(pointIndex: number) {
   await measurementStore.manualCollect(pointIndex)
 }
 
-/* ── 报警通道 ── */
-function onChannelConfirm(channels: number[]) {
-  measurementStore.alarmConfig.enabledChannels = channels
-  channelDialogVisible.value = false
-}
-
 /* ── 报警配置自动保存 ── */
 let alarmSaveTimer: ReturnType<typeof setTimeout> | null = null
 watch(
@@ -230,16 +223,44 @@ watch(
     measurementStore.alarmConfig.enabled,
     measurementStore.alarmConfig.soundEnabled,
     measurementStore.alarmConfig.confirmOnAlarm,
-    measurementStore.alarmConfig.enabledChannels
+    measurementStore.channels,
+    measurementStore.measurementParams.precisionLevel
   ],
   () => {
     if (alarmSaveTimer) clearTimeout(alarmSaveTimer)
     alarmSaveTimer = setTimeout(() => {
-      saveMeasurementAlarmConfig(measurementStore.alarmConfig)
+      const cfg = { ...measurementStore.alarmConfig }
+      cfg.enabledChannels = [...measurementStore.channels]
+      cfg.threshold = measurementStore.measurementParams.precisionLevel
+      cfg.isRelative = true
+      saveMeasurementAlarmConfig(cfg)
     }, 250)
   },
   { deep: true }
 )
+
+/* ── 报警弹窗 ── */
+const showAlarmDialog = computed(() =>
+  measurementStore.alarmPending && measurementStore.alarmConfig.confirmOnAlarm
+)
+
+const alarmPoint = computed(() => {
+  const d = measurementStore.alarmData
+  if (!d) return undefined
+  return measurementStore.points.find(p => p.id === d.pointId)
+})
+
+// 非确认模式：报警直接走 ElMessage 通知
+watch(() => measurementStore.alarmPending, (pending) => {
+  if (pending && !measurementStore.alarmConfig.confirmOnAlarm && measurementStore.alarmData) {
+    const a = measurementStore.alarmData
+    ElMessage.warning(`报警：${a.overLimitChannels.length} 个通道精度超限，最大偏差 ${(a.maxDeviation * 100).toFixed(2)}%`)
+  }
+})
+
+async function handleAlarmDecision(decision: 'continue' | 'retry') {
+  await measurementStore.resolveAlarm(decision)
+}
 
 /* ── 导出 ── */
 async function handleSelectPath() {

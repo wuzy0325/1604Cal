@@ -77,7 +77,7 @@ export const useMeasurementStore = defineStore('measurement', () => {
     precision: 3,
     averageCount: 3,
     stableWaitS: 3,
-    precisionLevel: 0.05,
+    precisionLevel: 0.0002,
     pressureMode: 'single' as 'single' | 'roundTrip',
     controlMode: 'auto' as 'auto' | 'manual'
   })
@@ -91,7 +91,8 @@ export const useMeasurementStore = defineStore('measurement', () => {
     enabledChannels: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16],
     confirmOnAlarm: false,
     soundEnabled: true,
-    threshold: 5.0
+    threshold: 5.0,
+    isRelative: true
   })
   const alarmPending = ref(false)
   const alarmData = ref<AlarmData | null>(null)
