@@ -67,7 +67,7 @@
 
           <section class="card-block card-block-data">
             <div class="card-accent" />
-            <CalibrationDataView @select-template="dialogsRef?.openTemplateDialog()" />
+            <CalibrationDataView @select-template="dialogsRef?.openTemplateDialog()" @export-report="dialogsRef?.openExportDialog()" />
             <div v-if="dialogsRef?.templateFilename" class="template-bar">
               <el-icon><DocumentChecked /></el-icon>
               <span>当前报告模板：{{ dialogsRef.templateFilename }}</span>

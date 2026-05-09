@@ -148,8 +148,10 @@ func newRouter(
 	)
 	if appCfg != nil {
 		server.measurementService.SetConfig(measurementConfigFromParams(appCfg.MeasurementParams))
+		server.measurementService.SetAlarmConfig(appCfg.Alarm)
 	} else {
 		server.measurementService.SetConfig(measurementConfigFromParams(config.Default().MeasurementParams))
+		server.measurementService.SetAlarmConfig(config.Default().Alarm)
 	}
 
 	// 注入事件发布、驱动提供者和 session 服务到校准服务
@@ -220,7 +222,7 @@ func newRouter(
 	mux.HandleFunc("POST /api/v1/measurement/points/generate", server.measurementGeneratePointsHandler)
 	mux.HandleFunc("GET /api/v1/measurement/points", server.measurementPointsHandler)
 	mux.HandleFunc("GET /api/v1/measurement/data", server.measurementDataHandler)
-	mux.HandleFunc("GET /api/v1/measurement/export", server.measurementExportHandler)
+	mux.HandleFunc("POST /api/v1/measurement/export", server.measurementExportHandler)
 	mux.HandleFunc("GET /api/v1/config/measurement-alarm", server.measurementGetAlarmConfigHandler)
 	mux.HandleFunc("POST /api/v1/config/measurement-alarm", server.measurementSetAlarmConfigHandler)
 	mux.HandleFunc("POST /api/v1/measurement/alarm/resolve", server.measurementAlarmResolveHandler)

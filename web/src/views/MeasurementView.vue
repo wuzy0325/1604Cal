@@ -78,11 +78,11 @@
       :visible="exportDialogVisible"
       :template-name="reportTemplateName"
       :point-count="measurementStore.points.length"
+      :channel-count="measurementStore.channels.length"
       :pressure-mode="measurementStore.measurementParams.pressureMode"
       :exporting="isExporting"
       @close="exportDialogVisible = false"
       @export="handleExport"
-      @select-path="handleSelectPath"
     />
 
     <AlarmConfirmDialog
@@ -103,7 +103,7 @@ import { useMeasurementStore } from '@/stores/measurement'
 import type { MeasurementState } from '@/stores/measurement/types'
 import { useMeasurementDeviceStore } from '@/stores/measurement/deviceStore'
 import { useMeasurementSync } from '@/composables/useMeasurementSync'
-import { saveMeasurementAlarmConfig } from '@/api/measurement'
+import { saveMeasurementAlarmConfig, exportMeasurementReport } from '@/api/measurement'
 import PageLayout from '@/components/common/PageLayout.vue'
 import MeasurementSidebar from '@/components/measurement/MeasurementSidebar.vue'
 import MeasurementControl from '@/components/measurement/MeasurementControl.vue'
@@ -133,8 +133,8 @@ const hasPressureDevice = computed(() =>
 
 const reportTemplateName = computed(() => {
   const count = measurementStore.points.length
-  const mode = measurementStore.measurementParams.pressureMode
-  return `${count}${mode === 'single' ? 's' : 'm'}.xlsx`
+  const mode = measurementStore.measurementParams.pressureMode === 'single' ? 's' : 'm'
+  return `${count}点${mode === 's' ? '单程' : '回程'}模板`
 })
 
 onMounted(async () => {
@@ -259,27 +259,26 @@ watch(() => measurementStore.alarmPending, (pending) => {
 })
 
 async function handleAlarmDecision(decision: 'continue' | 'retry') {
-  await measurementStore.resolveAlarm(decision)
+  if (decision === 'retry') {
+    const pointIndex = alarmPoint.value?.index
+    if (pointIndex === undefined) return
+    await measurementStore.resolveAlarm('retry')
+    await measurementStore.manualCollect(pointIndex)
+  } else {
+    await measurementStore.resolveAlarm(decision)
+  }
 }
 
 /* ── 导出 ── */
-async function handleSelectPath() {
-  ElMessage.info('请选择导出路径（当前尚未对接文件对话框 API）')
-}
-
 async function handleExport(path: string) {
   if (!path) { ElMessage.warning('请先选择导出路径'); return }
   isExporting.value = true
   try {
-    const url = measurementStore.exportUrl
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `measurement-export-${Date.now()}.csv`
-    a.click()
+    await exportMeasurementReport(path)
     ElMessage.success('报告导出成功')
     exportDialogVisible.value = false
-  } catch {
-    ElMessage.error('报告导出失败')
+  } catch (e) {
+    ElMessage.error(e instanceof Error ? e.message : '报告导出失败')
   } finally {
     isExporting.value = false
   }

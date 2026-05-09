@@ -26,8 +26,7 @@ vi.mock('@/api/measurement', () => ({
   startMeasurement: vi.fn(),
   pauseMeasurement: vi.fn(),
   stopMeasurement: vi.fn(),
-  fetchMeasurementData: vi.fn(),
-  getMeasurementExportUrl: vi.fn(() => '/api/v1/measurement/export?format=csv')
+  fetchMeasurementData: vi.fn()
 }))
 
 vi.mock('element-plus', async () => {
@@ -320,13 +319,6 @@ describe('useMeasurementStore', () => {
       store.syncState('paused')
       expect(store.state).toBe('paused')
       expect(store.isPaused).toBe(true)
-    })
-  })
-
-  describe('exportUrl', () => {
-    it('returns measurement export URL', () => {
-      const store = useMeasurementStore()
-      expect(store.exportUrl).toBe('/api/v1/measurement/export?format=csv')
     })
   })
 

@@ -5,6 +5,7 @@
     width="520px"
     :close-on-click-modal="false"
     :show-close="false"
+    draggable
     class="measurement-alarm-dialog"
   >
     <div class="alarm-body">

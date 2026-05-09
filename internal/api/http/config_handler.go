@@ -135,6 +135,7 @@ func (s *apiServer) alarmSaveConfigHandler(w http.ResponseWriter, r *http.Reques
 		s.persistConfig()
 	}
 	s.calibrationService.SetAlarmConfig(cfg)
+	s.measurementService.SetAlarmConfig(cfg)
 	writeSuccess(w, http.StatusOK, map[string]string{"status": "ok"})
 }
 

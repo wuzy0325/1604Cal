@@ -48,7 +48,7 @@ export function useMeasurementSync() {
           break
         case EVENT_MEASUREMENT_ALARM_RESOLVED:
           store.alarmPending = false
-          store.alarmData = null
+          // 保留 alarmData 不清理，红色标记持续到新数据覆盖
           break
         case EVENT_MEASUREMENT_POINT_STATUS: {
           const updated = payload.data as MeasurementPoint
@@ -62,6 +62,8 @@ export function useMeasurementSync() {
           if (ptIdx >= 0) {
             store.points[ptIdx] = { ...store.points[ptIdx], collectedData: collected.data, status: 'completed' }
           }
+          // 新采集数据到达，清除旧报警标记；若仍超限后续 alarm.triggered 会重新设置
+          store.alarmData = null
           break
         }
         case EVENT_MULTIPRESS_PRESSURE_UPDATE: {

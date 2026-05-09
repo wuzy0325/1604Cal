@@ -5,61 +5,45 @@
     title="选择报告模板"
     width="380px"
   >
-    <el-form
-      label-width="70px"
-    >
+    <el-form label-width="70px">
       <el-form-item label="测点数">
-        <el-input-number
-          v-model="templatePoints"
-          :min="2"
-          :max="6"
-        />
+        <el-input-number v-model="templatePoints" :min="2" :max="6" />
       </el-form-item>
       <el-form-item label="模式">
         <el-select v-model="templateMode">
-          <el-option
-            label="单程"
-            value="single"
-          />
-          <el-option
-            label="回程"
-            value="return"
-          />
+          <el-option label="单程" value="single" />
+          <el-option label="回程" value="return" />
         </el-select>
       </el-form-item>
     </el-form>
     <template #footer>
-      <el-button @click="showTemplateDialog = false">
-        取消
-      </el-button>
-      <el-button
-        type="primary"
-        @click="confirmTemplate"
-      >
-        确定
-      </el-button>
+      <el-button @click="showTemplateDialog = false">取消</el-button>
+      <el-button type="primary" @click="confirmTemplate">确定</el-button>
     </template>
   </el-dialog>
 
-  <div
-    v-if="errorMessage"
-    class="error-message"
-  >
+  <div v-if="errorMessage" class="error-message">
     <el-icon><Warning /></el-icon>
     {{ errorMessage }}
   </div>
+
+  <!-- 报告导出对话框 -->
+  <ReportExportDialog ref="reportExportRef" @done="onExportDone" />
 </template>
 
 <script setup lang="ts">
 import { ref } from 'vue'
 import { Warning } from '@element-plus/icons-vue'
-import { selectReportTemplate } from "@/api/calibration"
+import { selectReportTemplate } from '@/api/calibration'
+import ReportExportDialog from '@/components/calibration/ReportExportDialog.vue'
 
 const showTemplateDialog = ref(false)
 const templatePoints = ref(5)
 const templateMode = ref<'single' | 'return'>('single')
 const templateFilename = ref('')
 const errorMessage = ref('')
+
+const reportExportRef = ref<{ open: () => void }>()
 
 function openTemplateDialog() {
   showTemplateDialog.value = true
@@ -76,9 +60,19 @@ async function confirmTemplate() {
   }
 }
 
+/** 打开报告导出对话框。 */
+function openExportDialog() {
+  reportExportRef.value?.open()
+}
+
+function onExportDone() {
+  templateFilename.value = ''
+}
+
 defineExpose({
   openTemplateDialog,
-  templateFilename
+  openExportDialog,
+  templateFilename,
 })
 </script>
 

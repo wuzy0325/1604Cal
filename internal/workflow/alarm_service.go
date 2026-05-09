@@ -63,15 +63,19 @@ func (s *AlarmService) Evaluate(target, actual, levelPercent float64) AlarmResul
 // EvaluateMultiChannel 多通道报警判定。
 // channelData: channelIndex -> measured value
 // 返回超过限值的通道列表、最大偏差和是否触发报警。
-func (s *AlarmService) EvaluateMultiChannel(alarmConfig domain.AlarmConfig, target float64, maxPressure float64, channelData map[int]float64) MultiChannelAlarmResult {
+func (s *AlarmService) EvaluateMultiChannel(alarmConfig domain.AlarmConfig, target float64, maxPressure float64, minPressure float64, channelData map[int]float64) MultiChannelAlarmResult {
 	if !alarmConfig.Enabled {
 		return MultiChannelAlarmResult{}
 	}
 
-	// 满量程阈值：|maxPressure| × precisionThreshold / 100
-	allowance := math.Abs(maxPressure) * alarmConfig.PrecisionThreshold / 100
+	// 量程引用误差：(maxPressure - minPressure) × precisionThreshold
+	span := maxPressure - minPressure
+	if span < 0 {
+		span = -span
+	}
+	allowance := span * alarmConfig.PrecisionThreshold
 	if allowance < 1e-10 {
-		allowance = math.Abs(target) * alarmConfig.PrecisionThreshold / 100
+		allowance = math.Abs(target) * alarmConfig.PrecisionThreshold
 	}
 
 	result := MultiChannelAlarmResult{

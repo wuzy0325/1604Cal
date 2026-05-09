@@ -1,5 +1,5 @@
 <template>
-  <el-dialog v-model="visible" title="报警通知" width="480px" :close-on-click-modal="false" :show-close="false">
+  <el-dialog v-model="visible" title="报警通知" width="480px" :close-on-click-modal="false" :show-close="false" draggable>
     <div class="alarm-details">
       <el-alert type="warning" :closable="false" title="采集数据超出阈值">
         <template #default>

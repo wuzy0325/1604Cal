@@ -6,6 +6,8 @@ import (
 	"os"
 	"strings"
 
+	"cal1604/internal/domain"
+
 	"github.com/xuri/excelize/v2"
 )
 
@@ -168,4 +170,242 @@ func ResolveUnit(deviceUnit, cachedUnit, dataUnit, defaultUnit string) string {
 		return defaultUnit
 	}
 	return "kPa"
+}
+
+// CreateMeasurementFallbackWorkbook 创建计量报告默认工作簿（无模板时使用）。
+// 版式参考 1604V2 模板：多通道块、中英文标题、边框、公式。
+func CreateMeasurementFallbackWorkbook(standardValues []float64, channels [][]float64, unit string, points []domain.PressurePoint, config domain.WorkflowConfig) *excelize.File {
+	f := excelize.NewFile()
+	sheet := "校准结果"
+	f.SetSheetName("Sheet1", sheet)
+
+	numChannels := len(channels)
+	if numChannels == 0 {
+		numChannels = 1
+	}
+	basePointCount := len(standardValues)
+	dataRowCount := basePointCount
+	if dataRowCount < 6 {
+		dataRowCount = 6
+	}
+	isRoundTrip := config.PressureMode == "roundTrip"
+
+	// 列宽
+	widths := []float64{21.125, 13, 13, 13, 4, 14.375, 13.625, 13.125, 13.25, 14.25, 13.5, 7.625}
+	for idx, w := range widths {
+		f.SetColWidth(sheet, colName(idx+1), colName(idx+1), w)
+	}
+
+	// 顶部结构
+	f.MergeCell(sheet, "I1", "I2")
+	f.MergeCell(sheet, "A3", "D3")
+	f.MergeCell(sheet, "A4", "D4")
+	f.MergeCell(sheet, "F3", "J3")
+	f.MergeCell(sheet, "F4", "J4")
+
+	f.SetRowHeight(sheet, 1, 26.45)
+	f.SetRowHeight(sheet, 2, 15)
+	f.SetRowHeight(sheet, 3, 23.1)
+	f.SetRowHeight(sheet, 4, 11.1)
+	f.SetRowHeight(sheet, 5, 39.75)
+	f.SetRowHeight(sheet, 6, 15)
+
+	f.SetCellValue(sheet, "C1", "证书号：")
+	f.SetCellValue(sheet, "C2", "Certificate No.")
+	f.SetCellValue(sheet, "A3", "校准结果")
+	f.SetCellValue(sheet, "A4", "Results of Calibration")
+
+	f.SetCellValue(sheet, "F3", "结果分析")
+	f.SetCellValue(sheet, "F4", "Results analysis")
+	f.SetCellValue(sheet, "F5", "设备编号：")
+	f.SetCellValue(sheet, "H5", "校准日期：")
+	f.SetCellValue(sheet, "J5", "校准单位：")
+	f.SetCellValue(sheet, "K5", unit)
+	f.SetCellValue(sheet, "F6", "准确度等级：")
+	f.SetCellValue(sheet, "G6", fmt.Sprintf("%.2f", config.PrecisionLevel*100))
+	f.SetCellValue(sheet, "H6", "Min 量程：")
+	f.SetCellValue(sheet, "J6", "Max 量程：")
+
+	if len(standardValues) > 0 {
+		minVal, maxVal := standardValues[0], standardValues[0]
+		for _, v := range standardValues {
+			if v < minVal {
+				minVal = v
+			}
+			if v > maxVal {
+				maxVal = v
+			}
+		}
+		f.SetCellValue(sheet, "I6", minVal)
+		f.SetCellValue(sheet, "K6", maxVal)
+	}
+
+	// 通道块
+	blockStep := 1 + 2 + dataRowCount + 1 // 标题 + 表头(2) + 数据 + 间隔
+
+	for chIdx := 0; chIdx < numChannels; chIdx++ {
+		blockStart := 7 + chIdx*blockStep
+		headerRow := blockStart + 1
+		dataStartRow := blockStart + 3
+		dataEndRow := dataStartRow + dataRowCount - 1
+
+		f.SetRowHeight(sheet, blockStart, 32.25)
+
+		f.SetCellValue(sheet, cellName(1, blockStart), "通道编号：")
+		f.SetCellValue(sheet, cellName(2, blockStart), fmt.Sprintf("CH%d", chIdx+1))
+		f.SetCellValue(sheet, cellName(3, blockStart), "单位：")
+		f.SetCellFormula(sheet, cellName(4, blockStart), "$K$5")
+		f.SetCellFormula(sheet, cellName(7, blockStart), fmt.Sprintf("B%d", blockStart))
+
+		// 左侧表头
+		f.MergeCell(sheet, cellName(1, headerRow), cellName(1, headerRow+1))
+		f.SetCellValue(sheet, cellName(1, headerRow), "标准压力值")
+
+		f.MergeCell(sheet, cellName(2, headerRow), cellName(2, headerRow+1))
+		f.SetCellValue(sheet, cellName(2, headerRow), "被校设备显示值")
+
+		if isRoundTrip {
+			f.MergeCell(sheet, cellName(3, headerRow), cellName(3, headerRow+1))
+			f.SetCellValue(sheet, cellName(3, headerRow), "回程值")
+		} else {
+			f.MergeCell(sheet, cellName(3, headerRow), cellName(3, headerRow+1))
+			f.SetCellValue(sheet, cellName(3, headerRow), "示值误差")
+		}
+
+		f.MergeCell(sheet, cellName(4, headerRow), cellName(4, headerRow+1))
+		f.SetCellValue(sheet, cellName(4, headerRow), "U（%FS）\n（k=2）")
+
+		// 右侧表头
+		f.SetCellValue(sheet, cellName(6, headerRow), "标准压力")
+		f.SetCellValue(sheet, cellName(7, headerRow), "丨Indication error丨\n/FS")
+		f.SetCellValue(sheet, cellName(8, headerRow), "max")
+		f.SetCellValue(sheet, cellName(9, headerRow), "Notes")
+		f.SetCellValue(sheet, cellName(10, headerRow), "Notes")
+		f.SetCellValue(sheet, cellName(11, headerRow), "Notes")
+
+		f.SetCellFormula(sheet, cellName(6, headerRow+1), fmt.Sprintf(`"（"&$K$5&"）"`))
+		f.SetCellValue(sheet, cellName(7, headerRow+1), "丨Indication error丨\n/FS")
+		f.SetCellValue(sheet, cellName(8, headerRow+1), "max")
+		f.SetCellValue(sheet, cellName(9, headerRow+1), "Notes")
+		f.SetCellValue(sheet, cellName(10, headerRow+1), "Notes")
+		f.SetCellValue(sheet, cellName(11, headerRow+1), "Notes")
+
+		// 合并右侧表头
+		f.MergeCell(sheet, cellName(7, headerRow), cellName(7, headerRow+1))
+		f.MergeCell(sheet, cellName(8, headerRow), cellName(8, headerRow+1))
+		f.MergeCell(sheet, cellName(9, headerRow), cellName(11, headerRow+1))
+
+		rightPanelStart := dataStartRow
+		rightPanelEnd := rightPanelStart + 5
+		f.MergeCell(sheet, cellName(8, rightPanelStart), cellName(8, rightPanelEnd))
+		f.MergeCell(sheet, cellName(9, rightPanelStart), cellName(11, rightPanelEnd))
+
+		f.SetCellFormula(sheet, cellName(8, dataStartRow), fmt.Sprintf("MAX(G%d:G%d)", dataStartRow, dataEndRow))
+
+		// 数据行填充
+		for row := dataStartRow; row <= dataEndRow; row++ {
+			rowOffset := row - dataStartRow
+
+			for col := 1; col <= 8; col++ {
+				// 第 3 列：示值误差（单程模式用公式）
+				if col == 3 && !isRoundTrip {
+					f.SetCellFormula(sheet, cellName(col, row), fmt.Sprintf("B%d-A%d", row, row))
+				}
+				// 第 4 列：不确定度
+				if col == 4 {
+					f.SetCellValue(sheet, cellName(col, row), 0.013)
+				}
+				// 第 6 列：标准压力引用
+				if col == 6 {
+					f.SetCellFormula(sheet, cellName(col, row), fmt.Sprintf("A%d", row))
+				}
+				// 第 7 列：示值误差/FS
+				if col == 7 {
+					f.SetCellFormula(sheet, cellName(col, row), fmt.Sprintf("ABS(C%d)/($K$6-$I$6)", row))
+				}
+
+				// 对齐
+				hAlign := "center"
+				if col <= 4 {
+					hAlign = "right"
+				}
+				cell := cellName(col, row)
+				style, _ := f.NewStyle(&excelize.Style{
+					Alignment: &excelize.Alignment{Horizontal: hAlign, Vertical: "middle", WrapText: true},
+				})
+				f.SetCellStyle(sheet, cell, cell, style)
+			}
+
+			// 填充标准压力值（第 1 列）和测量值（第 2 列）
+			if rowOffset < basePointCount {
+				stdVal := standardValues[rowOffset]
+				f.SetCellValue(sheet, cellName(1, row), math.Round(stdVal*100)/100)
+				if chIdx < len(channels) && rowOffset < len(channels[chIdx]) {
+					f.SetCellValue(sheet, cellName(2, row), math.Round(channels[chIdx][rowOffset]*1e6)/1e6)
+				}
+			}
+		}
+
+		// 左侧边框
+		thinStyle, _ := f.NewStyle(&excelize.Style{
+			Border: []excelize.Border{
+				{Type: "left", Color: "000000", Style: 1},
+				{Type: "right", Color: "000000", Style: 1},
+				{Type: "top", Color: "000000", Style: 1},
+				{Type: "bottom", Color: "000000", Style: 1},
+			},
+			Alignment: &excelize.Alignment{Horizontal: "right", Vertical: "middle"},
+		})
+		headerStyle, _ := f.NewStyle(&excelize.Style{
+			Border: []excelize.Border{
+				{Type: "left", Color: "000000", Style: 1},
+				{Type: "right", Color: "000000", Style: 1},
+				{Type: "top", Color: "000000", Style: 1},
+				{Type: "bottom", Color: "000000", Style: 1},
+			},
+			Font:      &excelize.Font{Bold: true},
+			Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "middle", WrapText: true},
+		})
+		rightStyle, _ := f.NewStyle(&excelize.Style{
+			Border: []excelize.Border{
+				{Type: "left", Color: "000000", Style: 1},
+				{Type: "right", Color: "000000", Style: 1},
+				{Type: "top", Color: "000000", Style: 1},
+				{Type: "bottom", Color: "000000", Style: 1},
+			},
+			Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "middle", WrapText: true},
+		})
+
+		for row := blockStart; row <= dataEndRow; row++ {
+			for col := 1; col <= 4; col++ {
+				cell := cellName(col, row)
+				if row <= headerRow+1 {
+					f.SetCellStyle(sheet, cell, cell, headerStyle)
+				} else {
+					f.SetCellStyle(sheet, cell, cell, thinStyle)
+				}
+			}
+		}
+		for row := headerRow; row <= rightPanelEnd; row++ {
+			for col := 6; col <= 11; col++ {
+				cell := cellName(col, row)
+				f.SetCellStyle(sheet, cell, cell, rightStyle)
+			}
+		}
+	}
+
+	return f
+}
+
+// colName 返回 Excel 列字母（1-based：1→A, 2→B, ...）。
+func colName(col int) string {
+	if col <= 26 {
+		return string(rune('A' - 1 + col))
+	}
+	return string(rune('A'-1+col/26)) + string(rune('A'-1+col%26))
+}
+
+// cellName 返回 Excel 单元格名称（如 A1, B2）。
+func cellName(col, row int) string {
+	return fmt.Sprintf("%s%d", colName(col), row)
 }

@@ -5,6 +5,7 @@ declare global {
       main: {
         App: {
           GetAPIPort: () => Promise<number>
+          ShowSaveFilePath: (defaultName: string, filterName: string, filterPattern: string) => Promise<string>
         }
       }
     }

@@ -359,6 +359,71 @@ func TestManualCollectCapturesPointData(t *testing.T) {
 	}
 }
 
+// fakeSequentialMeasureDriver 每次 CollectData 返回下一组数据，用于验证平铺存储。
+type fakeSequentialMeasureDriver struct {
+	fakeMeasureDriver
+	callCount int
+	allData   [][]float64
+}
+
+func (d *fakeSequentialMeasureDriver) CollectData(_ context.Context, _ []int) ([]float64, error) {
+	if d.callCount >= len(d.allData) {
+		return nil, nil
+	}
+	data := d.allData[d.callCount]
+	d.callCount++
+	return data, nil
+}
+
+func TestManualCollectFlatStorage(t *testing.T) {
+	seqDrv := &fakeSequentialMeasureDriver{
+		allData: [][]float64{
+			{1.0, 2.0}, // 第 1 次采样 2 通道
+			{1.1, 2.1}, // 第 2 次采样
+			{1.2, 2.2}, // 第 3 次采样
+		},
+	}
+	store := &fakeStore{devices: map[string]domain.Device{
+		"m1": {ID: "m1", Type: domain.DeviceTypeMeasure, Model: "WTN1604", Host: "127.0.0.1", Port: 9000},
+	}}
+	sessSvc := session.NewService(store, driver.NewFactory(), func(string, any) {}, &mapProvider{
+		drivers: map[string]device.ConnectionDriver{"m1": embedMD{seqDrv}},
+	})
+	_ = sessSvc.BindMeasureDevice("m1")
+	svc := measurement.NewService(sessSvc, func(string, any) {})
+
+	svc.SetConfig(domain.WorkflowConfig{
+		MinPressure:  0,
+		MaxPressure:  20,
+		PointCount:   2,
+		Precision:    2,
+		AverageCount: 3,
+		StableWaitMs: 10,
+	})
+	if _, err := svc.GeneratePressurePoints(); err != nil {
+		t.Fatalf("GeneratePressurePoints: %v", err)
+	}
+	if err := svc.StartWorkflow(context.Background(), []int{1, 2}); err != nil {
+		t.Fatalf("StartWorkflow: %v", err)
+	}
+
+	// 只执行采集（不执行打压，直接注入状态）
+	if err := svc.ManualCollect(context.Background(), 1); err != nil {
+		t.Fatalf("ManualCollect: %v", err)
+	}
+
+	points := svc.GetPoints()
+	expected := []float64{1.0, 2.0, 1.1, 2.1, 1.2, 2.2} // 平铺：3次 × 2通道
+	if len(points[0].CollectedData) != len(expected) {
+		t.Fatalf("expected flat data len %d, got %d", len(expected), len(points[0].CollectedData))
+	}
+	for i, v := range expected {
+		if points[0].CollectedData[i] != v {
+			t.Fatalf("flat data[%d] = %v, want %v", i, points[0].CollectedData[i], v)
+		}
+	}
+}
+
 func TestSetStateTransitions(t *testing.T) {
 	tests := []struct {
 		name      string
@@ -676,5 +741,61 @@ func TestMeasurementAlarmBlocksWhenConfirmRequired(t *testing.T) {
 
 	if svc.IsAlarmPending() {
 		t.Fatal("expected alarm to be resolved")
+	}
+}
+
+// fakeStabilityPressureDriver 模拟 SCPI 打压设备，实现 StabilityStatusProvider。
+type fakeStabilityPressureDriver struct {
+	fakePressureDriver
+	deviceStable bool
+}
+
+func (d *fakeStabilityPressureDriver) IsStable(_ context.Context) (bool, error) {
+	return d.deviceStable, nil
+}
+
+func TestManualPressurizeSCPIStability(t *testing.T) {
+	_, mDrv, pDrv := setupMeasurementServiceWithPressure()
+	stableDrv := &fakeStabilityPressureDriver{
+		fakePressureDriver: *pDrv,
+		deviceStable:       true,
+	}
+	store := &fakeStore{devices: map[string]domain.Device{
+		"m1": {ID: "m1", Type: domain.DeviceTypeMeasure, Model: "WTN1604", Host: "127.0.0.1", Port: 9000},
+		"p1": {ID: "p1", Type: domain.DeviceTypePressure, Model: "ConST811A", Host: "127.0.0.1", Port: 9001},
+	}}
+	sessSvc := session.NewService(store, driver.NewFactory(), func(string, any) {}, &mapProvider{
+		drivers: map[string]device.ConnectionDriver{
+			"m1": embedMD{mDrv},
+			"p1": embedPD{stableDrv},
+		},
+	})
+	_ = sessSvc.BindDevices("m1", "p1")
+	svc := measurement.NewService(sessSvc, func(string, any) {})
+
+	svc.SetConfig(domain.WorkflowConfig{
+		MinPressure:        0,
+		MaxPressure:        20,
+		PointCount:         2,
+		Precision:          2,
+		AverageCount:       1,
+		StableWaitMs:       10,
+		StabilityTimeoutMs: 5000,
+	})
+	if _, err := svc.GeneratePressurePoints(); err != nil {
+		t.Fatalf("GeneratePressurePoints: %v", err)
+	}
+	if err := svc.StartWorkflow(context.Background(), []int{1, 2}); err != nil {
+		t.Fatalf("StartWorkflow: %v", err)
+	}
+
+	// 使用设备判稳路径执行打压，加压后状态应为 stabilizing（采集成功后变为 completed）
+	if err := svc.ManualPressurize(context.Background(), 1); err != nil {
+		t.Fatalf("ManualPressurize with SCPI stability: %v", err)
+	}
+
+	points := svc.GetPoints()
+	if points[0].Status != domain.PointStatusStabilizing {
+		t.Fatalf("expected first point stabilizing after pressurize, got %+v", points[0])
 	}
 }

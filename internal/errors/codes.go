@@ -13,4 +13,10 @@ var (
 	ErrInvalidStateTransition = errors.New("invalid state transition")
 	// ErrPrerequisiteNotMet 表示标定启动前置条件不满足（阀门状态、设备连接等）。
 	ErrPrerequisiteNotMet = errors.New("prerequisite not met")
+	// ErrNoData 表示请求的数据不存在。
+	ErrNoData = errors.New("no data")
+	// ErrNoActiveSession 表示没有活跃的校准会话，无法导出报告。
+	ErrNoActiveSession = errors.New("no active session")
+	// ErrReportExport 表示报告导出过程中出错（模板加载、数据填充、保存等）。
+	ErrReportExport = errors.New("report export failed")
 )

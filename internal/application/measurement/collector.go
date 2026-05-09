@@ -119,12 +119,15 @@ func (s *Service) ManualCollect(ctx context.Context, pointIndex int) error {
 		}
 	}
 
-	averaged := domain.AverageSamples(samples)
-	s.updatePointCollectedData(pointIndex, averaged, time.Now())
+	flattened := make([]float64, 0, len(samples)*len(channels))
+	for _, sample := range samples {
+		flattened = append(flattened, sample...)
+	}
+	s.updatePointCollectedData(pointIndex, flattened, time.Now())
 	s.publish(events.EventMeasurementDataCollected, map[string]any{
 		"pointIndex": point.Index,
 		"channels":   channels,
-		"data":       averaged,
+		"data":       flattened,
 	})
 
 	// 采集后自动检查报警。
@@ -158,7 +161,7 @@ func (s *Service) preparePressureStep(pointIndex int) (device.PressureDriver, do
 
 	stableWaitMs := s.config.StableWaitMs
 	if stableWaitMs <= 0 {
-		stableWaitMs = 2000
+		stableWaitMs = 5000
 	}
 
 	stabilityTimeoutMs := s.config.StabilityTimeoutMs
@@ -283,10 +286,15 @@ func (s *Service) waitForMeasurementStability(
 	stabilityTimeoutMs int,
 ) error {
 	deadline := time.Now().Add(time.Duration(stabilityTimeoutMs) * time.Millisecond)
-	monitor := workflow.NewStabilityMonitor(0.001, time.Duration(stableWaitMs)*time.Millisecond, nil)
-
+	stableDuration := time.Duration(stableWaitMs) * time.Millisecond
 	ticker := time.NewTicker(200 * time.Millisecond)
 	defer ticker.Stop()
+
+	// 检查打压设备是否支持硬件级判稳（SCPI 设备优先使用设备返回的稳定标志）
+	deviceStability, hasDeviceStability := pressureDriver.(device.StabilityStatusProvider)
+
+	// 软件判稳：使用偏差计算
+	monitor := workflow.NewStabilityMonitor(0.001, stableDuration, nil)
 
 	for {
 		select {
@@ -301,12 +309,28 @@ func (s *Service) waitForMeasurementStability(
 				return fmt.Errorf("stability timeout")
 			}
 
-			currentVal, valErr := pressureDriver.ReadCurrentPressure(ctx)
-			if valErr != nil {
-				continue
+			var status workflow.StabilityStatus
+			if hasDeviceStability {
+				// 设备判稳路径：查询硬件稳定标志，仍在统一倒计时框架内
+				stable, err := deviceStability.IsStable(ctx)
+				if err != nil {
+					continue
+				}
+				// 设备报告稳定时 FeedSample 偏差为 0（累积器继续计时）
+				// 设备报告不稳定时 FeedSample 大偏差（累积器重置）
+				feedVal := targetPressure
+				if !stable {
+					feedVal = targetPressure + 1000
+				}
+				status = monitor.FeedSample(targetPressure, feedVal)
+			} else {
+				currentVal, valErr := pressureDriver.ReadCurrentPressure(ctx)
+				if valErr != nil {
+					continue
+				}
+				status = monitor.FeedSample(targetPressure, currentVal)
 			}
 
-			status := monitor.FeedSample(targetPressure, currentVal)
 			s.publish(events.EventMeasurementStabilityUpdate, map[string]any{
 				"pointIndex":         pointIndex,
 				"isStable":           status.IsStable,

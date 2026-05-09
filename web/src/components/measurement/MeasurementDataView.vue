@@ -72,7 +72,10 @@
                 />
               </td>
               <td v-for="ch in channelCount" :key="ch" class="cell-channel">
-                <div v-if="pt.collectedData && pt.collectedData[ch - 1] !== undefined" class="channel-value">
+                <div
+                  v-if="pt.collectedData && pt.collectedData[ch - 1] !== undefined"
+                  :class="['channel-value', { 'channel-over-limit': isOverLimitChannel(ch) }]"
+                >
                   {{ pt.collectedData[ch - 1].toFixed(precisionForDisplay) }}
                 </div>
                 <div v-else class="channel-value empty">--</div>
@@ -127,7 +130,7 @@
             <tr v-for="row in tableRows" :key="row.index" class="data-row">
               <td class="cell-index">{{ row.index }}</td>
               <td class="cell-pressure">{{ row.actualPressure }}</td>
-              <td v-for="ch in visibleChannels" :key="`${row.index}-${ch}`" class="cell-channel">
+              <td v-for="ch in visibleChannels" :key="`${row.index}-${ch}`" :class="['cell-channel', { 'channel-over-limit': isOverLimitChannel(ch) }]">
                 {{ row.channelValues[ch] ?? '--' }}
               </td>
               <td class="cell-time">{{ row.collectTime }}</td>
@@ -169,6 +172,13 @@ const channelCount = 16
 const currentPointIndex = computed(() => measurementStore.currentPointIndex)
 
 const precisionStep = computed(() => Math.pow(10, -(measurementStore.measurementParams.precision || 2)))
+
+const alarmEnabled = computed(() => measurementStore.alarmConfig.enabled)
+const overLimitChannels = computed(() => measurementStore.alarmData?.overLimitChannels ?? [])
+
+function isOverLimitChannel(ch: number): boolean {
+  return alarmEnabled.value && overLimitChannels.value.length > 0 && overLimitChannels.value.includes(ch)
+}
 
 function getRowClass(pt: MeasurementPoint): string {
   const classes: string[] = []
@@ -681,6 +691,11 @@ $amber: #f59e0b;
   &.empty {
     color: $slate-300;
   }
+}
+
+.channel-over-limit {
+  color: $red !important;
+  font-weight: 700;
 }
 
 .time-display {

@@ -481,6 +481,7 @@ func (s *Service) checkAlarm(ctx context.Context, pointIndex int, data []float64
 	alarmConfig := s.alarmConfig
 	channels := s.config.Channels
 	maxPressure := s.config.MaxPressure
+	minPressure := s.config.MinPressure
 	s.mu.Unlock()
 
 	if len(data) == 0 {
@@ -495,7 +496,7 @@ func (s *Service) checkAlarm(ctx context.Context, pointIndex int, data []float64
 		}
 	}
 
-	result := defaultAlarmService.EvaluateMultiChannel(alarmConfig, point.TargetPressure, maxPressure, channelData)
+	result := defaultAlarmService.EvaluateMultiChannel(alarmConfig, point.TargetPressure, maxPressure, minPressure, channelData)
 	if !result.Triggered {
 		return workflow.AlarmDecisionContinue, nil
 	}

@@ -1,8 +1,8 @@
 <template>
-  <el-dialog v-model="visible" title="导出校准报告" width="500px" :close-on-click-modal="false">
+  <el-dialog v-model="visible" title="导出标定报告" width="500px" :close-on-click-modal="false" @close="reset">
     <el-form label-width="100px" label-position="left">
       <el-form-item label="保存路径">
-        <el-input v-model="outputPath" placeholder="输入或粘贴输出文件路径 (.xlsx)">
+        <el-input v-model="outputPath" placeholder="请选择导出路径" readonly>
           <template #append>
             <el-button @click="selectPath">浏览</el-button>
           </template>
@@ -35,24 +35,40 @@
 import { ref, computed } from 'vue'
 import { ElMessage } from 'element-plus'
 import { apiPost } from '@/api/client'
+import { showSaveDialog } from '@/composables/useFileSaveDialog'
 
-const visible = defineModel<boolean>('visible', { default: false })
-
-const props = defineProps<{
-  templateFilename?: string
+const emit = defineEmits<{
+  done: []
 }>()
 
+const visible = ref(false)
 const outputPath = ref('')
 const exporting = ref(false)
 const progress = ref(0)
 const errorMessage = ref('')
 
-const templateInfo = computed(() => props.templateFilename || '无模板（将生成默认格式）')
+const templateInfo = computed(() => {
+  // 由父组件通过 v-if 更新，这里仅展示
+  return ''
+})
+
 const progressStatus = computed(() => {
   if (errorMessage.value) return 'exception' as const
   if (progress.value >= 100) return 'success' as const
   return undefined
 })
+
+function open() {
+  visible.value = true
+  reset()
+}
+
+async function selectPath() {
+  const path = await showSaveDialog('calibration_report.xlsx', 'Excel 文件', '*.xlsx')
+  if (path) {
+    outputPath.value = path
+  }
+}
 
 async function handleExport() {
   if (!outputPath.value) return
@@ -67,6 +83,7 @@ async function handleExport() {
     progress.value = 100
     ElMessage.success('报告导出成功')
     visible.value = false
+    emit('done')
   } catch (e) {
     errorMessage.value = e instanceof Error ? e.message : '导出失败'
     progress.value = 0
@@ -75,16 +92,10 @@ async function handleExport() {
   }
 }
 
-function selectPath() {
-  outputPath.value = outputPath.value || 'calibration_report.xlsx'
-}
-
 function reset() {
   outputPath.value = ''
   exporting.value = false
   progress.value = 0
   errorMessage.value = ''
 }
-
-defineExpose({ reset })
 </script>

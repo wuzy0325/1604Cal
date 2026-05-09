@@ -5,3 +5,11 @@
 export function GetAPIPort() {
   return window['go']['main']['App']['GetAPIPort']();
 }
+
+export function SaveFileContent(arg1, arg2) {
+  return window['go']['main']['App']['SaveFileContent'](arg1, arg2);
+}
+
+export function ShowSaveFilePath(arg1, arg2, arg3) {
+  return window['go']['main']['App']['ShowSaveFilePath'](arg1, arg2, arg3);
+}

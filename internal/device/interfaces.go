@@ -76,3 +76,9 @@ type ConnectionDriverFactory interface {
 type ActiveDriverProvider interface {
 	GetActiveDriver(id string) ConnectionDriver
 }
+
+// StabilityStatusProvider 可选能力：打压设备支持硬件级判稳状态查询。
+// SCPI 设备（ConST 系列）通过专用命令直接返回稳定标志，比软件判稳更准确。
+type StabilityStatusProvider interface {
+	IsStable(ctx context.Context) (bool, error)
+}

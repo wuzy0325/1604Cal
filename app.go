@@ -14,6 +14,7 @@ import (
 	"cal1604/internal/config"
 	"cal1604/internal/device/manager"
 	"cal1604/internal/domain"
+	wailsRuntime "github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
 const configPathEnvName = "CAL1604_CONFIG"
@@ -97,6 +98,32 @@ func (a *App) shutdown(ctx context.Context) {
 // GetAPIPort 返回内嵌 HTTP 服务器端口，供前端通过 Wails 绑定调用。
 func (a *App) GetAPIPort() int {
 	return a.port
+}
+
+// SaveFileContent 将内容写入指定文件（桌面模式导出用）。
+func (a *App) SaveFileContent(path string, content string) error {
+	return os.WriteFile(path, []byte(content), 0o644)
+}
+
+// ShowSaveFilePath 弹出系统"另存为"对话框，返回用户选择的文件路径。
+// 前置调用方需保证 defaultName 非空，filterPattern 示例："*.xlsx"。
+// 用户取消对话框时返回空字符串（无错误）。
+func (a *App) ShowSaveFilePath(defaultName, filterName, filterPattern string) string {
+	if a.ctx == nil {
+		return ""
+	}
+	path, err := wailsRuntime.SaveFileDialog(a.ctx, wailsRuntime.SaveDialogOptions{
+		Title:           "选择导出路径",
+		DefaultFilename: defaultName,
+		Filters: []wailsRuntime.FileFilter{
+			{DisplayName: filterName, Pattern: filterPattern},
+			{DisplayName: "所有文件", Pattern: "*.*"},
+		},
+	})
+	if err != nil {
+		return ""
+	}
+	return path
 }
 
 // withCORS 包装 handler，添加宽松的 CORS 响应头。

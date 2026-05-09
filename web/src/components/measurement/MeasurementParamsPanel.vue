@@ -35,9 +35,9 @@
         />
       </div>
 
-      <!-- 精度 -->
+      <!-- 显示精度 -->
       <div class="control-group">
-        <label>精度:</label>
+        <label>显示精度:</label>
         <input
           v-model.number="measurementStore.measurementParams.precision"
           type="number"
@@ -47,14 +47,14 @@
         />
       </div>
 
-      <!-- 平均次数 -->
+      <!-- 重复采样次数 -->
       <div class="control-group">
-        <label>平均:</label>
+        <label>重复采样:</label>
         <input
           v-model.number="measurementStore.measurementParams.averageCount"
           type="number"
           min="1"
-          max="20"
+          max="10"
           class="compact-input narrow"
         />
       </div>
@@ -70,37 +70,21 @@
         </select>
       </div>
 
-      <!-- 精度 Level -->
+      <!-- 精度等级 -->
       <div class="control-group precision-level-group">
-        <label>精度 Level</label>
-        <div class="precision-level-controls">
-          <select
-            v-if="!useCustomPrecision"
-            v-model.number="storePrecisionLevel"
-            class="compact-select wide"
+        <label>精度等级</label>
+        <select
+          v-model.number="p.precisionLevel"
+          class="compact-select wide"
+        >
+          <option
+            v-for="item in precisionLevelOptions"
+            :key="item"
+            :value="item"
           >
-            <option
-              v-for="item in precisionLevelOptions"
-              :key="item"
-              :value="item"
-            >
-              {{ (item * 100).toFixed(2) }}%
-            </option>
-          </select>
-          <input
-            v-else
-            v-model.number="customPrecisionValue"
-            type="number"
-            step="0.0001"
-            min="0.0001"
-            max="5"
-            class="compact-input wide"
-          />
-          <label class="inline-check">
-            <input v-model="useCustomPrecision" type="checkbox" />
-            <span>自定义</span>
-          </label>
-        </div>
+            {{ (item * 100).toFixed(2) }}%
+          </option>
+        </select>
       </div>
 
       <div class="divider" />
@@ -118,7 +102,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue'
+import { computed } from 'vue'
 import { ElMessage } from 'element-plus'
 import { useMeasurementStore } from '@/stores/measurement'
 import { fetchUnitConsistency } from '@/api/device'
@@ -138,29 +122,6 @@ const isParamValid = computed(() => {
     p.value.pointCount <= 11 &&
     p.value.averageCount >= 1
   )
-})
-
-const useCustomPrecision = ref(false)
-const customPrecisionValue = ref(p.value.precisionLevel)
-
-const storePrecisionLevel = computed({
-  get: () => useCustomPrecision.value ? customPrecisionValue.value : p.value.precisionLevel,
-  set: (val: number) => {
-    const normalized = Number.isFinite(val) ? Math.min(5, Math.max(0.0001, val)) : p.value.precisionLevel
-    p.value.precisionLevel = Number(normalized.toFixed(4))
-  }
-})
-
-watch(p, () => {
-  if (!useCustomPrecision.value) {
-    customPrecisionValue.value = p.value.precisionLevel
-  }
-}, { deep: true })
-
-watch(customPrecisionValue, (val) => {
-  if (useCustomPrecision.value && Number.isFinite(val)) {
-    storePrecisionLevel.value = val
-  }
 })
 
 async function onGenerateClick() {
@@ -303,36 +264,6 @@ $slate-800: #1f2937;
   .compact-select,
   .compact-input {
     min-width: 80px;
-  }
-}
-
-.precision-level-controls {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.inline-check {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  color: $slate-600;
-  font-size: 12px;
-  cursor: pointer;
-  white-space: nowrap;
-  font-family: $font-sans;
-
-  input[type="checkbox"] {
-    width: 14px;
-    height: 14px;
-    accent-color: $mint;
-    border: 1px solid $slate-300;
-    border-radius: 3px;
-    cursor: pointer;
-  }
-
-  &:hover span {
-    color: $slate-800;
   }
 }
 

@@ -48,6 +48,18 @@ func writeError(w http.ResponseWriter, err error) {
 		status = http.StatusConflict
 		code = "PREREQUISITE_NOT_MET"
 		message = "calibration prerequisite not met"
+	} else if errors.Is(err, apperrors.ErrNoData) {
+		status = http.StatusNotFound
+		code = "NO_DATA"
+		message = "no data available for export"
+	} else if errors.Is(err, apperrors.ErrNoActiveSession) {
+		status = http.StatusConflict
+		code = "NO_ACTIVE_SESSION"
+		message = "no active calibration session"
+	} else if errors.Is(err, apperrors.ErrReportExport) {
+		status = http.StatusUnprocessableEntity
+		code = "REPORT_EXPORT_FAILED"
+		message = "report export failed"
 	}
 
 	// 将原始错误信息附加到 message，便于前端诊断具体原因

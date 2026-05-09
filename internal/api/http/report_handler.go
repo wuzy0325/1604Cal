@@ -2,7 +2,6 @@ package http
 
 import (
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -56,7 +55,7 @@ func (s *apiServer) exportReportHandler(w http.ResponseWriter, r *http.Request) 
 
 	session := s.calibrationService.GetCalibrationSession()
 	if session == nil {
-		writeError(w, fmt.Errorf("no active calibration session"))
+		writeError(w, apperrors.ErrNoActiveSession)
 		return
 	}
 

@@ -113,7 +113,7 @@ func Default() AppConfig {
 		},
 		Alarm: domain.AlarmConfig{
 			Enabled:            true,
-			PrecisionThreshold: 5.0,
+			PrecisionThreshold: 0.05,
 			SoundEnabled:       true,
 			ConfirmOnAlarm:     true,
 			EnabledChannels:    []int{},

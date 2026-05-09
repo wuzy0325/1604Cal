@@ -29,3 +29,13 @@ TBD - created by archiving change stabilize-measurement-calibration-core-flow. U
 - **WHEN** 当前点出现报警且决策为 `stop`
 - **THEN** 自动采集 MUST 终止并发布 `calibration.alarm.resolved` 事件
 
+### Requirement: 报警阈值 MUST 使用量程引用误差
+多通道报警判定 MUST 使用量程引用误差公式计算允许偏差：`(maxPressure - minPressure) × precisionThreshold`。当量程为 0 时，降级使用 `|target| × precisionThreshold` 作为容差。
+
+#### Scenario: 窄量程正常触发报警
+- **WHEN** 校准量程为 1 MPa（min=9.5, max=10.5）且 precisionThreshold=0.001（0.1%）
+- **THEN** 允许偏差 MUST 为 0.001 MPa 而非 0.0105 MPa
+
+#### Scenario: 量程为零时使用目标值作为基准
+- **WHEN** maxPressure 等于 minPressure（量程为 0）
+- **THEN** 允许偏差 MUST 降级为 `|targetPressure| × precisionThreshold`

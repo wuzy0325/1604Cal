@@ -1,4 +1,4 @@
-import { apiGet, apiPost } from './client'
+import { apiGet, apiPost, getApiBase } from './client'
 
 export interface CollectedRow {
   timestamp: string
@@ -48,9 +48,9 @@ export async function fetchMeasurementData(): Promise<MeasurementDataResponse> {
   return apiGet<MeasurementDataResponse>('/measurement/data')
 }
 
-/** 导出 CSV 下载地址 */
-export function getMeasurementExportUrl(): string {
-  return '/api/v1/measurement/export?format=csv'
+/** 导出 xlsx 报告（模板方式） */
+export async function exportMeasurementReport(outputPath: string): Promise<string> {
+  return (await apiPost<{ path: string }>('/measurement/export', { outputPath })).path
 }
 
 /** 获取计量模块参数配置 */

@@ -24,14 +24,24 @@
       </el-form-item>
 
       <el-form-item label="打压模式">
-        <span style="color: var(--text-primary)">{{ pressureMode === 'single' ? '单程' : '回程' }}</span>
+        <span style="color: var(--text-primary)">{{ modeLabel }}</span>
+      </el-form-item>
+
+      <el-form-item v-if="channelCount > 0" label="通道数">
+        <span style="color: var(--text-primary)">{{ channelCount }}</span>
       </el-form-item>
     </el-form>
 
     <template #footer>
       <div style="display: flex; gap: 8px; justify-content: flex-end">
         <el-button @click="emit('close')">取消</el-button>
-        <el-button type="primary" :loading="exporting" :icon="Download" @click="emit('export', exportPath)">
+        <el-button
+          type="primary"
+          :loading="exporting"
+          :disabled="!exportPath"
+          :icon="Download"
+          @click="emit('export', exportPath)"
+        >
           {{ exporting ? '导出中...' : '导出报告' }}
         </el-button>
       </div>
@@ -40,13 +50,15 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import { FolderOpened, Download } from '@element-plus/icons-vue'
+import { showSaveDialog } from '@/composables/useFileSaveDialog'
 
-defineProps<{
+const props = defineProps<{
   visible: boolean
   templateName: string
   pointCount: number
+  channelCount: number
   pressureMode: string
   exporting: boolean
 }>()
@@ -54,13 +66,17 @@ defineProps<{
 const emit = defineEmits<{
   close: []
   export: [path: string]
-  'select-path': []
 }>()
 
 const exportPath = ref('')
 
-function selectPath() {
-  emit('select-path')
+const modeLabel = computed(() => props.pressureMode === 'single' ? '单程' : '回程')
+
+async function selectPath() {
+  const path = await showSaveDialog('measurement-report.xlsx', 'Excel 文件', '*.xlsx')
+  if (path) {
+    exportPath.value = path
+  }
 }
 </script>
 

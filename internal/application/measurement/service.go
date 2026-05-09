@@ -10,6 +10,7 @@ import (
 
 	"cal1604/internal/application/session"
 	"cal1604/internal/domain"
+	apperrors "cal1604/internal/errors"
 	"cal1604/internal/events"
 	"cal1604/internal/workflow"
 )
@@ -252,10 +253,29 @@ func (s *Service) WriteCSV(w io.Writer) error {
 	copy(rows, s.rows)
 	channels := make([]int, len(s.channels))
 	copy(channels, s.channels)
+	points := make([]domain.PressurePoint, len(s.points))
+	copy(points, s.points)
 	s.mu.Unlock()
 
+	// 优先使用实时采集行数据，否则从按点采集的压力点数据生成
 	if len(rows) == 0 {
-		return fmt.Errorf("no data to export")
+		rows = rowsFromPoints(points)
+	}
+
+	if len(rows) == 0 {
+		return apperrors.ErrNoData
+	}
+
+	// 若 channels 为空，从 points 推断通道数
+	if len(channels) == 0 {
+		for _, p := range points {
+			if len(p.CollectedData) > len(channels) {
+				channels = make([]int, len(p.CollectedData))
+				for i := range channels {
+					channels[i] = i + 1
+				}
+			}
+		}
 	}
 
 	cw := csv.NewWriter(w)
@@ -287,6 +307,25 @@ func (s *Service) WriteCSV(w io.Writer) error {
 	}
 
 	return nil
+}
+
+// rowsFromPoints 从按点采集的压力点数据生成 CollectedRow，用于标定模式导出。
+func rowsFromPoints(points []domain.PressurePoint) []CollectedRow {
+	var result []CollectedRow
+	for _, p := range points {
+		if len(p.CollectedData) == 0 || p.Status != "completed" {
+			continue
+		}
+		chMap := make(map[string]float64, len(p.CollectedData))
+		for i, v := range p.CollectedData {
+			chMap[fmt.Sprintf("%d", i+1)] = v
+		}
+		result = append(result, CollectedRow{
+			Timestamp: p.CollectTime,
+			Channels:  chMap,
+		})
+	}
+	return result
 }
 
 // startCollectLoop 启动后台采集 goroutine。

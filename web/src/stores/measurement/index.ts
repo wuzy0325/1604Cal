@@ -20,7 +20,6 @@ import {
   pauseMeasurement,
   stopMeasurement,
   fetchMeasurementData,
-  getMeasurementExportUrl,
   generateMeasurementPoints,
   fetchMeasurementPoints,
   getMeasurementAlarmConfig,
@@ -107,7 +106,6 @@ export const useMeasurementStore = defineStore('measurement', () => {
   const isPaused = computed(() => state.value === 'paused')
   const isIdle = computed(() => state.value === 'idle')
   const totalRows = computed(() => rows.value.length)
-  const exportUrl = computed(() => getMeasurementExportUrl())
   const deviceBound = computed(() => measureDeviceId.value !== '')
 
   // ── 设备绑定 ──
@@ -423,7 +421,6 @@ export const useMeasurementStore = defineStore('measurement', () => {
     isPaused,
     isIdle,
     totalRows,
-    exportUrl,
     deviceBound,
     // 设备绑定
     bindDevices,

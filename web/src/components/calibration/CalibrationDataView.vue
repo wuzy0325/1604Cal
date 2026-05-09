@@ -154,10 +154,19 @@
           </el-button>
           <el-button
             size="small"
+            type="primary"
+            :disabled="calibrationStore.pressurePoints.length === 0"
+            @click="$emit('exportReport')"
+          >
+            <el-icon><Download /></el-icon>
+            导出报告
+          </el-button>
+          <el-button
+            size="small"
             :disabled="calibrationStore.pressurePoints.length === 0"
             @click="exportCSV"
           >
-            <el-icon><Download /></el-icon>
+            <el-icon><DataAnalysis /></el-icon>
             导出CSV
           </el-button>
         </div>
@@ -240,6 +249,7 @@ import {
   Document,
   DataLine,
   Download,
+  DataAnalysis,
   SetUp
 } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
@@ -248,6 +258,7 @@ import type { SessionState } from '@/types/calibration'
 
 defineEmits<{
   selectTemplate: []
+  exportReport: []
 }>()
 
 const calibrationStore = useCalibrationStore()

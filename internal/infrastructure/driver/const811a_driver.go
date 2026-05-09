@@ -91,6 +91,10 @@ func (d *ConST811ADriver) ReadStability(ctx context.Context) (bool, error) {
 	return d.constReadStability(ctx, "PRESsure:MODule1:STABle?")
 }
 
+func (d *ConST811ADriver) IsStable(ctx context.Context) (bool, error) {
+	return d.ReadStability(ctx)
+}
+
 func (d *ConST811ADriver) StartControl(ctx context.Context) error {
 	_, err := d.base.sendSCPICommand(ctx, "PRESsure:MODE CONTROL", 3*time.Second)
 	if err != nil {

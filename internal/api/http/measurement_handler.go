@@ -79,14 +79,29 @@ func (s *apiServer) measurementDataHandler(w http.ResponseWriter, _ *http.Reques
 	writeSuccess(w, http.StatusOK, map[string]any{"rows": rows, "total": total})
 }
 
-func (s *apiServer) measurementExportHandler(w http.ResponseWriter, _ *http.Request) {
-	w.Header().Set("Content-Type", "text/csv")
-	w.Header().Set("Content-Disposition", "attachment; filename=measurement_data.csv")
+func (s *apiServer) measurementExportHandler(w http.ResponseWriter, r *http.Request) {
+	var req exportReportRequest
+	if r.Method == http.MethodPost {
+		_ = json.NewDecoder(r.Body).Decode(&req)
+	}
+	if req.OutputPath == "" {
+		req.OutputPath = r.URL.Query().Get("outputPath")
+	}
 
-	if err := s.measurementService.WriteCSV(w); err != nil {
+	if req.OutputPath == "" {
+		writeError(w, apperrors.ErrInvalidArgument)
+		return
+	}
+
+	points := s.measurementService.GetPoints()
+	config := s.measurementService.GetConfig()
+
+	if err := s.reportService.ExportMeasurementReport(r.Context(), points, config, req.OutputPath); err != nil {
 		writeError(w, err)
 		return
 	}
+
+	writeSuccess(w, http.StatusOK, map[string]string{"status": "ok", "path": req.OutputPath})
 }
 
 func (s *apiServer) measurementGetAlarmConfigHandler(w http.ResponseWriter, _ *http.Request) {
