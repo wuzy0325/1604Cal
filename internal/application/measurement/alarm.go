@@ -9,13 +9,13 @@ import (
 )
 
 type Alarm struct {
-	PointID          string  `json:"pointId"`
-	TargetPressure   float64 `json:"targetPressure"`
-	ActualPressure   float64 `json:"actualPressure"`
-	Threshold        float64 `json:"threshold"`
-	IsRelative       bool    `json:"isRelative"`
-	MaxDeviation     float64 `json:"maxDeviation"`
-	OverLimitChannels []int  `json:"overLimitChannels"`
+	PointID           string  `json:"pointId"`
+	TargetPressure    float64 `json:"targetPressure"`
+	ActualPressure    float64 `json:"actualPressure"`
+	Threshold         float64 `json:"threshold"`
+	IsRelative        bool    `json:"isRelative"`
+	MaxDeviation      float64 `json:"maxDeviation"`
+	OverLimitChannels []int   `json:"overLimitChannels"`
 }
 
 func (s *Service) SetAlarmConfig(cfg domain.AlarmConfig) {
@@ -122,4 +122,13 @@ func (s *Service) ResolveAlarm(decision string) error {
 	s.currentAlarm = nil
 
 	return nil
+}
+
+// ResolveStabilityTimeout 接收前端用户对稳定超时的决定。
+// decision: "continue" 继续等待， "skip" 跳过当前点。
+func (s *Service) ResolveStabilityTimeout(decision string) {
+	select {
+	case s.stabilityTimeoutCh <- decision:
+	default:
+	}
 }

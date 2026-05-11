@@ -84,6 +84,8 @@ export const useMeasurementStore = defineStore('measurement', () => {
   // 计量工作流相关
   const config = ref<MeasurementParamsPayload | null>(null)
   const points = ref<MeasurementPoint[]>([])
+  const pointsEdited = ref(false)
+  const pointsConfigKey = ref('')
   const currentPointIndex = ref(0)
   const alarmConfig = ref<MeasurementAlarmConfig>({
     enabled: true,
@@ -95,6 +97,7 @@ export const useMeasurementStore = defineStore('measurement', () => {
   })
   const alarmPending = ref(false)
   const alarmData = ref<AlarmData | null>(null)
+  const stabilityTimeoutPending = ref(false)
 
   // ── 计算属性 ──
   const runningStates: MeasurementState[] = ['pressurizing', 'stabilizing', 'collecting']
@@ -196,6 +199,8 @@ export const useMeasurementStore = defineStore('measurement', () => {
       return
     }
     try {
+      await ensureDevicesBound()
+      await syncPointsBeforeStart()
       channels.value = selectedChannels
       const newState = await startMeasurement(selectedChannels)
       state.value = newState as MeasurementState
@@ -213,6 +218,8 @@ export const useMeasurementStore = defineStore('measurement', () => {
       return
     }
     try {
+      await ensureDevicesBound()
+      await syncPointsBeforeStart()
       channels.value = selectedChannels
       currentPointIndex.value = 0
       const newState = await manualStartMeasurement(selectedChannels)
@@ -318,12 +325,56 @@ export const useMeasurementStore = defineStore('measurement', () => {
       await saveMeasurementParamsConfig(payload)
       config.value = payload
       points.value = await generateMeasurementPoints()
+      pointsEdited.value = false
+      pointsConfigKey.value = measurementParamsKey(p)
       ElMessage.success('压力点已生成')
     } catch (error) {
       const detail = error instanceof Error ? error.message : String(error)
       ElMessage.error(`生成压力点失败: ${detail}`)
     }
   }
+
+  const syncPointsBeforeStart = async () => {
+    const p = measurementParams.value
+    const currentConfigKey = measurementParamsKey(p)
+    const customPoints = pointsEdited.value && pointsConfigKey.value === currentConfigKey && points.value.length > 0
+      ? points.value.map(point => point.targetPressure)
+      : undefined
+    const payload: MeasurementParamsPayload = {
+      minPressure: p.minPressure,
+      maxPressure: p.maxPressure,
+      pointCount: p.pointCount,
+      precision: p.precision,
+      averageCount: p.averageCount,
+      stableDurationMs: p.stableWaitS * 1000,
+      precisionLevel: p.precisionLevel,
+      pressureMode: p.pressureMode,
+      controlMode: p.controlMode,
+      customPoints
+    }
+    await saveMeasurementParamsConfig(payload)
+    config.value = payload
+    points.value = await generateMeasurementPoints()
+    pointsEdited.value = false
+    pointsConfigKey.value = currentConfigKey
+  }
+
+  const ensureDevicesBound = async () => {
+    if (!measureDeviceId.value) return
+    if (pressureDeviceId.value) {
+      await apiBindDevices(measureDeviceId.value, pressureDeviceId.value)
+      return
+    }
+    await apiBindMeasureDevice(measureDeviceId.value)
+  }
+
+  const measurementParamsKey = (p: typeof measurementParams.value): string => JSON.stringify({
+    minPressure: p.minPressure,
+    maxPressure: p.maxPressure,
+    pointCount: p.pointCount,
+    precision: p.precision,
+    pressureMode: p.pressureMode
+  })
 
   const loadAlarmConfig = async () => {
     try {
@@ -361,12 +412,17 @@ export const useMeasurementStore = defineStore('measurement', () => {
     currentPointIndex.value = 0
     rows.value = []
     points.value = []
+    pointsEdited.value = false
+    pointsConfigKey.value = ''
     state.value = 'idle'
   }
 
   const updatePointTarget = (pointId: string, targetPressure: number) => {
     const pt = points.value.find(p => p.id === pointId)
-    if (pt) pt.targetPressure = targetPressure
+    if (pt) {
+      pt.targetPressure = targetPressure
+      pointsEdited.value = true
+    }
   }
 
   const autoCollect = async () => {
@@ -414,6 +470,7 @@ export const useMeasurementStore = defineStore('measurement', () => {
     measureUnit,
     deviceInfo,
     stabilityState,
+    stabilityTimeoutPending,
     // 计算属性
     isCollecting,
     isRunning,

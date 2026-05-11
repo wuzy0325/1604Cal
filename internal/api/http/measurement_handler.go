@@ -42,16 +42,20 @@ func (s *apiServer) measurementStartHandler(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
+	// 开始采集前以服务端当前配置重新生成测点，确保实际打压目标不受前端旧缓存影响。
+	if _, err := s.measurementService.GeneratePressurePoints(); err != nil {
+		writeError(w, err)
+		return
+	}
+
+	// 创建工作流会话（校验点位、绑定设备），状态变为 ready
 	if err := s.measurementService.StartWorkflow(r.Context(), req.Channels); err != nil {
 		writeError(w, err)
 		return
 	}
 
-	if err := s.measurementService.Start(r.Context(), req.Channels); err != nil {
-		_ = s.measurementService.Stop()
-		writeError(w, err)
-		return
-	}
+	// 后台自动按点采集（逐点打压→稳定→采集），通过 StopAutoCollect 可控停止
+	s.measurementService.StartAutoCollect()
 
 	writeSuccess(w, http.StatusOK, map[string]string{"state": string(s.measurementService.State())})
 }
@@ -140,11 +144,8 @@ func (s *apiServer) measurementAlarmPendingHandler(w http.ResponseWriter, _ *htt
 	writeSuccess(w, http.StatusOK, map[string]bool{"pending": s.measurementService.IsAlarmPending()})
 }
 
-func (s *apiServer) measurementAutoCollectHandler(w http.ResponseWriter, r *http.Request) {
-	if err := s.measurementService.RunAutoCollection(r.Context()); err != nil {
-		writeError(w, err)
-		return
-	}
+func (s *apiServer) measurementAutoCollectHandler(w http.ResponseWriter, _ *http.Request) {
+	s.measurementService.StartAutoCollect()
 
 	writeSuccess(w, http.StatusOK, map[string]string{"state": string(s.measurementService.State())})
 }
@@ -203,4 +204,18 @@ func (s *apiServer) measurementManualCollectHandler(w http.ResponseWriter, r *ht
 	}
 
 	writeSuccess(w, http.StatusOK, map[string]string{"state": string(s.measurementService.State())})
+}
+
+// measurementStabilityTimeoutResolveHandler 接收前端用户对稳定超时的决定。
+func (s *apiServer) measurementStabilityTimeoutResolveHandler(w http.ResponseWriter, r *http.Request) {
+	req, err := decodeJSON[struct {
+		Decision string `json:"decision"`
+	}](r)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+
+	s.measurementService.ResolveStabilityTimeout(req.Decision)
+	writeSuccess(w, http.StatusOK, map[string]string{"status": "resolved"})
 }

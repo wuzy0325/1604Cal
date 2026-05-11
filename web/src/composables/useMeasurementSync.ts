@@ -9,6 +9,7 @@ import {
   EVENT_MEASUREMENT_STATE_CHANGED,
   EVENT_MEASUREMENT_DATA_UPDATED,
   EVENT_MEASUREMENT_STABILITY_UPDATE,
+  EVENT_MEASUREMENT_STABILITY_TIMEOUT,
   EVENT_MEASUREMENT_ALARM_TRIGGERED,
   EVENT_MEASUREMENT_ALARM_RESOLVED,
   EVENT_MEASUREMENT_POINT_STATUS,
@@ -48,6 +49,9 @@ export function useMeasurementSync() {
         case EVENT_MEASUREMENT_ALARM_TRIGGERED:
           store.alarmPending = true
           store.alarmData = payload.data as AlarmData
+          break
+        case EVENT_MEASUREMENT_STABILITY_TIMEOUT:
+          store.stabilityTimeoutPending = true
           break
         case EVENT_MEASUREMENT_ALARM_RESOLVED:
           store.alarmPending = false

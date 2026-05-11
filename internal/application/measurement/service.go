@@ -3,8 +3,10 @@ package measurement
 import (
 	"context"
 	"encoding/csv"
+	"errors"
 	"fmt"
 	"io"
+	"log"
 	"sync"
 	"time"
 
@@ -14,6 +16,8 @@ import (
 	"cal1604/internal/events"
 	"cal1604/internal/workflow"
 )
+
+var ErrPointSkipped = errors.New("point skipped by user")
 
 // CollectedRow 单次采集的数据行。
 type CollectedRow struct {
@@ -29,7 +33,7 @@ type Service struct {
 	mu             sync.Mutex
 	sessionMachine *workflow.SessionMachine
 	sess           *session.Service
-	publish EventPublisher
+	publish        EventPublisher
 
 	config  domain.WorkflowConfig
 	points  []domain.PressurePoint
@@ -51,6 +55,15 @@ type Service struct {
 	collectMu     sync.Mutex
 	collectWg     sync.WaitGroup
 
+	// autoCollectCtx 用于控制自动按点采集 goroutine 的生命周期。
+	autoCollectCtx    context.Context
+	autoCollectCancel context.CancelFunc
+	autoCollectMu     sync.Mutex
+	autoCollectWg     sync.WaitGroup
+
+	// stabilityTimeoutCh 用于等待前端用户对稳定超时的决定。
+	stabilityTimeoutCh chan string
+
 	// sessionStore 历史会话持久化存储。
 	sessionStore *SessionStore
 }
@@ -61,9 +74,10 @@ func NewService(sess *session.Service, publisher EventPublisher) *Service {
 		publisher = func(string, any) {}
 	}
 	return &Service{
-		sessionMachine: workflow.NewSessionMachine(),
-		sess:           sess,
-		publish:        publisher,
+		sessionMachine:     workflow.NewSessionMachine(),
+		sess:               sess,
+		publish:            publisher,
+		stabilityTimeoutCh: make(chan string, 1),
 	}
 }
 
@@ -141,6 +155,7 @@ func (s *Service) Pause() error {
 	s.mu.Unlock()
 
 	s.stopCollectLoop()
+	s.StopAutoCollect()
 	s.publish(events.EventMeasurementStateChanged, map[string]any{"state": string(domain.SessionStatePaused)})
 
 	return nil
@@ -194,6 +209,7 @@ func (s *Service) Stop() error {
 	s.mu.Unlock()
 
 	s.stopCollectLoop()
+	s.StopAutoCollect()
 	for _, state := range stateChanges {
 		s.publish(events.EventMeasurementStateChanged, map[string]any{"state": string(state)})
 	}
@@ -329,22 +345,28 @@ func rowsFromPoints(points []domain.PressurePoint) []CollectedRow {
 }
 
 // startCollectLoop 启动后台采集 goroutine。
-func (s *Service) startCollectLoop(ctx context.Context) {
+// 使用 context.Background() 确保采集循环不受调用方 context 生命周期影响，
+// 仅通过 stopCollectLoop() 控制停止。
+func (s *Service) startCollectLoop(_ context.Context) {
 	s.collectMu.Lock()
 	if s.collectCancel != nil {
 		s.collectMu.Unlock()
 		return
 	}
-	s.collectCtx, s.collectCancel = context.WithCancel(ctx)
+	s.collectCtx, s.collectCancel = context.WithCancel(context.Background())
 	collectCtx := s.collectCtx
 	s.collectWg.Add(1)
 	s.collectMu.Unlock()
+
+	const maxConsecutiveErrors = 10
 
 	go func() {
 		defer s.collectWg.Done()
 
 		ticker := time.NewTicker(500 * time.Millisecond)
 		defer ticker.Stop()
+
+		consecutiveErrors := 0
 
 		for {
 			select {
@@ -361,8 +383,20 @@ func (s *Service) startCollectLoop(ctx context.Context) {
 
 				data, err := s.sess.ReadMeasureData(collectCtx)
 				if err != nil {
+					consecutiveErrors++
+					if consecutiveErrors >= maxConsecutiveErrors {
+						s.publish(events.EventMeasurementStateChanged, map[string]any{
+							"state": string(domain.SessionStateError),
+							"error": fmt.Sprintf("连续%d次采集失败: %v", consecutiveErrors, err),
+						})
+						s.mu.Lock()
+						_ = s.sessionMachine.Transition(domain.SessionStateError)
+						s.mu.Unlock()
+						return
+					}
 					continue
 				}
+				consecutiveErrors = 0
 
 				// 构建通道映射
 				chMap := make(map[string]float64, len(channels))
@@ -401,6 +435,51 @@ func (s *Service) stopCollectLoop() {
 	if cancel != nil {
 		cancel()
 		s.collectWg.Wait()
+	}
+}
+
+// StartAutoCollect 启动自动按点采集 goroutine，返回可取消的 context。
+// 调用方负责在 Stop/Pause 时通过 StopAutoCollect 取消。
+func (s *Service) StartAutoCollect() {
+	s.autoCollectMu.Lock()
+	defer s.autoCollectMu.Unlock()
+
+	if s.autoCollectCancel != nil {
+		log.Printf("[measurement] StartAutoCollect skipped: already running")
+		return // 已经在运行
+	}
+
+	s.autoCollectCtx, s.autoCollectCancel = context.WithCancel(context.Background())
+	ctx := s.autoCollectCtx
+	s.autoCollectWg.Add(1)
+
+	go func() {
+		defer s.autoCollectWg.Done()
+		defer func() {
+			// goroutine 退出时清理 cancel 标记，确保下次 StartAutoCollect 可重新启动
+			s.autoCollectMu.Lock()
+			s.autoCollectCancel = nil
+			s.autoCollectCtx = nil
+			s.autoCollectMu.Unlock()
+		}()
+		if err := s.RunAutoCollection(ctx); err != nil {
+			log.Printf("[measurement] auto collection failed: %v", err)
+			s.SetState(domain.SessionStateError)
+		}
+	}()
+}
+
+// StopAutoCollect 停止自动按点采集 goroutine 并等待其退出。
+func (s *Service) StopAutoCollect() {
+	s.autoCollectMu.Lock()
+	cancel := s.autoCollectCancel
+	s.autoCollectCancel = nil
+	s.autoCollectCtx = nil
+	s.autoCollectMu.Unlock()
+
+	if cancel != nil {
+		cancel()
+		s.autoCollectWg.Wait()
 	}
 }
 

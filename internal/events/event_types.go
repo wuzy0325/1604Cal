@@ -16,19 +16,20 @@ const (
 
 // Measurement 计量工作流事件
 const (
-	EventMeasurementStateChanged = "measurement.state_changed"
-	EventMeasurementDataUpdated  = "measurement.data_updated"
-	EventMeasurementDataCollected = "measurement.data.collected"
-	EventMeasurementPointStatus  = "measurement.point.status"
-	EventMeasurementAlarmTriggered = "measurement.alarm.triggered"
-	EventMeasurementAlarmResolved  = "measurement.alarm.resolved"
-	EventMeasurementStabilityUpdate = "measurement.stability.update"
+	EventMeasurementStateChanged     = "measurement.state_changed"
+	EventMeasurementDataUpdated      = "measurement.data_updated"
+	EventMeasurementDataCollected    = "measurement.data.collected"
+	EventMeasurementPointStatus      = "measurement.point.status"
+	EventMeasurementAlarmTriggered   = "measurement.alarm.triggered"
+	EventMeasurementAlarmResolved    = "measurement.alarm.resolved"
+	EventMeasurementStabilityUpdate  = "measurement.stability.update"
+	EventMeasurementStabilityTimeout = "measurement.stability.timeout"
 )
 
 // Calibration 标定工作流事件
 const (
-	EventCalibrationPointStatus  = "calibration.point_status"
-	EventCalibrationAlarmResolved = "calibration.alarm.resolved"
+	EventCalibrationPointStatus       = "calibration.point_status"
+	EventCalibrationAlarmResolved     = "calibration.alarm.resolved"
 	EventCalibrationStabilityChanged  = "calibration.stability.changed"
 	EventCalibrationStabilityLost     = "calibration.stability.lost"
 	EventCalibrationStabilityProgress = "calibration.stability.progress"

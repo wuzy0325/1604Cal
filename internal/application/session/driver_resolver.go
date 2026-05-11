@@ -2,6 +2,7 @@ package session
 
 import (
 	"fmt"
+	"log"
 
 	"cal1604/internal/device"
 	"cal1604/internal/infrastructure/driver"
@@ -36,6 +37,7 @@ func (r *DriverResolver) ResolvePressureDriver(pressureDevID string) (device.Pre
 	if r.DriverProvider != nil {
 		if drv := r.DriverProvider.GetActiveDriver(pressureDevID); drv != nil {
 			if pDrv, ok := drv.(device.PressureDriver); ok {
+				log.Printf("[session] reuse active pressure driver id=%s type=%T", pressureDevID, pDrv)
 				return pDrv, nil
 			}
 		}
@@ -45,5 +47,10 @@ func (r *DriverResolver) ResolvePressureDriver(pressureDevID string) (device.Pre
 	if !ok {
 		return nil, fmt.Errorf("%w: %s", ErrDeviceNotFound, pressureDevID)
 	}
-	return r.Factory.CreatePressureDriver(pressureDev)
+	pDrv, err := r.Factory.CreatePressureDriver(pressureDev)
+	if err != nil {
+		return nil, err
+	}
+	log.Printf("[session] create pressure driver id=%s type=%T", pressureDevID, pDrv)
+	return pDrv, nil
 }

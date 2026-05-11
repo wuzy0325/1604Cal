@@ -215,10 +215,7 @@ function getStatusText(status: string): string {
 
 function onTargetChange(pointId: string, value: number | null) {
   if (value === null || isNaN(value)) return
-  const pt = points.value.find(p => p.id === pointId)
-  if (pt) {
-    pt.targetPressure = value
-  }
+  measurementStore.updatePointTarget(pointId, value)
 }
 
 function formatTime(timestamp: string): string {

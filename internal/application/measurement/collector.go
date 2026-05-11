@@ -2,7 +2,9 @@ package measurement
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"log"
 	"time"
 
 	"cal1604/internal/application/session"
@@ -22,8 +24,19 @@ func (s *Service) RunAutoCollection(ctx context.Context) error {
 	pressureDriver := s.sess.PressureDriver()
 
 	var collectErr error
+pointsLoop:
 	for _, point := range points {
+		select {
+		case <-ctx.Done():
+			collectErr = ctx.Err()
+			break pointsLoop
+		default:
+		}
 		if err := s.ManualPressurize(ctx, point.Index); err != nil {
+			if errors.Is(err, ErrPointSkipped) {
+				log.Printf("[measurement] point %d skipped by user", point.Index)
+				continue
+			}
 			collectErr = err
 			break
 		}
@@ -62,6 +75,9 @@ func (s *Service) ManualPressurize(ctx context.Context, pointIndex int) error {
 	if err != nil {
 		return err
 	}
+
+	log.Printf("[measurement] ManualPressurize point=%d target=%.4f stableWait=%dms timeout=%dms",
+		pointIndex, point.TargetPressure, stableWaitMs, stabilityTimeoutMs)
 
 	s.updatePointStatus(pointIndex, domain.PointStatusPressurizing)
 	if err := s.transitionTo(domain.SessionStatePressurizing); err != nil {
@@ -166,7 +182,7 @@ func (s *Service) preparePressureStep(pointIndex int) (device.PressureDriver, do
 
 	stabilityTimeoutMs := s.config.StabilityTimeoutMs
 	if stabilityTimeoutMs <= 0 {
-		stabilityTimeoutMs = 60000
+		stabilityTimeoutMs = 120000
 	}
 
 	return pressureDriver, s.points[pointIndex-1], stableWaitMs, stabilityTimeoutMs, nil
@@ -277,6 +293,7 @@ func (s *Service) updatePointCollectedData(pointIndex int, data []float64, colle
 }
 
 // waitForMeasurementStability 等待压力稳定，通过 StabilityMonitor 判定并发布 SSE 进度事件。
+// 超时时不直接失败，而是发布超时事件等待前端用户决定：继续等待或跳过当前点。
 func (s *Service) waitForMeasurementStability(
 	ctx context.Context,
 	pointIndex int,
@@ -302,27 +319,44 @@ func (s *Service) waitForMeasurementStability(
 			return ctx.Err()
 		case <-ticker.C:
 			if time.Now().After(deadline) {
-				s.publish(events.EventMeasurementStabilityUpdate, map[string]any{
-					"pointIndex": pointIndex, "isStable": false, "isInRange": false,
-					"currentValue": 0, "stableDurationMs": 0, "requiredDurationMs": stableWaitMs, "progress": 0,
+				// 超时：发布事件并等待前端用户决定
+				s.publish(events.EventMeasurementStabilityTimeout, map[string]any{
+					"pointIndex": pointIndex,
 				})
-				return fmt.Errorf("stability timeout")
+
+				select {
+				case decision := <-s.stabilityTimeoutCh:
+					switch decision {
+					case "continue":
+						// 用户选择继续等待，重置超时倒计时
+						deadline = time.Now().Add(time.Duration(stabilityTimeoutMs) * time.Millisecond)
+						continue
+					case "skip":
+						return ErrPointSkipped
+					}
+				case <-ctx.Done():
+					return ctx.Err()
+				}
 			}
 
 			var status workflow.StabilityStatus
 			if hasDeviceStability {
-				// 设备判稳路径：查询硬件稳定标志，仍在统一倒计时框架内
+				// 设备判稳路径：查询硬件稳定标志，同时读取实际压力校验偏差。
+				// 硬件 IsStable 仅判断"压力不再变化"，不判断"是否到达目标值"，
+				// 必须结合实际压力才能确保压力已正确到达目标。
 				stable, err := deviceStability.IsStable(ctx)
 				if err != nil {
 					continue
 				}
-				// 设备报告稳定时 FeedSample 偏差为 0（累积器继续计时）
-				// 设备报告不稳定时 FeedSample 大偏差（累积器重置）
-				feedVal := targetPressure
-				if !stable {
-					feedVal = targetPressure + 1000
+				currentVal, valErr := pressureDriver.ReadCurrentPressure(ctx)
+				if valErr != nil {
+					continue
 				}
-				status = monitor.FeedSample(targetPressure, feedVal)
+				status = monitor.FeedSample(targetPressure, currentVal)
+				// 设备报告稳定且软件偏差已达标 → 提前结束等待
+				if stable && status.IsStable {
+					return nil
+				}
 			} else {
 				currentVal, valErr := pressureDriver.ReadCurrentPressure(ctx)
 				if valErr != nil {

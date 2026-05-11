@@ -30,7 +30,12 @@ func (d *ConST811ADriver) Disconnect(ctx context.Context) error {
 }
 
 func (d *ConST811ADriver) SetTargetPressure(ctx context.Context, target float64) error {
-	cmd := fmt.Sprintf("PRESsure:TARGet %.4f", target)
+	sendTarget := target
+	if target == 0 {
+		sendTarget = 0.0001
+	}
+	cmd := fmt.Sprintf("PRESsure:TARGet %.4f", sendTarget)
+	log.Printf("[811A] SetTargetPressure target=%.4f send=%.4f cmd=%q", target, sendTarget, cmd)
 	_, err := d.base.sendSCPICommand(ctx, cmd, 3*time.Second)
 	if err != nil {
 		return fmt.Errorf("set target pressure: %w", err)

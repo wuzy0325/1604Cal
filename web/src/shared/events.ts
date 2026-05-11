@@ -16,6 +16,7 @@ export const EVENT_MEASUREMENT_POINT_STATUS = 'measurement.point.status'
 export const EVENT_MEASUREMENT_ALARM_TRIGGERED = 'measurement.alarm.triggered'
 export const EVENT_MEASUREMENT_ALARM_RESOLVED = 'measurement.alarm.resolved'
 export const EVENT_MEASUREMENT_STABILITY_UPDATE = 'measurement.stability.update'
+export const EVENT_MEASUREMENT_STABILITY_TIMEOUT = 'measurement.stability.timeout'
 
 // Calibration 标定工作流事件
 export const EVENT_CALIBRATION_POINT_STATUS = 'calibration.point_status'

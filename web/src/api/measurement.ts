@@ -142,3 +142,8 @@ export async function manualPressurizeMeasurement(pointIndex: number): Promise<s
 export async function manualCollectMeasurement(pointIndex: number): Promise<string> {
   return (await apiPost<{ state: string }>('/measurement/manual-collect', { pointIndex })).state
 }
+
+/** 稳定超时决定：继续等待或跳过当前点 */
+export async function resolveStabilityTimeout(decision: 'continue' | 'skip'): Promise<void> {
+  await apiPost('/measurement/stability-timeout/resolve', { decision })
+}

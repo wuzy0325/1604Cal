@@ -97,13 +97,13 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { ArrowLeft } from '@element-plus/icons-vue'
 import { useMeasurementStore } from '@/stores/measurement'
 import type { MeasurementState } from '@/stores/measurement/types'
 import { useMeasurementDeviceStore } from '@/stores/measurement/deviceStore'
 import { useMeasurementSync } from '@/composables/useMeasurementSync'
-import { saveMeasurementAlarmConfig, exportMeasurementReport } from '@/api/measurement'
+import { saveMeasurementAlarmConfig, exportMeasurementReport, resolveStabilityTimeout } from '@/api/measurement'
 import PageLayout from '@/components/common/PageLayout.vue'
 import MeasurementSidebar from '@/components/measurement/MeasurementSidebar.vue'
 import MeasurementControl from '@/components/measurement/MeasurementControl.vue'
@@ -124,6 +124,7 @@ const isExporting = ref(false)
 const canStart = computed(() =>
   deviceStore.measureDevices.some(d => d.status === 'connected') &&
   deviceStore.pressureDevices.some(d => d.status === 'connected') &&
+  measurementStore.deviceBound &&
   measurementStore.points.length > 0
 )
 
@@ -255,6 +256,30 @@ watch(() => measurementStore.alarmPending, (pending) => {
   if (pending && !measurementStore.alarmConfig.confirmOnAlarm && measurementStore.alarmData) {
     const a = measurementStore.alarmData
     ElMessage.warning(`报警：${a.overLimitChannels.length} 个通道精度超限，最大偏差 ${(a.maxDeviation * 100).toFixed(2)}%`)
+  }
+})
+
+// 稳定超时弹窗：让用户选择继续等待或跳过当前点
+watch(() => measurementStore.stabilityTimeoutPending, async (pending) => {
+  if (!pending) return
+  measurementStore.stabilityTimeoutPending = false
+  try {
+    await ElMessageBox.confirm(
+      '当前压力点稳定等待超时，请选择处理方式：',
+      '稳定超时',
+      {
+        confirmButtonText: '继续等待',
+        cancelButtonText: '跳过此点',
+        distinguishCancelAndClose: true,
+        type: 'warning'
+      }
+    )
+    await resolveStabilityTimeout('continue')
+  } catch (action: unknown) {
+    const actionStr = typeof action === 'string' ? action : ''
+    if (actionStr === 'cancel') {
+      await resolveStabilityTimeout('skip')
+    }
   }
 })
 

@@ -40,6 +40,12 @@ func (s *Service) StartWorkflow(_ context.Context, channels []int) error {
 	currentState := s.sessionMachine.State()
 	if currentState != domain.SessionStateReady {
 		s.rows = nil
+		// error → idle → ready（error 不允许直接到 ready）
+		if currentState == domain.SessionStateError {
+			if err := s.sessionMachine.Transition(domain.SessionStateIdle); err != nil {
+				return fmt.Errorf("start measurement workflow: %w", err)
+			}
+		}
 		if err := s.sessionMachine.Transition(domain.SessionStateReady); err != nil {
 			return fmt.Errorf("start measurement workflow: %w", err)
 		}

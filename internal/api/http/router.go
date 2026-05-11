@@ -231,6 +231,7 @@ func newRouter(
 	mux.HandleFunc("POST /api/v1/measurement/manual-start", server.measurementManualStartHandler)
 	mux.HandleFunc("POST /api/v1/measurement/manual-pressurize", server.measurementManualPressurizeHandler)
 	mux.HandleFunc("POST /api/v1/measurement/manual-collect", server.measurementManualCollectHandler)
+	mux.HandleFunc("POST /api/v1/measurement/stability-timeout/resolve", server.measurementStabilityTimeoutResolveHandler)
 
 	// 校准流程
 	mux.HandleFunc("POST /api/v1/calibration/devices", server.calibrationSetDevicesHandler)

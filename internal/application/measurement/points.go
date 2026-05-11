@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"strconv"
 
-	apperrors "cal1604/internal/errors"
 	"cal1604/internal/domain"
+	apperrors "cal1604/internal/errors"
 )
 
 // SetConfig 更新计量模块当前配置。
@@ -100,12 +100,12 @@ func generatePointsFromCustom(config domain.WorkflowConfig) ([]domain.PressurePo
 			ID:             "measurement-point-" + strconv.Itoa(i+1),
 			Index:          i + 1,
 			TargetPressure: rounded,
-			Direction:      "forward",
+			Direction:      pointDirection(config, i),
 			Status:         domain.PointStatusPending,
 		})
 	}
 
-	if config.PressureMode != "roundTrip" {
+	if config.PressureMode != "roundTrip" || len(config.CustomPoints) != config.PointCount {
 		return points, nil
 	}
 
@@ -121,4 +121,11 @@ func generatePointsFromCustom(config domain.WorkflowConfig) ([]domain.PressurePo
 	}
 
 	return points, nil
+}
+
+func pointDirection(config domain.WorkflowConfig, index int) string {
+	if config.PressureMode != "roundTrip" || config.PointCount <= 0 || index < config.PointCount {
+		return "forward"
+	}
+	return "backward"
 }

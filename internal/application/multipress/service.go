@@ -517,6 +517,11 @@ func (s *Service) pollAllDevices(ctx context.Context) {
 		} else {
 			entry.state.CurrentPressure = r.pressure
 			entry.state.Stable = r.stable
+
+			// 排空中且压力已稳定 → 排空完成，切回空闲
+			if entry.state.Status == "exhausting" && r.stable {
+				entry.state.Status = "idle"
+			}
 		}
 		status := entry.state.Status
 		entry.mu.Unlock()
