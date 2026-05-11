@@ -2,6 +2,7 @@ import { onMounted, onUnmounted } from 'vue'
 import { createEventStream } from '@/api/client'
 import type { StreamEventPayload } from '@/types/api'
 import { useMeasurementStore } from '@/stores/measurement'
+import { useDeviceInventoryStore } from '@/stores/device/inventoryStore'
 import type { MeasurementState, StabilityUpdate, AlarmData } from '@/stores/measurement/types'
 import type { MeasurementPoint } from '@/api/measurement'
 import {
@@ -14,6 +15,7 @@ import {
   EVENT_MEASUREMENT_DATA_COLLECTED,
   EVENT_MULTIPRESS_PRESSURE_UPDATE,
 } from '@/shared/events'
+import { multipressListDevices } from '@/api/multipress'
 
 /**
  * Composable that manages SSE event stream for measurement view.
@@ -22,6 +24,7 @@ import {
  */
 export function useMeasurementSync() {
   const store = useMeasurementStore()
+  const deviceStore = useDeviceInventoryStore()
 
   let eventSource: EventSource | null = null
 
@@ -72,6 +75,7 @@ export function useMeasurementSync() {
           const pressure = data?.currentPressure as number | undefined
           if (deviceId && typeof pressure === 'number') {
             store.updateDevicePressure(deviceId, pressure)
+            deviceStore.updateDevicePressure(deviceId, pressure)
           }
           break
         }
@@ -87,6 +91,7 @@ export function useMeasurementSync() {
   }
 
   let pollTimer: ReturnType<typeof setInterval> | null = null
+  let pressureRefreshTimer: ReturnType<typeof setInterval> | null = null
 
   function startPolling() {
     if (pollTimer) return
@@ -101,10 +106,28 @@ export function useMeasurementSync() {
     }, 2000)
   }
 
+  function startPressureRefresh() {
+    if (pressureRefreshTimer) return
+    pressureRefreshTimer = setInterval(async () => {
+      try {
+        const states = await multipressListDevices()
+        for (const s of states) {
+          deviceStore.updateDevicePressure(s.deviceId, s.currentPressure)
+        }
+      } catch {
+        // 静默失败
+      }
+    }, 1000)
+  }
+
   function stopPolling() {
     if (pollTimer) {
       clearInterval(pollTimer)
       pollTimer = null
+    }
+    if (pressureRefreshTimer) {
+      clearInterval(pressureRefreshTimer)
+      pressureRefreshTimer = null
     }
   }
 
@@ -115,6 +138,7 @@ export function useMeasurementSync() {
     ])
     setupSSE()
     startPolling()
+    startPressureRefresh()
   })
 
   onUnmounted(() => {

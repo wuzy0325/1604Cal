@@ -32,13 +32,6 @@ func newTCPConnectionDriver(model string, host string, port int) *tcpConnectionD
 }
 
 func (d *tcpConnectionDriver) Connect(ctx context.Context) error {
-	d.mu.Lock()
-	if d.conn != nil {
-		_ = d.conn.Close()
-		d.conn = nil
-	}
-	d.mu.Unlock()
-
 	if !d.breaker.AllowRequest() {
 		return fmt.Errorf("%s: circuit breaker is open", d.model)
 	}
@@ -56,6 +49,10 @@ func (d *tcpConnectionDriver) Connect(ctx context.Context) error {
 		}
 
 		d.mu.Lock()
+		if d.conn != nil {
+			_ = d.conn.Close()
+			d.conn = nil
+		}
 		var dialer net.Dialer
 		conn, err := dialer.DialContext(ctx, "tcp", d.address)
 		if err != nil {
@@ -95,6 +92,14 @@ func (d *tcpConnectionDriver) Disconnect(_ context.Context) error {
 	return nil
 }
 
+// closeConn 关闭并清理已损坏的连接（调用者必须持有 d.mu）。
+func (d *tcpConnectionDriver) closeConn() {
+	if d.conn != nil {
+		_ = d.conn.Close()
+		d.conn = nil
+	}
+}
+
 // sendSCPICommand 发送 SCPI 命令并读取响应（带超时）。
 // 对于设置类命令（不含 ?），设备通常不回复，直接返回空响应以免阻塞 3 秒。
 func (d *tcpConnectionDriver) sendSCPICommand(ctx context.Context, cmd string, readTimeout time.Duration) (string, error) {
@@ -102,6 +107,10 @@ func (d *tcpConnectionDriver) sendSCPICommand(ctx context.Context, cmd string, r
 	defer d.mu.Unlock()
 	if d.conn == nil {
 		return "", fmt.Errorf("%s: not connected", d.model)
+	}
+	// 检查 context 是否已过期，避免将过期期限设置到 socket 导致 Windows WSAECONNABORTED
+	if err := ctx.Err(); err != nil {
+		return "", fmt.Errorf("%s write SCPI command %q: context error: %w", d.model, cmd, err)
 	}
 	_ = d.conn.SetReadDeadline(time.Now().Add(50 * time.Millisecond))
 	drainBuf := make([]byte, 4096)
@@ -118,6 +127,7 @@ func (d *tcpConnectionDriver) sendSCPICommand(ctx context.Context, cmd string, r
 		return "", fmt.Errorf("%s set write deadline: %w", d.model, err)
 	}
 	if _, err := fmt.Fprintf(d.conn, "%s\r\n", cmd); err != nil {
+		d.closeConn()
 		return "", fmt.Errorf("%s write SCPI command %q: %w", d.model, cmd, err)
 	}
 	// 设置类命令（不含 ?）通常无响应，跳过读取避免 3 秒超时阻塞
@@ -149,6 +159,10 @@ func (d *tcpConnectionDriver) sendWTN1604Command(ctx context.Context, cmd string
 	if d.conn == nil {
 		return "", fmt.Errorf("%s: not connected", d.model)
 	}
+	// 检查 context 是否已过期，避免将过期期限设置到 socket 导致 Windows WSAECONNABORTED
+	if err := ctx.Err(); err != nil {
+		return "", fmt.Errorf("%s write command %q: context error: %w", d.model, cmd, err)
+	}
 	deadline, ok := ctx.Deadline()
 	if !ok {
 		deadline = time.Now().Add(5 * time.Second)
@@ -157,23 +171,28 @@ func (d *tcpConnectionDriver) sendWTN1604Command(ctx context.Context, cmd string
 		return "", fmt.Errorf("%s set write deadline: %w", d.model, err)
 	}
 	if _, err := d.conn.Write([]byte(cmd)); err != nil {
+		d.closeConn()
 		return "", fmt.Errorf("%s write command %q: %w", d.model, cmd, err)
 	}
 	if err := d.conn.SetReadDeadline(time.Now().Add(readTimeout)); err != nil {
+		d.closeConn()
 		return "", fmt.Errorf("%s set read deadline: %w", d.model, err)
 	}
 	lenBuf := make([]byte, 2)
 	if _, err := io.ReadFull(d.conn, lenBuf); err != nil {
+		d.closeConn()
 		return "", fmt.Errorf("%s read length prefix: %w", d.model, err)
 	}
 	totalLen := int(binary.BigEndian.Uint16(lenBuf))
 	if totalLen < 2 {
+		d.closeConn()
 		return "", fmt.Errorf("%s invalid response length: %d", d.model, totalLen)
 	}
 	dataLen := totalLen - 2
 	data := make([]byte, dataLen)
 	if dataLen > 0 {
 		if _, err := io.ReadFull(d.conn, data); err != nil {
+			d.closeConn()
 			return "", fmt.Errorf("%s read response data: %w", d.model, err)
 		}
 	}

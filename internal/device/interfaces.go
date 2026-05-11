@@ -53,6 +53,7 @@ type CalibrationCapable interface {
 type DeviceStore interface {
 	Upsert(dev domain.Device)
 	UpdateStatus(id string, status domain.DeviceStatus) bool
+	UpdateUnit(id string, unit string) bool
 	Delete(id string)
 	Get(id string) (domain.Device, bool)
 	List() []domain.Device

@@ -9,6 +9,7 @@ import (
 
 	"cal1604/internal/application/session"
 	"cal1604/internal/device"
+	"cal1604/internal/domain"
 	"cal1604/internal/infrastructure/driver"
 )
 
@@ -135,6 +136,9 @@ func (s *Service) RegisterDevice(ctx context.Context, deviceID string) error {
 	s.entries[deviceID] = entry
 	s.mu.Unlock()
 
+	s.deviceManager.UpdateStatus(deviceID, domain.DeviceStatusConnected)
+	s.deviceManager.UpdateUnit(deviceID, unit)
+
 	s.publish("multipress.device.registered", map[string]any{
 		"deviceId": deviceID,
 		"name":     dev.Name,
@@ -163,6 +167,9 @@ func (s *Service) UnregisterDevice(ctx context.Context, deviceID string) error {
 	s.mu.Lock()
 	delete(s.entries, deviceID)
 	s.mu.Unlock()
+
+	s.deviceManager.UpdateStatus(deviceID, domain.DeviceStatusDisconnected)
+	s.deviceManager.UpdateUnit(deviceID, "")
 
 	s.publish("multipress.device.unregistered", map[string]any{
 		"deviceId": deviceID,
@@ -441,7 +448,7 @@ func (s *Service) pollLoop(ctx context.Context) {
 	}
 }
 
-// pollAllDevices 并发读取所有打压中/排空中设备的状态。
+// pollAllDevices 并发读取所有已注册设备的状态（含空闲设备，以便实时显示当前压力）。
 func (s *Service) pollAllDevices(ctx context.Context) {
 	s.mu.Lock()
 	var targets []*deviceEntry
@@ -449,7 +456,7 @@ func (s *Service) pollAllDevices(ctx context.Context) {
 		entry.mu.Lock()
 		status := entry.state.Status
 		entry.mu.Unlock()
-		if status == "pressurizing" || status == "exhausting" {
+		if status != "" && status != "error" {
 			targets = append(targets, entry)
 		}
 	}
@@ -476,16 +483,16 @@ func (s *Service) pollAllDevices(ctx context.Context) {
 			pollCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
 			defer cancel()
 
-			e.mu.Lock()
 			pressure, pErr := e.driver.ReadCurrentPressure(pollCtx)
 			stable, sErr := e.driver.ReadStability(pollCtx)
-			e.mu.Unlock()
 
 			result := pollResult{deviceID: e.state.DeviceID}
 			if pErr != nil {
 				result.err = pErr
+				log.Printf("[multipress.poll] %s ReadCurrentPressure error: %v", e.state.DeviceID, pErr)
 			} else {
 				result.pressure = pressure
+				log.Printf("[multipress.poll] %s ReadCurrentPressure ok pressure=%f", e.state.DeviceID, pressure)
 			}
 			if sErr == nil {
 				result.stable = stable
@@ -506,19 +513,21 @@ func (s *Service) pollAllDevices(ctx context.Context) {
 
 		entry.mu.Lock()
 		if r.err != nil {
-			entry.state.Status = "error"
 			entry.state.ErrorMessage = r.err.Error()
 		} else {
 			entry.state.CurrentPressure = r.pressure
 			entry.state.Stable = r.stable
 		}
+		status := entry.state.Status
 		entry.mu.Unlock()
 
-		s.publish("multipress.pressure.update", map[string]any{
-			"deviceId":        r.deviceID,
-			"currentPressure": r.pressure,
-			"stable":          r.stable,
-			"status":          entry.state.Status,
-		})
+		if r.err == nil {
+			s.publish("multipress.pressure.update", map[string]any{
+				"deviceId":        r.deviceID,
+				"currentPressure": r.pressure,
+				"stable":          r.stable,
+				"status":          status,
+			})
+		}
 	}
 }

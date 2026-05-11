@@ -75,17 +75,18 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ArrowLeft } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { useMultiPressStore } from '@/stores/multipress'
+import { useMultiPressSync } from '@/composables/useMultiPressSync'
 import PageLayout from '@/components/common/PageLayout.vue'
 import StatCard from '@/components/common/StatCard.vue'
 import PressureControlCard from './PressureControlCard.vue'
 
 const router = useRouter()
 const store = useMultiPressStore()
+useMultiPressSync()
 
 function goBack(): void { router.push('/') }
 
@@ -121,9 +122,6 @@ async function handleSetUnit(deviceId: string, unit: string): Promise<void> {
 async function handleStopAll(): Promise<void> {
   await store.stopAll()
 }
-
-onMounted(() => { store.loadPressureDevices(); store.setupListeners() })
-onUnmounted(() => { store.cleanup() })
 </script>
 
 <style scoped lang="scss">

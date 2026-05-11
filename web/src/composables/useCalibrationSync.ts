@@ -11,7 +11,9 @@ import {
   EVENT_DEVICE_STATUS_CHANGED,
   EVENT_CALIBRATION_STABILITY_PREFIX,
   EVENT_ALARM_TRIGGERED,
+  EVENT_MULTIPRESS_PRESSURE_UPDATE,
 } from '@/shared/events'
+import { multipressListDevices } from '@/api/multipress'
 
 // 稳定性 SSE 事件数据结构
 export interface StabilityEventData {
@@ -48,6 +50,7 @@ export function useCalibrationSync() {
   let eventSource: EventSource | null = null
   let pollTimer: ReturnType<typeof setInterval> | null = null
   let deviceRefreshTimer: ReturnType<typeof setInterval> | null = null
+  let pressureRefreshTimer: ReturnType<typeof setInterval> | null = null
   let bindingInProgress = false
   let boundMeasureId = ''
   let lastRepairAttemptAt = 0
@@ -131,6 +134,13 @@ export function useCalibrationSync() {
       if (payload.type === EVENT_ALARM_TRIGGERED) {
         alarmEvent.value = payload.data as AlarmEventData
       }
+      // 打压设备压力实时更新
+      if (payload.type === EVENT_MULTIPRESS_PRESSURE_UPDATE) {
+        const data = payload.data as { deviceId?: string; currentPressure?: number }
+        if (data?.deviceId && typeof data.currentPressure === 'number') {
+          deviceStore.updateDevicePressure(data.deviceId, data.currentPressure)
+        }
+      }
     })
   }
 
@@ -154,6 +164,20 @@ export function useCalibrationSync() {
     }, 5000)
   }
 
+  function startPressureRefresh() {
+    if (pressureRefreshTimer) return
+    pressureRefreshTimer = setInterval(async () => {
+      try {
+        const states = await multipressListDevices()
+        for (const s of states) {
+          deviceStore.updateDevicePressure(s.deviceId, s.currentPressure)
+        }
+      } catch {
+        // 静默失败
+      }
+    }, 1000)
+  }
+
   function stopPolling() {
     if (pollTimer) {
       clearInterval(pollTimer)
@@ -162,6 +186,10 @@ export function useCalibrationSync() {
     if (deviceRefreshTimer) {
       clearInterval(deviceRefreshTimer)
       deviceRefreshTimer = null
+    }
+    if (pressureRefreshTimer) {
+      clearInterval(pressureRefreshTimer)
+      pressureRefreshTimer = null
     }
   }
 
@@ -176,6 +204,7 @@ export function useCalibrationSync() {
     setupSSE()
     startPolling()
     startDeviceRefresh()
+    startPressureRefresh()
   })
 
   onUnmounted(() => {

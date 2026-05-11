@@ -203,6 +203,7 @@ func (s *Service) Disconnect(ctx context.Context, id string) (domain.Device, err
 
 	s.clearActiveDriver(id)
 	dev.Status = domain.DeviceStatusDisconnected
+	dev.Unit = ""
 	dev.LastErrorReason = ""
 	dev.LastErrorAt = nil
 	s.store.Upsert(dev)

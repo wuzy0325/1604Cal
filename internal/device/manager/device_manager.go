@@ -44,6 +44,21 @@ func (m *DeviceManager) UpdateStatus(id string, status domain.DeviceStatus) bool
 	return true
 }
 
+// UpdateUnit 更新设备单位，不触发持久化（单位从硬件实时读取）。
+func (m *DeviceManager) UpdateUnit(id string, unit string) bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	dev, ok := m.devices[id]
+	if !ok {
+		return false
+	}
+
+	dev.Unit = unit
+	m.devices[id] = dev
+	return true
+}
+
 // Delete 删除指定设备。
 func (m *DeviceManager) Delete(id string) {
 	m.mu.Lock()

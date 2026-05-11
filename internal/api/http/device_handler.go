@@ -25,6 +25,7 @@ import (
 type deviceManager interface {
 	Upsert(dev domain.Device)
 	UpdateStatus(id string, status domain.DeviceStatus) bool
+	UpdateUnit(id string, unit string) bool
 	Delete(id string)
 	Get(id string) (domain.Device, bool)
 	List() []domain.Device
@@ -204,6 +205,10 @@ func (s *apiServer) handleUpsertDevice(w http.ResponseWriter, r *http.Request) {
 	if existed {
 		dev.LastErrorReason = old.LastErrorReason
 		dev.LastErrorAt = old.LastErrorAt
+		// 已连接设备的 unit 从硬件实时读取，编辑配置时不能覆盖
+		if old.Status == domain.DeviceStatusConnected && old.Unit != "" {
+			dev.Unit = old.Unit
+		}
 	}
 
 	s.deviceManager.Upsert(dev)

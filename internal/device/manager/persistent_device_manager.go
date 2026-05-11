@@ -99,6 +99,21 @@ func (m *PersistentDeviceManager) UpdateStatus(id string, status domain.DeviceSt
 	return true
 }
 
+// UpdateUnit 更新设备单位，不触发持久化（单位从硬件实时读取，不做本地保存）。
+func (m *PersistentDeviceManager) UpdateUnit(id string, unit string) bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	dev, ok := m.devices[id]
+	if !ok {
+		return false
+	}
+
+	dev.Unit = unit
+	m.devices[id] = dev
+	return true
+}
+
 // Delete 删除指定设备，并持久化到磁盘。
 func (m *PersistentDeviceManager) Delete(id string) {
 	m.mu.Lock()
@@ -260,6 +275,7 @@ func (m *PersistentDeviceManager) deviceList() []domain.Device {
 var _ interface {
 	Upsert(dev domain.Device)
 	UpdateStatus(id string, status domain.DeviceStatus) bool
+	UpdateUnit(id string, unit string) bool
 	Delete(id string)
 	Get(id string) (domain.Device, bool)
 	List() []domain.Device
