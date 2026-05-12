@@ -107,13 +107,28 @@ func NewSessionMachine() *SessionMachine {
 }
 
 // ForceStop 强制迁移到 stopped 状态。
-// 若直接迁移失败，尝试经由中间状态（如 pressurizing→paused→stopped）逐步抵达。
+// 若直接迁移失败，尝试经由中间状态逐步抵达。
+// 覆盖的所有状态路径：
+//   direct:  任意允许直达 stopped 的状态
+//   via paused:    pressurizing, stabilizing, collecting, point_done, await_manual_collect, await_alarm_resolution, ready
+//   via error:     fitting（fitting 不允许直达 stopped 但可以经 error 中转）
+//   via idle:      completed（completed 不允许直达 stopped 但可以经 idle 中转）
 func (m *SessionMachine) ForceStop() {
 	if m.Transition(domain.SessionStateStopped) == nil {
 		return
 	}
-	// pressurizing → paused → stopped
+	// 尝试经由 paused
 	if m.Transition(domain.SessionStatePaused) == nil {
+		_ = m.Transition(domain.SessionStateStopped)
+		return
+	}
+	// 尝试经由 idle
+	if m.Transition(domain.SessionStateIdle) == nil {
+		_ = m.Transition(domain.SessionStateStopped)
+		return
+	}
+	// 尝试经由 error
+	if m.Transition(domain.SessionStateError) == nil {
 		_ = m.Transition(domain.SessionStateStopped)
 	}
 }

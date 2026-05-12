@@ -30,10 +30,12 @@ const (
 const (
 	EventCalibrationPointStatus       = "calibration.point_status"
 	EventCalibrationAlarmResolved     = "calibration.alarm.resolved"
+	EventCalibrationStabilityUpdate   = "calibration.stability.update"
 	EventCalibrationStabilityChanged  = "calibration.stability.changed"
 	EventCalibrationStabilityLost     = "calibration.stability.lost"
 	EventCalibrationStabilityProgress = "calibration.stability.progress"
 	EventCalibrationStabilityAchieved = "calibration.stability.achieved"
+	EventCalibrationStabilityTimeout  = "calibration.stability.timeout"
 )
 
 // AutoCollection 自动采集事件

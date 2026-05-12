@@ -479,17 +479,6 @@ func TestResolveAlarmSupportsNewDecisions(t *testing.T) {
 	default:
 		t.Fatal("expected alarm decision to be sent to channel")
 	}
-
-	hasResolvedEvent := false
-	for _, eventType := range recorder.events {
-		if eventType == events.EventCalibrationAlarmResolved {
-			hasResolvedEvent = true
-			break
-		}
-	}
-	if !hasResolvedEvent {
-		t.Fatalf("expected calibration.alarm.resolved event, got %v", recorder.events)
-	}
 }
 
 func TestCollectPointAlarmDecisionSkip(t *testing.T) {

@@ -11,6 +11,8 @@ import {
   EVENT_DEVICE_STATUS_CHANGED,
   EVENT_CALIBRATION_STABILITY_PREFIX,
   EVENT_ALARM_TRIGGERED,
+  EVENT_CALIBRATION_ALARM_RESOLVED,
+  EVENT_CALIBRATION_POINT_STATUS,
   EVENT_MULTIPRESS_PRESSURE_UPDATE,
 } from '@/shared/events'
 import { multipressListDevices } from '@/api/multipress'
@@ -126,6 +128,18 @@ export function useCalibrationSync() {
       if (payload.type === EVENT_DEVICE_STATUS_CHANGED) {
         void deviceStore.loadDevices(true).then(bindConnectedMeasureDevice)
       }
+      // 压力点状态更新（采集数据、打压进度等）
+      if (payload.type === EVENT_CALIBRATION_POINT_STATUS) {
+        const data = payload.data as { index?: number; status?: string; collectedData?: number[]; actualPressure?: number }
+        if (typeof data?.index === 'number') {
+          const point = calibrationStore.pressurePoints.find(p => p.index === data.index)
+          if (point) {
+            if (data.status) point.status = data.status as typeof point.status
+            if (data.collectedData) point.collectedData = data.collectedData
+            if (data.actualPressure !== undefined) point.actualPressure = data.actualPressure
+          }
+        }
+      }
       // 稳定性 SSE 事件
       if (payload.type?.startsWith(EVENT_CALIBRATION_STABILITY_PREFIX)) {
         stabilityStatus.value = payload.data as StabilityEventData
@@ -133,6 +147,9 @@ export function useCalibrationSync() {
       // 报警事件
       if (payload.type === EVENT_ALARM_TRIGGERED) {
         alarmEvent.value = payload.data as AlarmEventData
+      }
+      if (payload.type === EVENT_CALIBRATION_ALARM_RESOLVED) {
+        alarmEvent.value = null
       }
       // 打压设备压力实时更新
       if (payload.type === EVENT_MULTIPRESS_PRESSURE_UPDATE) {

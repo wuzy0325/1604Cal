@@ -125,15 +125,7 @@
         >
           重置
         </button>
-        <button
-          v-if="measurementStore.totalRows > 0 || hasCompletedPoints"
-          type="button"
-          class="ctrl-btn btn-export"
-          @click="$emit('export')"
-        >
-          <el-icon><Download /></el-icon>
-          导出报告
-        </button>
+
       </div>
     </div>
 

@@ -145,30 +145,6 @@
           </span>
         </div>
         <div class="table-actions">
-          <el-button
-            size="small"
-            @click="$emit('selectTemplate')"
-          >
-            <el-icon><Document /></el-icon>
-            报告模板
-          </el-button>
-          <el-button
-            size="small"
-            type="primary"
-            :disabled="calibrationStore.pressurePoints.length === 0"
-            @click="$emit('exportReport')"
-          >
-            <el-icon><Download /></el-icon>
-            导出报告
-          </el-button>
-          <el-button
-            size="small"
-            :disabled="calibrationStore.pressurePoints.length === 0"
-            @click="exportCSV"
-          >
-            <el-icon><DataAnalysis /></el-icon>
-            导出CSV
-          </el-button>
         </div>
       </div>
 
@@ -246,19 +222,12 @@
 import { computed } from 'vue'
 import {
   Operation,
-  Document,
-  DataLine,
-  Download,
-  DataAnalysis,
   SetUp
 } from '@element-plus/icons-vue'
-import { ElMessage } from 'element-plus'
 import { useCalibrationStore } from '@/stores/calibration'
 import type { SessionState } from '@/types/calibration'
 
 defineEmits<{
-  selectTemplate: []
-  exportReport: []
 }>()
 
 const calibrationStore = useCalibrationStore()
@@ -370,33 +339,6 @@ const getChannelClass = (row: TableRow, index: number) => {
   if (diff < 0.1) return 'channel-good'
   if (diff < 0.5) return 'channel-warning'
   return 'channel-error'
-}
-
-// 导出 CSV
-const exportCSV = () => {
-  const points = calibrationStore.pressurePoints
-  if (points.length === 0) {
-    ElMessage.warning('没有可导出的数据')
-    return
-  }
-
-  const channels = calibrationStore.selectedChannels
-  const headers = ['序号', '目标压力', '实际压力', '状态', ...channels.map(ch => `CH${ch}`)]
-  const rows = points.map(p => [
-    p.index,
-    p.targetPressure.toFixed(2),
-    p.actualPressure?.toFixed(2) || '--',
-    getPointStatusText(p.status),
-    ...channels.map(ch => p.collectedData?.[ch - 1]?.toFixed(precision.value) || '--')
-  ])
-
-  const csvContent = [headers.join(','), ...rows.map(r => r.join(','))].join('\n')
-  const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' })
-  const link = document.createElement('a')
-  link.href = URL.createObjectURL(blob)
-  link.download = `calibration_data_${new Date().toISOString().split('T')[0]}.csv`
-  link.click()
-  ElMessage.success('报告已导出')
 }
 </script>
 

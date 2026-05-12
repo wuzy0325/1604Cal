@@ -10,6 +10,7 @@
             type="number"
             step="0.1"
             class="compact-input"
+            :disabled="isRunning"
           />
           <label class="input-label">最大</label>
           <input
@@ -17,6 +18,7 @@
             type="number"
             step="0.1"
             class="compact-input"
+            :disabled="isRunning"
           />
         </div>
       </div>
@@ -26,13 +28,13 @@
         <span class="group-label">采集配置</span>
         <div class="group-body">
           <label class="input-label">点数</label>
-          <input v-model.number="calibrationStore.calibrationParams.points" type="number" min="2" max="6" class="compact-input narrow" />
+          <input v-model.number="calibrationStore.calibrationParams.points" type="number" min="2" max="6" class="compact-input narrow" :disabled="isRunning" />
           <label class="input-label">精度</label>
-          <input v-model.number="calibrationStore.calibrationParams.precision" type="number" min="0" max="4" class="compact-input narrow" />
+          <input v-model.number="calibrationStore.calibrationParams.precision" type="number" min="0" max="4" class="compact-input narrow" :disabled="isRunning" />
           <label class="input-label">平均</label>
-          <input v-model.number="calibrationStore.calibrationParams.averageCount" type="number" min="1" max="100" class="compact-input narrow" />
+          <input v-model.number="calibrationStore.calibrationParams.averageCount" type="number" min="1" max="100" class="compact-input narrow" :disabled="isRunning" />
           <label class="input-label">等级</label>
-          <select v-model="calibrationStore.calibrationParams.precisionLevel" class="compact-select">
+          <select v-model="calibrationStore.calibrationParams.precisionLevel" class="compact-select" :disabled="isRunning">
             <option value="0.01">0.01%</option>
             <option value="0.05">0.05%</option>
             <option value="0.1">0.1%</option>
@@ -45,7 +47,7 @@
         <span class="group-label">稳定设置</span>
         <div class="group-body">
           <label class="input-label">时间</label>
-          <select v-model.number="calibrationStore.calibrationParams.stableTime" class="compact-select">
+          <select v-model.number="calibrationStore.calibrationParams.stableTime" class="compact-select" :disabled="isRunning">
             <option :value="1">1s</option>
             <option :value="3">3s</option>
             <option :value="5">5s</option>
@@ -63,12 +65,14 @@
               type="button"
               class="segment-btn"
               :class="{ active: calibrationStore.controlMode === 'auto' }"
+              :disabled="isRunning"
               @click="calibrationStore.controlMode = 'auto'"
             >自动</button>
             <button
               type="button"
               class="segment-btn"
               :class="{ active: calibrationStore.controlMode === 'manual' }"
+              :disabled="isRunning"
               @click="calibrationStore.controlMode = 'manual'"
             >手动</button>
           </div>
@@ -78,7 +82,7 @@
       <div class="param-group">
         <span class="group-label">采集通道</span>
         <div class="group-body">
-          <button class="channel-select-btn" @click="channelDialogVisible = true">
+          <button class="channel-select-btn" :disabled="isRunning" @click="channelDialogVisible = true">
             <el-icon><Grid /></el-icon>
             <span>{{ calibrationStore.selectedChannels.length }}/16</span>
           </button>
@@ -95,13 +99,15 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { Grid } from '@element-plus/icons-vue'
 import { useCalibrationStore } from '@/stores/calibration'
 import ChannelSelectDialog from '@/components/common/ChannelSelectDialog.vue'
 
 const calibrationStore = useCalibrationStore()
 const channelDialogVisible = ref(false)
+
+const isRunning = computed(() => calibrationStore.isRunning)
 
 let debounceTimer: ReturnType<typeof setTimeout> | null = null
 
@@ -259,6 +265,10 @@ $blue: #3b82f6;
     background: rgba(59, 130, 246, 0.06);
     border-color: $blue;
   }
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
 
   .el-icon {
     font-size: 12px;
@@ -285,6 +295,7 @@ $blue: #3b82f6;
   font-family: $font-sans;
 
   &:hover { color: $slate-700; }
+  &:disabled { opacity: 0.5; cursor: not-allowed; }
 
   &.active {
     background: linear-gradient(135deg, $mint, $mint-dark);

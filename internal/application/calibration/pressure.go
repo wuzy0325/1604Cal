@@ -200,39 +200,96 @@ func (s *Service) Pressurize(ctx context.Context, pointIndex int) error {
 	return nil
 }
 
-// waitForStabilityWithMonitor 使用 StabilityMonitor 等待压力稳定。
+// waitForStabilityWithMonitor 等待压力稳定，对齐计量工作台的判稳逻辑。
+// 支持硬件判稳（StabilityStatusProvider）+ 软件判稳双路径。
+// 超时取 config.StabilityTimeoutMs（默认 120s），读取压力连续失败时跳过而非报错。
+// 每次 tick 发布 calibration.stability.update 事件，前端可实时展示稳定计时和进度。
+// 超时时发布 timeout 事件等待用户决策（continue/skip）。
 func (s *Service) waitForStabilityWithMonitor(ctx context.Context, targetPressure float64) error {
-	tolerance := s.config.PrecisionLevel
-	if tolerance <= 0 {
-		tolerance = 0.0005
-	}
 	stableWaitMs := s.config.StableWaitMs
 	if stableWaitMs <= 0 {
 		stableWaitMs = 5000
 	}
-	monitor := workflow.NewStabilityMonitor(
-		tolerance,
-		time.Duration(stableWaitMs)*time.Millisecond,
-		workflow.StabilityEventPublisher(s.publish),
-	)
+	stabilityTimeoutMs := s.config.StabilityTimeoutMs
+	if stabilityTimeoutMs <= 0 {
+		stabilityTimeoutMs = 120000
+	}
 
-	deadline := time.Now().Add(60 * time.Second)
+	deadline := time.Now().Add(time.Duration(stabilityTimeoutMs) * time.Millisecond)
+	stableDuration := time.Duration(stableWaitMs) * time.Millisecond
+	ticker := time.NewTicker(200 * time.Millisecond)
+	defer ticker.Stop()
+
+	pressureDriver := s.getPressureDriver()
+	deviceStability, hasDeviceStability := pressureDriver.(device.StabilityStatusProvider)
+
+	// 软件判稳：使用固定容差 0.001，与计量工作台保持一致
+	monitor := workflow.NewStabilityMonitor(0.001, stableDuration, nil)
+
 	for {
-		if time.Now().After(deadline) {
-			return fmt.Errorf("stability timeout")
-		}
-		if ctx.Err() != nil {
+		select {
+		case <-ctx.Done():
 			return ctx.Err()
+		case <-ticker.C:
+			if time.Now().After(deadline) {
+				// 超时：发布事件并等待前端用户决定
+				s.publish(events.EventCalibrationStabilityTimeout, map[string]any{
+					"pointIndex":    s.currentPoint,
+					"targetPressure": targetPressure,
+				})
+
+				select {
+				case decision := <-s.stabilityTimeoutCh:
+					switch decision {
+					case "continue":
+						// 用户选择继续等待，重置超时倒计时
+						deadline = time.Now().Add(time.Duration(stabilityTimeoutMs) * time.Millisecond)
+						continue
+					case "skip":
+						return ErrPointSkipped
+					}
+				case <-ctx.Done():
+					return ctx.Err()
+				}
+			}
+
+			var status workflow.StabilityStatus
+			if hasDeviceStability {
+				// 设备判稳路径：SCPI 设备硬件自行判断压力稳定，软件仅依赖硬件 IsStable 标志。
+				// 设备报告稳定时 FeedSample 偏差为 0（累积器继续计时）；
+				// 设备报告不稳定时 FeedSample 大偏差（累积器重置）。
+				stable, err := deviceStability.IsStable(ctx)
+				if err != nil {
+					continue
+				}
+				feedVal := targetPressure
+				if !stable {
+					feedVal = targetPressure + 1000
+				}
+				status = monitor.FeedSample(targetPressure, feedVal)
+			} else {
+				currentVal, valErr := pressureDriver.ReadCurrentPressure(ctx)
+				if valErr != nil {
+					continue
+				}
+				status = monitor.FeedSample(targetPressure, currentVal)
+			}
+
+			// 每次 tick 发布统一的稳定状态更新（对齐计量 measurement.stability.update）
+			s.publish(events.EventCalibrationStabilityUpdate, map[string]any{
+				"isStable":           status.IsStable,
+				"isInRange":          status.IsInRange,
+				"currentValue":       status.CurrentValue,
+				"targetValue":        status.TargetValue,
+				"deviation":          status.Deviation,
+				"stableDurationMs":   status.StableDurationMs,
+				"requiredDurationMs": status.RequiredDurationMs,
+				"progress":           status.Progress,
+			})
+
+			if status.IsStable {
+				return nil
+			}
 		}
-		actual, err := s.getPressureDriver().ReadCurrentPressure(ctx)
-		if err != nil {
-			time.Sleep(time.Duration(stableWaitMs) * time.Millisecond)
-			return nil
-		}
-		status := monitor.FeedSample(targetPressure, actual)
-		if status.IsStable {
-			return nil
-		}
-		time.Sleep(200 * time.Millisecond)
 	}
 }

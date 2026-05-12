@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 	"sync"
 	"time"
 
@@ -42,6 +43,8 @@ var (
 	ErrMeasureDeviceNotSet = errors.New("measure device not set")
 	// ErrPressureDeviceNotSet 表示打压设备驱动尚未绑定。
 	ErrPressureDeviceNotSet = errors.New("pressure device not set")
+	// ErrPointSkipped 表示用户选择跳过当前点。
+	ErrPointSkipped = errors.New("point skipped by user")
 	// ErrInvalidStartState 表示当前会话状态不允许开始标定。
 	ErrInvalidStartState = errors.New("invalid session state for start")
 	// ErrNoPendingAlarm 表示当前没有待处理的报警。
@@ -89,11 +92,15 @@ type Service struct {
 	autoCollectionCtx    context.Context
 	autoCollectionCancel context.CancelFunc
 	autoCollectionMu     sync.Mutex
+	autoCollectWg        sync.WaitGroup
 
 	// alarmCh 用于在自动采集过程中阻塞等待用户确认报警。
 	alarmMu      sync.Mutex
 	alarmCh      chan string
 	alarmPending bool
+
+	// stabilityTimeoutCh 用于等待前端用户对稳定超时的决定。
+	stabilityTimeoutCh chan string
 
 	publish StatusPublisher
 
@@ -119,6 +126,7 @@ func NewService(
 		publish:                 publisher,
 		driverProvider:          driverProvider,
 		sessionService:          sessionSvc,
+		stabilityTimeoutCh:      make(chan string, 1),
 		startPrerequisiteConfig: defaultStartPrerequisiteConfig(),
 	}
 }
@@ -151,12 +159,21 @@ func (s *Service) getPressureDriver() device.PressureDriver {
 // 是否校验阀门状态由 startPrerequisiteConfig.EnforceValveCalibration 控制。
 func (s *Service) StartCalibration(ctx context.Context) error {
 	s.mu.Lock()
-	
+
 	if s.getMeasureDriver() == nil {
 		s.mu.Unlock()
 		return ErrMeasureDeviceNotSet
 	}
+
+	// 在锁内提取所需配置
 	enforceValveGate := s.startPrerequisiteConfig.EnforceValveCalibration
+	measureDriver := s.getMeasureDriver()
+	avgCount := s.config.AverageCount
+	channels := s.config.Channels
+	pointCount := s.config.PointCount
+	if avgCount < 1 {
+		avgCount = 1
+	}
 
 	// 状态迁移: (idle|stopped|completed) -> ready
 	state := s.sessionMachine.State()
@@ -174,8 +191,9 @@ func (s *Service) StartCalibration(ctx context.Context) error {
 		return fmt.Errorf("%w: %s", ErrInvalidStartState, state)
 	}
 
+	// 阀门门禁（持有锁时执行，ReadValveStatus 可能 I/O 阻塞，但门禁仅用于开发联调阶段可接受）
 	if enforceValveGate {
-		valveStatus, err := s.getMeasureDriver().ReadValveStatus(ctx)
+		valveStatus, err := measureDriver.ReadValveStatus(ctx)
 		if err != nil {
 			s.mu.Unlock()
 			return fmt.Errorf("read valve status: %w", err)
@@ -186,30 +204,27 @@ func (s *Service) StartCalibration(ctx context.Context) error {
 		}
 	}
 
-	// WTN1604 开始多点校准
-	calDev, ok := s.getMeasureDriver().(device.CalibrationCapable)
-	if ok {
-		avgCount := s.config.AverageCount
-		if avgCount < 1 {
-			avgCount = 1
-		}
-		if err := calDev.StartCalibration(ctx, s.config.Channels, s.config.PointCount, avgCount); err != nil {
-			s.mu.Unlock()
+	calDev, calDevOK := measureDriver.(device.CalibrationCapable)
+	s.mu.Unlock()
+
+	// WTN1604 开始多点校准（不持有锁，避免 I/O 阻塞影响其他操作）
+	if calDevOK {
+		if err := calDev.StartCalibration(ctx, channels, pointCount, avgCount); err != nil {
 			return fmt.Errorf("start WTN1604 calibration: %w", err)
 		}
 	}
 
 	// 初始化校准会话记录
+	s.mu.Lock()
 	s.calibrationSession = &CalibrationSession{
 		ID:               fmt.Sprintf("cal-%d", time.Now().UnixMilli()),
 		StartTime:        time.Now(),
 		Config:           s.config,
-		Points:   s.pressurePoints,
+		Points:           s.pressurePoints,
 		MeasureDeviceID:  s.measureDevID,
 		PressureDeviceID: s.pressureDevID,
 		Status:           "running",
 	}
-
 	controlMode := s.config.ControlMode
 	s.mu.Unlock()
 
@@ -267,32 +282,35 @@ func (s *Service) ValidateStartPrerequisites(ctx context.Context) error {
 
 // EndCalibration 结束校准流程，执行确定性资源清理。
 // 停止自动采集循环、停止压力控制、结束 WTN1604 校准。
-// 不自动切阀（保留人工回阀路径），状态迁移由 handler 层完成。
+// 不自动切阀（保留人工回阀路径），不持有锁时执行设备 I/O。
 func (s *Service) EndCalibration(ctx context.Context) error {
 	s.StopAutoCollection()
 
+	// 先获取驱动引用（持有锁），I/O 操作在锁外执行
 	s.mu.Lock()
-	defer s.mu.Unlock()
-	
+	calDev, _ := s.getMeasureDriver().(device.CalibrationCapable)
+	pressureDriver := s.getPressureDriver()
+	s.mu.Unlock()
 
-	// WTN1604 结束校准
-	calDev, ok := s.getMeasureDriver().(device.CalibrationCapable)
-	if ok {
+	// WTN1604 结束校准（不持有锁，避免 I/O 阻塞影响其他操作）
+	if calDev != nil {
 		_ = calDev.EndCalibration(ctx)
 	}
 
 	// 停止压力控制
-	if s.getPressureDriver() != nil {
-		_ = s.getPressureDriver().Stop(ctx)
+	if pressureDriver != nil {
+		_ = pressureDriver.Stop(ctx)
 	}
 
 	// 关闭校准会话记录
+	s.mu.Lock()
 	if s.calibrationSession != nil {
 		now := time.Now()
 		s.calibrationSession.EndTime = &now
 		s.calibrationSession.Status = "completed"
 		s.calibrationSession.Points = s.pressurePoints
 	}
+	s.mu.Unlock()
 
 	return nil
 }
@@ -305,10 +323,15 @@ func (s *Service) RunAutoCollection(ctx context.Context) error {
 		s.autoCollectionMu.Unlock()
 		return ErrAutoCollectionRunning
 	}
-	s.autoCollectionCtx, s.autoCollectionCancel = context.WithCancel(ctx)
+	// 使用 context.Background() 而非传入的 ctx（HTTP 请求上下文），
+	// 因为 HTTP handler 返回后 r.Context() 会被立即取消，导致自动采集 goroutine 立即退出。
+	s.autoCollectionCtx, s.autoCollectionCancel = context.WithCancel(context.Background())
 	s.autoCollectionMu.Unlock()
 
+	s.autoCollectWg.Add(1)
+
 	go func() {
+		defer s.autoCollectWg.Done()
 		defer func() {
 			s.autoCollectionMu.Lock()
 			s.autoCollectionCancel = nil
@@ -385,92 +408,71 @@ func (s *Service) RunAutoCollection(ctx context.Context) error {
 }
 
 // collectPoint 采集单个压力点：打压 -> 稳定监控 -> 采集 -> 报警检查。
+// 使用迭代循环替代递归，设置最大重试次数避免栈溢出风险。
 func (s *Service) collectPoint(ctx context.Context, pointIndex int) error {
 	s.publish(events.EventPointStarted, map[string]any{"pointIndex": pointIndex})
 
-	if err := s.Pressurize(ctx, pointIndex); err != nil {
-		return fmt.Errorf("pressurize point %d: %w", pointIndex, err)
-	}
-
-	// 稳定性监控：使用 StabilityMonitor 进行带 SSE 事件推送的稳定判定
-	s.mu.Lock()
-	point := s.pressurePoints[pointIndex-1]
-	tolerance := s.config.PrecisionLevel
-	stableDurationMs := s.config.StableWaitMs
-	s.mu.Unlock()
-
-	if tolerance <= 0 {
-		tolerance = 0.0005
-	}
-	if stableDurationMs <= 0 {
-		stableDurationMs = 5000
-	}
-
-	monitor := workflow.NewStabilityMonitor(
-		tolerance,
-		time.Duration(stableDurationMs)*time.Millisecond,
-		workflow.StabilityEventPublisher(s.publish),
-	)
-
-	// 循环读取压力直到稳定
-	for {
-		if ctx.Err() != nil {
-			return ctx.Err()
+	const maxRetries = 3
+	for retry := 0; retry <= maxRetries; retry++ {
+		if retry > 0 {
+			// 重试前重置压力点状态，重新打压
+			s.mu.Lock()
+			if pointIndex >= 1 && pointIndex <= len(s.pressurePoints) {
+				s.pressurePoints[pointIndex-1].Status = domain.PointStatusPending
+				s.pressurePoints[pointIndex-1].CollectedData = nil
+				s.pressurePoints[pointIndex-1].ActualPressure = 0
+			}
+			s.mu.Unlock()
+			s.publish(events.EventPointRecollect, map[string]any{"pointIndex": pointIndex})
 		}
 
-		actual, err := s.getPressureDriver().ReadCurrentPressure(ctx)
+		if err := s.Pressurize(ctx, pointIndex); err != nil {
+			if errors.Is(err, ErrPointSkipped) {
+				s.updatePointStatus(pointIndex, domain.PointStatusSkipped)
+				s.publish(events.EventPointSkipped, map[string]any{"pointIndex": pointIndex})
+				return nil
+			}
+			return fmt.Errorf("pressurize point %d: %w", pointIndex, err)
+		}
+
+		// Pressurize() 返回表示打压已完成且压力稳定，直接进入采集。
+		data, err := s.Collect(ctx, pointIndex)
 		if err != nil {
-			return fmt.Errorf("read pressure for stability check: %w", err)
+			return fmt.Errorf("collect point %d: %w", pointIndex, err)
 		}
 
-		status := monitor.FeedSample(point.TargetPressure, actual)
-		if status.IsStable {
-			break
+		// 报警检查
+		action, err := s.checkAlarm(ctx, pointIndex, data)
+		if err != nil {
+			return fmt.Errorf("alarm check point %d: %w", pointIndex, err)
 		}
 
-		time.Sleep(200 * time.Millisecond)
-	}
+		switch action {
+		case workflow.AlarmDecisionRecollect:
+			// 继续重试循环
+			continue
 
-	data, err := s.Collect(ctx, pointIndex)
-	if err != nil {
-		return fmt.Errorf("collect point %d: %w", pointIndex, err)
-	}
+		case workflow.AlarmDecisionSkip:
+			s.mu.Lock()
+			if pointIndex >= 1 && pointIndex <= len(s.pressurePoints) {
+				s.pressurePoints[pointIndex-1].CollectedData = nil
+			}
+			s.mu.Unlock()
+			s.updatePointStatus(pointIndex, domain.PointStatusSkipped)
+			s.publish(events.EventPointSkipped, map[string]any{"pointIndex": pointIndex})
+			return nil
 
-	// 报警检查
-	action, err := s.checkAlarm(ctx, pointIndex, data)
-	if err != nil {
-		return fmt.Errorf("alarm check point %d: %w", pointIndex, err)
-	}
-
-	switch action {
-	case workflow.AlarmDecisionRecollect:
-		s.mu.Lock()
-		if pointIndex >= 1 && pointIndex <= len(s.pressurePoints) {
-			s.pressurePoints[pointIndex-1].Status = domain.PointStatusPending
-			s.pressurePoints[pointIndex-1].CollectedData = nil
-			s.pressurePoints[pointIndex-1].ActualPressure = 0
+		case workflow.AlarmDecisionStop:
+			s.publish(events.EventPointStopped, map[string]any{"pointIndex": pointIndex})
+			return errAutoCollectionStopped
 		}
-		s.mu.Unlock()
-		s.publish(events.EventPointRecollect, map[string]any{"pointIndex": pointIndex})
-		return s.collectPoint(ctx, pointIndex)
 
-	case workflow.AlarmDecisionSkip:
-		s.mu.Lock()
-		if pointIndex >= 1 && pointIndex <= len(s.pressurePoints) {
-			s.pressurePoints[pointIndex-1].CollectedData = nil
-		}
-		s.mu.Unlock()
-		s.updatePointStatus(pointIndex, domain.PointStatusSkipped)
-		s.publish(events.EventPointSkipped, map[string]any{"pointIndex": pointIndex})
+		// AlarmDecisionContinue — 正常完成
+		s.publish(events.EventPointCompleted, map[string]any{"pointIndex": pointIndex, "data": data})
 		return nil
-
-	case workflow.AlarmDecisionStop:
-		s.publish(events.EventPointStopped, map[string]any{"pointIndex": pointIndex})
-		return errAutoCollectionStopped
 	}
 
-	s.publish(events.EventPointCompleted, map[string]any{"pointIndex": pointIndex, "data": data})
-	return nil
+	return fmt.Errorf("point %d exceeded max retries (%d)", pointIndex, maxRetries)
 }
 
 // checkAlarm 检查采集数据是否触发报警，若触发则阻塞等待用户决策。
@@ -503,7 +505,8 @@ func (s *Service) checkAlarm(ctx context.Context, pointIndex int, data []float64
 
 	// 触发报警，进入等待报警确认状态
 	if err := s.sessionMachine.Transition(domain.SessionStateAwaitAlarmResolution); err != nil {
-		// 若状态机不支持该迁移，直接继续
+		// 若状态机不支持该迁移，记录日志后继续（不阻塞采集流程）
+		log.Printf("[calibration] checkAlarm: transition to await_alarm_resolution failed: %v", err)
 		return workflow.AlarmDecisionContinue, nil
 	}
 	s.publishSessionState()
@@ -581,11 +584,7 @@ func (s *Service) ResolveAlarm(decision string) error {
 
 	select {
 	case s.alarmCh <- decision:
-		s.publish(events.EventCalibrationAlarmResolved, map[string]any{
-			"pointIndex": s.currentPoint + 1,
-			"decision":   decision,
-			"triggered":  true,
-		})
+		// 事件由 checkAlarm 收到决策后统一发布，避免重复 SSE 推送。
 		return nil
 	default:
 		return fmt.Errorf("alarm channel blocked")
@@ -642,15 +641,18 @@ func (s *Service) ResumeAutoCollection(ctx context.Context) error {
 	return s.RunAutoCollection(ctx)
 }
 
-// StopAutoCollection 停止自动采集，取消后台 goroutine。
+// StopAutoCollection 停止自动采集，取消后台 goroutine 并等待退出。
 func (s *Service) StopAutoCollection() {
 	s.autoCollectionMu.Lock()
-	if s.autoCollectionCancel != nil {
-		s.autoCollectionCancel()
-		s.autoCollectionCancel = nil
-		s.autoCollectionCtx = nil
-	}
+	cancel := s.autoCollectionCancel
+	s.autoCollectionCancel = nil
+	s.autoCollectionCtx = nil
 	s.autoCollectionMu.Unlock()
+
+	if cancel != nil {
+		cancel()
+		s.autoCollectWg.Wait()
+	}
 
 	s.alarmMu.Lock()
 	if s.alarmPending && s.alarmCh != nil {
@@ -665,6 +667,15 @@ func (s *Service) StopAutoCollection() {
 }
 
 // IsAutoCollectionRunning 返回自动采集是否正在运行。
+// ResolveStabilityTimeout 接收前端用户对稳定超时的决定。
+// decision: "continue" 继续等待， "skip" 跳过当前点。
+func (s *Service) ResolveStabilityTimeout(decision string) {
+	select {
+	case s.stabilityTimeoutCh <- decision:
+	default:
+	}
+}
+
 func (s *Service) IsAutoCollectionRunning() bool {
 	s.autoCollectionMu.Lock()
 	defer s.autoCollectionMu.Unlock()

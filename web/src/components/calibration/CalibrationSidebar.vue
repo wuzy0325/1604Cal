@@ -94,11 +94,17 @@ defineEmits<{
 
 const calibrationStore = useCalibrationStore()
 
-const prerequisites = computed(() => [
-  { label: '1604 设备已连接', satisfied: calibrationStore.device1604Connected },
-  { label: '打压设备已连接', satisfied: calibrationStore.pressDeviceConnected },
-  { label: '已选择采集通道', satisfied: calibrationStore.channelsSelected }
-])
+const prerequisites = computed(() => {
+  const items = [
+    { label: '1604 设备已连接', satisfied: calibrationStore.device1604Connected },
+    { label: '已选择采集通道', satisfied: calibrationStore.channelsSelected }
+  ]
+  // 手动模式下打压设备为可选条件，不作为启动前置要求
+  if (calibrationStore.controlMode === 'auto') {
+    items.splice(1, 0, { label: '打压设备已连接', satisfied: calibrationStore.pressDeviceConnected })
+  }
+  return items
+})
 </script>
 
 <style scoped lang="scss">

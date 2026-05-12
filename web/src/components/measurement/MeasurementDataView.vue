@@ -105,15 +105,7 @@
           <span class="record-badge">{{ rows.length }} 条采样</span>
         </div>
         <div class="toolbar-actions">
-          <button
-            type="button"
-            class="action-btn"
-            :disabled="rows.length === 0"
-            @click="$emit('export-csv')"
-          >
-            <el-icon><Download /></el-icon>
-            导出CSV
-          </button>
+
         </div>
       </div>
       <div class="table-scroll custom-scroll">
@@ -156,7 +148,6 @@ const props = defineProps<{
 }>()
 
 defineEmits<{
-  'export-csv': []
   'collect-point': [pointIndex: number]
 }>()
 

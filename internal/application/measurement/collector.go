@@ -341,22 +341,18 @@ func (s *Service) waitForMeasurementStability(
 
 			var status workflow.StabilityStatus
 			if hasDeviceStability {
-				// 设备判稳路径：查询硬件稳定标志，同时读取实际压力校验偏差。
-				// 硬件 IsStable 仅判断"压力不再变化"，不判断"是否到达目标值"，
-				// 必须结合实际压力才能确保压力已正确到达目标。
+				// 设备判稳路径：SCPI 设备硬件自行判断压力稳定，软件仅依赖硬件 IsStable 标志。
+				// 设备报告稳定时 FeedSample 偏差为 0（累积器继续计时）；
+				// 设备报告不稳定时 FeedSample 大偏差（累积器重置）。
 				stable, err := deviceStability.IsStable(ctx)
 				if err != nil {
 					continue
 				}
-				currentVal, valErr := pressureDriver.ReadCurrentPressure(ctx)
-				if valErr != nil {
-					continue
+				feedVal := targetPressure
+				if !stable {
+					feedVal = targetPressure + 1000
 				}
-				status = monitor.FeedSample(targetPressure, currentVal)
-				// 设备报告稳定且软件偏差已达标 → 提前结束等待
-				if stable && status.IsStable {
-					return nil
-				}
+				status = monitor.FeedSample(targetPressure, feedVal)
 			} else {
 				currentVal, valErr := pressureDriver.ReadCurrentPressure(ctx)
 				if valErr != nil {

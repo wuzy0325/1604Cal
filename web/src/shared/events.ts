@@ -21,6 +21,7 @@ export const EVENT_MEASUREMENT_STABILITY_TIMEOUT = 'measurement.stability.timeou
 // Calibration 标定工作流事件
 export const EVENT_CALIBRATION_POINT_STATUS = 'calibration.point_status'
 export const EVENT_CALIBRATION_ALARM_RESOLVED = 'calibration.alarm.resolved'
+export const EVENT_CALIBRATION_STABILITY_UPDATE = 'calibration.stability.update'
 export const EVENT_CALIBRATION_STABILITY_CHANGED = 'calibration.stability.changed'
 export const EVENT_CALIBRATION_STABILITY_LOST = 'calibration.stability.lost'
 export const EVENT_CALIBRATION_STABILITY_PROGRESS = 'calibration.stability.progress'

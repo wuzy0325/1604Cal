@@ -19,15 +19,31 @@
             @click="calibrationStore.resolveAlarm('continue')"
           >
             <el-icon><CircleCheck /></el-icon>
-            报警确认继续
+            确认继续
+          </button>
+          <button
+            type="button"
+            class="ctrl-btn btn-fit"
+            @click="calibrationStore.resolveAlarm('skip')"
+          >
+            <el-icon><Right /></el-icon>
+            跳过此点
+          </button>
+          <button
+            type="button"
+            class="ctrl-btn btn-resume"
+            @click="calibrationStore.resolveAlarm('recollect')"
+          >
+            <el-icon><RefreshRight /></el-icon>
+            重新采集
           </button>
           <button
             type="button"
             class="ctrl-btn btn-stop"
-            @click="calibrationStore.resolveAlarm('recollect')"
+            @click="calibrationStore.resolveAlarm('stop')"
           >
-            <el-icon><RefreshRight /></el-icon>
-            报警重采
+            <el-icon><CloseBold /></el-icon>
+            停止标定
           </button>
         </template>
         <template v-else>
@@ -43,7 +59,7 @@
           <button
             type="button"
             class="ctrl-btn btn-pause"
-            :disabled="!calibrationStore.isRunning"
+            :disabled="!canPause"
             @click="calibrationStore.pauseCalibration()"
           >
             <el-icon><VideoPause /></el-icon>
@@ -71,7 +87,7 @@
           <button
             type="button"
             class="ctrl-btn btn-fit"
-            :disabled="!calibrationStore.hasCollectedData"
+            :disabled="!canFit"
             @click="calibrationStore.fitData()"
           >
             <el-icon><DataAnalysis /></el-icon>
@@ -80,6 +96,7 @@
           <button
             type="button"
             class="ctrl-btn btn-end"
+            :disabled="!canEnd"
             @click="calibrationStore.endCalibration()"
           >
             <el-icon><CircleClose /></el-icon>
@@ -100,7 +117,8 @@ import {
   CloseBold,
   DataAnalysis,
   CircleClose,
-  CircleCheck
+  CircleCheck,
+  Right
 } from '@element-plus/icons-vue'
 import { useCalibrationStore } from '@/stores/calibration'
 
@@ -108,6 +126,25 @@ const calibrationStore = useCalibrationStore()
 
 const sessionState = computed(() => calibrationStore.sessionState)
 const isRunning = computed(() => calibrationStore.isRunning)
+
+// 可暂停的状态：运行中的采集/打压/稳定阶段，排除拟合和报警等待
+const canPause = computed(() =>
+  isRunning.value &&
+  sessionState.value !== 'fitting' &&
+  sessionState.value !== 'await_alarm_resolution'
+)
+
+// 可拟合：有数据且未在拟合/已完成状态
+const canFit = computed(() =>
+  calibrationStore.hasCollectedData &&
+  sessionState.value !== 'fitting' &&
+  sessionState.value !== 'completed'
+)
+
+// 可结束：非空闲状态
+const canEnd = computed(() =>
+  sessionState.value !== 'idle' && sessionState.value !== 'stopped'
+)
 
 const completedCount = computed(() =>
   calibrationStore.pressurePoints.filter(p => p.status === 'completed').length
