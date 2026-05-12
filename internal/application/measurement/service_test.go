@@ -12,6 +12,8 @@ import (
 	"cal1604/internal/infrastructure/driver"
 )
 
+func float64Ptr(v float64) *float64 { return &v }
+
 // fakeMeasureDriver 最小实现，仅 CollectData。
 type fakeMeasureDriver struct {
 	data []float64
@@ -666,7 +668,7 @@ func TestMeasurementAlarmCheckNoAlarm(t *testing.T) {
 	point := domain.PressurePoint{
 		Index:          1,
 		TargetPressure: 100,
-		ActualPressure: 100.05,
+		ActualPressure: float64Ptr(100.05),
 	}
 
 	alarm, err := svc.CheckAlarm(point)
@@ -690,7 +692,7 @@ func TestMeasurementAlarmCheckTriggersAlarm(t *testing.T) {
 	point := domain.PressurePoint{
 		Index:          1,
 		TargetPressure: 100,
-		ActualPressure: 100.05,
+		ActualPressure: float64Ptr(100.05),
 		CollectedData:  []float64{100.05},
 	}
 
@@ -718,7 +720,7 @@ func TestMeasurementAlarmBlocksWhenConfirmRequired(t *testing.T) {
 	point := domain.PressurePoint{
 		Index:          1,
 		TargetPressure: 100,
-		ActualPressure: 100.05,
+		ActualPressure: float64Ptr(100.05),
 		CollectedData:  []float64{100.05},
 	}
 

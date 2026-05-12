@@ -332,13 +332,14 @@ func TestCollectUsesCalibrationPointCommandWhenSupported(t *testing.T) {
 func TestRetryPointManualModeWithoutPressureDeviceResetsOnly(t *testing.T) {
 	svc := NewService(workflow.NewSessionMachine(), nil, nil, nil, nil, nil)
 	svc.config = domain.WorkflowConfig{ControlMode: "manual"}
+	ap := 10.15
 	svc.pressurePoints = []domain.PressurePoint{
 		{
 			Index:          1,
 			TargetPressure: 10,
 			Status:         domain.PointStatusCompleted,
 			CollectedData:  []float64{10.12, 10.23},
-			ActualPressure: 10.15,
+			ActualPressure: &ap,
 		},
 	}
 
@@ -353,8 +354,8 @@ func TestRetryPointManualModeWithoutPressureDeviceResetsOnly(t *testing.T) {
 	if point.CollectedData != nil {
 		t.Fatalf("expected collected data to be cleared, got %#v", point.CollectedData)
 	}
-	if point.ActualPressure != 0 {
-		t.Fatalf("expected actual pressure reset to 0, got %v", point.ActualPressure)
+	if point.ActualPressure != nil {
+		t.Fatalf("expected actual pressure reset to nil, got %v", point.ActualPressure)
 	}
 }
 

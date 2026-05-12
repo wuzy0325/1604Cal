@@ -187,7 +187,7 @@ func (s *Service) Pressurize(ctx context.Context, pointIndex int) error {
 	actual, err := s.getPressureDriver().ReadCurrentPressure(ctx)
 	if err == nil {
 		s.mu.Lock()
-		s.pressurePoints[pointIndex-1].ActualPressure = actual
+		s.pressurePoints[pointIndex-1].ActualPressure = &actual
 		s.mu.Unlock()
 	}
 

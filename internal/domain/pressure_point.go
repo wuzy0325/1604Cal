@@ -91,7 +91,7 @@ type PressurePoint struct {
 	TargetPressure float64   `json:"targetPressure"`
 	Direction      string    `json:"direction"` // forward | backward
 	Status         string    `json:"status"`
-	ActualPressure float64   `json:"actualPressure,omitempty"`
+	ActualPressure *float64  `json:"actualPressure,omitempty"`
 	CollectedData  []float64 `json:"collectedData,omitempty"`
 	CollectTime    string    `json:"collectTime,omitempty"`
 	ErrorMessage   string    `json:"errorMessage,omitempty"`

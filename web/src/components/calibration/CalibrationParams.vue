@@ -33,13 +33,7 @@
           <input v-model.number="calibrationStore.calibrationParams.precision" type="number" min="0" max="4" class="compact-input narrow" :disabled="isRunning" />
           <label class="input-label">平均</label>
           <input v-model.number="calibrationStore.calibrationParams.averageCount" type="number" min="1" max="100" class="compact-input narrow" :disabled="isRunning" />
-          <label class="input-label">等级</label>
-          <select v-model="calibrationStore.calibrationParams.precisionLevel" class="compact-select" :disabled="isRunning">
-            <option value="0.01">0.01%</option>
-            <option value="0.05">0.05%</option>
-            <option value="0.1">0.1%</option>
-            <option value="0.2">0.2%</option>
-          </select>
+
         </div>
       </div>
 

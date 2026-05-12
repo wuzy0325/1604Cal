@@ -1,4 +1,5 @@
 import { onMounted, onUnmounted, ref, type Ref, type InjectionKey } from 'vue'
+import { ElMessage } from 'element-plus'
 import { createEventStream } from '@/api/client'
 import { connectDevice } from '@/api/device'
 import { bindMeasureDevice } from '@/api/session'
@@ -14,6 +15,7 @@ import {
   EVENT_CALIBRATION_ALARM_RESOLVED,
   EVENT_CALIBRATION_POINT_STATUS,
   EVENT_MULTIPRESS_PRESSURE_UPDATE,
+  EVENT_AUTO_COLLECTION_COMPLETED,
 } from '@/shared/events'
 import { multipressListDevices } from '@/api/multipress'
 
@@ -150,6 +152,10 @@ export function useCalibrationSync() {
       }
       if (payload.type === EVENT_CALIBRATION_ALARM_RESOLVED) {
         alarmEvent.value = null
+      }
+      // 自动采集完成
+      if (payload.type === EVENT_AUTO_COLLECTION_COMPLETED) {
+        ElMessage.success('所有压力点采集完成，系统已自动排空')
       }
       // 打压设备压力实时更新
       if (payload.type === EVENT_MULTIPRESS_PRESSURE_UPDATE) {

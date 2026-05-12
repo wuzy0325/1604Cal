@@ -79,7 +79,7 @@ func (s *Service) CheckAlarm(point domain.PressurePoint) (*Alarm, error) {
 		alarm := &Alarm{
 			PointID:           point.ID,
 			TargetPressure:    point.TargetPressure,
-			ActualPressure:    point.ActualPressure,
+			ActualPressure:    func() float64 { if point.ActualPressure != nil { return *point.ActualPressure }; return 0 }(),
 			Threshold:         cfg.Threshold,
 			IsRelative:        cfg.IsRelative,
 			MaxDeviation:      maxDev,

@@ -260,9 +260,9 @@ func (s *Service) updatePointActualPressure(pointIndex int, actualPressure float
 		s.mu.Unlock()
 		return
 	}
-	s.points[pointIndex-1].ActualPressure = actualPressure
+	s.points[pointIndex-1].ActualPressure = &actualPressure
 	if s.session != nil && pointIndex <= len(s.session.Points) {
-		s.session.Points[pointIndex-1].ActualPressure = actualPressure
+		s.session.Points[pointIndex-1].ActualPressure = &actualPressure
 	}
 	point := s.points[pointIndex-1]
 	s.mu.Unlock()

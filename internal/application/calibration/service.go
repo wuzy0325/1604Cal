@@ -398,6 +398,10 @@ func (s *Service) RunAutoCollection(ctx context.Context) error {
 		ctx := s.autoCollectionCtx
 		s.autoCollectionMu.Unlock()
 		if ctx != nil && ctx.Err() == nil {
+			// 采集完成自动排空
+			if pressureDriver := s.getPressureDriver(); pressureDriver != nil {
+				_ = pressureDriver.Stop(ctx)
+			}
 			s.publish(events.EventAutoCollectionCompleted, map[string]any{
 				"totalPoints": totalPoints,
 			})
@@ -420,7 +424,7 @@ func (s *Service) collectPoint(ctx context.Context, pointIndex int) error {
 			if pointIndex >= 1 && pointIndex <= len(s.pressurePoints) {
 				s.pressurePoints[pointIndex-1].Status = domain.PointStatusPending
 				s.pressurePoints[pointIndex-1].CollectedData = nil
-				s.pressurePoints[pointIndex-1].ActualPressure = 0
+				s.pressurePoints[pointIndex-1].ActualPressure = nil
 			}
 			s.mu.Unlock()
 			s.publish(events.EventPointRecollect, map[string]any{"pointIndex": pointIndex})
@@ -600,7 +604,7 @@ func (s *Service) RetryPoint(ctx context.Context, pointIndex int) error {
 	}
 	s.pressurePoints[pointIndex-1].Status = domain.PointStatusPending
 	s.pressurePoints[pointIndex-1].CollectedData = nil
-	s.pressurePoints[pointIndex-1].ActualPressure = 0
+	s.pressurePoints[pointIndex-1].ActualPressure = nil
 	s.currentPoint = pointIndex - 1
 	controlMode := s.config.ControlMode
 	hasPressureDriver := s.getPressureDriver() != nil

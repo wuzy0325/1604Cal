@@ -51,6 +51,7 @@
             </template>
           </el-table-column>
           <el-table-column
+            v-if="calibrationStore.controlMode === 'manual'"
             label="确认"
             width="95"
           >
@@ -68,6 +69,7 @@
             </template>
           </el-table-column>
           <el-table-column
+            v-if="calibrationStore.controlMode === 'manual'"
             label="采集"
             width="95"
           >
@@ -85,6 +87,7 @@
             </template>
           </el-table-column>
           <el-table-column
+            v-if="calibrationStore.controlMode === 'manual'"
             label="操作"
             min-width="120"
           >
@@ -144,8 +147,6 @@
             {{ collectedCount }}/{{ tableData.length }} 已采集
           </span>
         </div>
-        <div class="table-actions">
-        </div>
       </div>
 
       <div class="table-body data-table-body">
@@ -188,21 +189,13 @@
               </span>
             </template>
           </el-table-column>
-          <el-table-column
-            label="状态"
-            width="85"
-            fixed="right"
-          >
-            <template #default="{ row }">
-              <el-tag
-                :type="getPointStatusType(row.status)"
-                size="small"
-              >
-                {{ getPointStatusText(row.status) }}
-              </el-tag>
-            </template>
-          </el-table-column>
         </el-table>
+          <div class="channel-legend">
+            <span class="legend-label">通道偏差：</span>
+            <span class="legend-item legend-good">≤ 0.1</span>
+            <span class="legend-item legend-warning">≤ 0.5</span>
+            <span class="legend-item legend-error">&gt; 0.5</span>
+          </div>
 
         <div
           v-if="calibrationStore.pressurePoints.length === 0"
@@ -316,7 +309,10 @@ const canPressurize = (status: string) =>
   canOperatePointActions.value && status === 'pending' && !manualModeWithoutPressDevice.value
 
 const canConfirm = (status: string) =>
-  canOperatePointActions.value && (status === 'stabilizing' || (calibrationStore.controlMode === 'manual' && status === 'pending'))
+  canOperatePointActions.value && (
+    (calibrationStore.controlMode === 'manual' && status === 'stabilizing') ||
+    (calibrationStore.controlMode === 'manual' && status === 'pending')
+  )
 
 const canCollect = (status: string) =>
   canOperatePointActions.value && (
@@ -488,6 +484,36 @@ $amber: #f59e0b;
 }
 
 .row-actions { display: flex; gap: 6px; }
+
+.channel-legend {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  font-size: 11px;
+  font-family: $font-sans;
+  color: $slate-500;
+  border-top: 1px solid $slate-200;
+}
+.legend-label { font-weight: 500; }
+.legend-item {
+  padding: 1px 8px;
+  border-radius: 4px;
+  font-weight: 600;
+  font-family: $font-mono;
+}
+.legend-good {
+  background: rgba(34, 197, 94, 0.1);
+  color: $green;
+}
+.legend-warning {
+  background: rgba(245, 158, 11, 0.1);
+  color: $amber;
+}
+.legend-error {
+  background: rgba(239, 68, 68, 0.1);
+  color: $red;
+}
 
 .row-btn {
   min-width: 56px;
