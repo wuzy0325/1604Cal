@@ -70,8 +70,8 @@ func EquidistantPoints(minPressure, maxPressure float64, pointCount, precision i
 		return forward
 	}
 
-	backward := make([]PressurePoint, pointCount-1)
-	for i := 0; i < pointCount-1; i++ {
+	backward := make([]PressurePoint, pointCount)
+	for i := 0; i < pointCount; i++ {
 		backward[i] = PressurePoint{
 			Index:          pointCount + i + 1,
 			TargetPressure: RoundToPrecision(maxPressure-step*float64(i), precision),

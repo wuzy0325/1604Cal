@@ -125,6 +125,15 @@
         >
           重置
         </button>
+        <button
+          v-if="hasCompletedPoints"
+          type="button"
+          class="ctrl-btn btn-export"
+          @click="$emit('export')"
+        >
+          <el-icon><Download /></el-icon>
+          导出报告
+        </button>
 
       </div>
     </div>

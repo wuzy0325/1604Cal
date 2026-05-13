@@ -109,7 +109,7 @@ func generatePointsFromCustom(config domain.WorkflowConfig) ([]domain.PressurePo
 		return points, nil
 	}
 
-	for i := len(config.CustomPoints) - 1; i > 0; i-- {
+	for i := len(config.CustomPoints) - 1; i >= 0; i-- {
 		rounded := domain.RoundToPrecision(config.CustomPoints[i], precision)
 		points = append(points, domain.PressurePoint{
 			ID:             "measurement-point-" + strconv.Itoa(len(points)+1),
