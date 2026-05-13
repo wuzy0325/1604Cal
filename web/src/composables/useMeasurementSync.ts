@@ -33,9 +33,15 @@ export function useMeasurementSync() {
     if (eventSource) return
     eventSource = createEventStream((payload: StreamEventPayload) => {
       switch (payload.type) {
-        case EVENT_MEASUREMENT_STATE_CHANGED:
-          store.syncState((payload.data as { state: MeasurementState }).state)
+        case EVENT_MEASUREMENT_STATE_CHANGED: {
+          const newState = (payload.data as { state: MeasurementState }).state
+          store.syncState(newState)
+          // 进入打压状态时清除旧报警标记，避免上个点的报警残留到当前点
+          if (newState === 'pressurizing') {
+            store.alarmData = null
+          }
           break
+        }
         case EVENT_MEASUREMENT_DATA_UPDATED: {
           const data = payload.data as { timestamp: string; channels: Record<string, number> }
           store.rows.push({ timestamp: data.timestamp, channels: data.channels })
@@ -55,7 +61,7 @@ export function useMeasurementSync() {
           break
         case EVENT_MEASUREMENT_ALARM_RESOLVED:
           store.alarmPending = false
-          // 保留 alarmData 不清理，红色标记持续到新数据覆盖
+          store.alarmData = null
           break
         case EVENT_MEASUREMENT_POINT_STATUS: {
           const updated = payload.data as MeasurementPoint
@@ -69,8 +75,6 @@ export function useMeasurementSync() {
           if (ptIdx >= 0) {
             store.points[ptIdx] = { ...store.points[ptIdx], collectedData: collected.data, status: 'completed' }
           }
-          // 新采集数据到达，清除旧报警标记；若仍超限后续 alarm.triggered 会重新设置
-          store.alarmData = null
           break
         }
         case EVENT_MULTIPRESS_PRESSURE_UPDATE: {
