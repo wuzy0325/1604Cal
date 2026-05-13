@@ -115,32 +115,7 @@ describe('CalibrationDataView', () => {
     expect(wrapper.text()).toContain('采集数据')
   })
 
-  it('keeps confirm and collect actions in point-operation rows', async () => {
-    const calibrationStore = useCalibrationStore()
-    calibrationStore.sessionState = 'ready'
-    const confirmSpy = vi.spyOn(calibrationStore as any, 'confirmPressure').mockImplementation(() => {})
-    const collectSpy = vi.spyOn(calibrationStore as any, 'collectData').mockResolvedValue(undefined)
-
-    const wrapper = mount(CalibrationDataView, {
-      global: {
-        stubs: {
-          ElTable: ElTableStub,
-          ElTableColumn: ElTableColumnStub,
-          ElButton: ElButtonStub,
-          ElTag: { template: '<span><slot /></span>' },
-          ElIcon: { template: '<i><slot /></i>' }
-        }
-      }
-    })
-
-    await wrapper.get('[data-testid="confirm-btn-point-1"]').trigger('click')
-    await wrapper.get('[data-testid="collect-btn-point-1"]').trigger('click')
-
-    expect(confirmSpy).toHaveBeenCalledWith('point-1')
-    expect(collectSpy).toHaveBeenCalledWith('point-1')
-  })
-
-  it('before start, manual mode keeps confirm disabled and hides pressurize action', () => {
+it('before start, manual mode keeps confirm disabled and hides pressurize action', () => {
     const calibrationStore = useCalibrationStore()
     const pressurePointStore = usePressurePointStore()
 
@@ -169,13 +144,11 @@ describe('CalibrationDataView', () => {
       }
     })
 
-    const confirmButton = wrapper.get('[data-testid="confirm-btn-point-1"]')
-    expect(confirmButton.attributes('disabled')).toBe('')
     expect(wrapper.text()).not.toContain('打压')
-    expect(wrapper.text()).toContain('待确认')
+    expect(wrapper.text()).toContain('待采集')
   })
 
-  it('after start, manual mode allows confirm then collect', async () => {
+  it('after start, manual mode allows collect directly for stabilizing point', () => {
     const calibrationStore = useCalibrationStore()
     const pressurePointStore = usePressurePointStore()
 
@@ -184,7 +157,7 @@ describe('CalibrationDataView', () => {
         id: 'point-1',
         index: 1,
         targetPressure: 10,
-        status: 'pending',
+        status: 'stabilizing',
         collectedData: undefined,
         actualPressure: undefined
       }
@@ -205,21 +178,13 @@ describe('CalibrationDataView', () => {
       }
     })
 
-    const collectButtonBeforeConfirm = wrapper.get('[data-testid="collect-btn-point-1"]')
-    expect(collectButtonBeforeConfirm.attributes('disabled')).toBe('')
-
-    await wrapper.get('[data-testid="confirm-btn-point-1"]').trigger('click')
-
-    expect(pressurePointStore.pressurePoints[0].status).toBe('stabilizing')
-    expect(wrapper.text()).toContain('待采集')
-    expect(wrapper.text()).not.toContain('稳定中')
-
-    const collectButtonAfterConfirm = wrapper.get('[data-testid="collect-btn-point-1"]')
-    expect(collectButtonAfterConfirm.attributes('disabled')).toBeUndefined()
+    const collectButton = wrapper.get('[data-testid="collect-btn-point-1"]')
+    expect(collectButton.attributes('disabled')).toBeUndefined()
   })
 
   it('keeps collect enabled for completed point without retry action', () => {
     const calibrationStore = useCalibrationStore()
+    ;(calibrationStore as any).controlMode = 'manual'
     calibrationStore.sessionState = 'ready'
 
     const wrapper = mount(CalibrationDataView, {

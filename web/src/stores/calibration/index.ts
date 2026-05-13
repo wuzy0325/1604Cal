@@ -256,27 +256,6 @@ export const useCalibrationStore = defineStore('calibration', () => {
     await pressurePointStore.pressurize(pointId)
   }
 
-  const confirmPressure = (pointId: string) => {
-    if (!canOperateCurrentPoint()) {
-      ElMessage.warning('请先开始标定流程')
-      return
-    }
-
-    const point = pressurePointStore.pressurePoints.find(p => p.id === pointId)
-    if (!point) {
-      return
-    }
-
-    // 手动模式下，pending 点可直接确认（操作者自行保证压力已到位）
-    if (controlMode.value === 'manual' && point.status === 'pending') {
-      point.status = 'stabilizing'
-      ElMessage.success('已确认压力到位，可以进行采集')
-      return
-    }
-
-    pressurePointStore.confirmPressure(pointId)
-  }
-
   const fitData = async () => {
     if (!hasCollectedData.value) {
       ElMessage.warning('没有可拟合的数据')
@@ -365,7 +344,6 @@ export const useCalibrationStore = defineStore('calibration', () => {
     stopCalibration,
     resolveAlarm,
     pressurize,
-    confirmPressure,
     collectData: pressurePointStore.collectData,
     fitData,
     endCalibration,

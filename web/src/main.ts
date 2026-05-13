@@ -6,7 +6,10 @@ import 'element-plus/dist/index.css'
 
 import App from './App.vue'
 import router from './router'
-import { initDesktopApiBase } from './api/client'
+import { initDesktopApiBase, createEventStream } from './api/client'
+import { EVENT_HARDWARE_COMMAND, EVENT_HARDWARE_RESPONSE } from './shared/events'
+import { useHardwareLogStore } from './stores/hardwareLog'
+import type { StreamEventPayload } from './types/api'
 import './styles/global.scss'
 
 async function bootstrap() {
@@ -20,9 +23,25 @@ async function bootstrap() {
     app.component(key, component)
   }
 
-  app.use(createPinia())
+  const pinia = createPinia()
+  app.use(pinia)
   app.use(router)
   app.use(ElementPlus)
+
+  // 全局监听硬件通讯事件
+  const hardwareLog = useHardwareLogStore()
+  createEventStream((payload: StreamEventPayload) => {
+    if (payload.type === EVENT_HARDWARE_COMMAND) {
+      const data = payload.data as { model?: string; proto?: string; cmd?: string }
+      hardwareLog.addEntry('hw-cmd', data?.model ?? '', data?.proto ?? '', data?.cmd ?? '')
+    }
+    if (payload.type === EVENT_HARDWARE_RESPONSE) {
+      const data = payload.data as { model?: string; proto?: string; resp?: string; cmd?: string }
+      const detail = data?.resp ?? ''
+      hardwareLog.addEntry('hw-res', data?.model ?? '', data?.proto ?? '', detail.length > 200 ? detail.slice(0, 200) + '...' : detail)
+    }
+  })
+
   app.mount('#app')
 }
 

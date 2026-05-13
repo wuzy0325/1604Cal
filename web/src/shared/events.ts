@@ -52,3 +52,7 @@ export const EVENT_MULTIPRESS_PRESSURE_UPDATE = 'multipress.pressure.update'
 
 // Alarm 报警事件
 export const EVENT_ALARM_TRIGGERED = 'alarm.triggered'
+
+// Hardware 硬件通讯日志事件
+export const EVENT_HARDWARE_COMMAND = 'hardware.command'
+export const EVENT_HARDWARE_RESPONSE = 'hardware.response'

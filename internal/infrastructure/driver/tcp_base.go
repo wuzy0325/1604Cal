@@ -10,6 +10,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"cal1604/internal/events"
 )
 
 // tcpConnectionDriver 负责维护 TCP 级别连接与命令交互。
@@ -103,6 +105,11 @@ func (d *tcpConnectionDriver) closeConn() {
 // sendSCPICommand 发送 SCPI 命令并读取响应（带超时）。
 // 对于设置类命令（不含 ?），设备通常不回复，直接返回空响应以免阻塞 3 秒。
 func (d *tcpConnectionDriver) sendSCPICommand(ctx context.Context, cmd string, readTimeout time.Duration) (string, error) {
+	events.GlobalBus.Publish(events.Event{Type: events.EventHardwareCommand, Data: map[string]any{
+		"model": d.model,
+		"proto": "SCPI",
+		"cmd":   cmd,
+	}})
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	if d.conn == nil {
@@ -149,11 +156,23 @@ func (d *tcpConnectionDriver) sendSCPICommand(ctx context.Context, cmd string, r
 			break
 		}
 	}
-	return strings.TrimSpace(resp.String()), nil
+	response := strings.TrimSpace(resp.String())
+	events.GlobalBus.Publish(events.Event{Type: events.EventHardwareResponse, Data: map[string]any{
+		"model":  d.model,
+		"proto":  "SCPI",
+		"resp":   response,
+		"cmd":    cmd,
+	}})
+	return response, nil
 }
 
 // sendWTN1604Command 发送 WTN1604 命令并读取长度前缀响应。
 func (d *tcpConnectionDriver) sendWTN1604Command(ctx context.Context, cmd string, readTimeout time.Duration) (string, error) {
+	events.GlobalBus.Publish(events.Event{Type: events.EventHardwareCommand, Data: map[string]any{
+		"model": d.model,
+		"proto": "WTN1604",
+		"cmd":   cmd,
+	}})
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	if d.conn == nil {
@@ -197,5 +216,11 @@ func (d *tcpConnectionDriver) sendWTN1604Command(ctx context.Context, cmd string
 		}
 	}
 	response := strings.TrimSpace(strings.ReplaceAll(string(data), "\x00", ""))
+	events.GlobalBus.Publish(events.Event{Type: events.EventHardwareResponse, Data: map[string]any{
+		"model":  d.model,
+		"proto":  "WTN1604",
+		"resp":   response,
+		"cmd":    cmd,
+	}})
 	return response, nil
 }

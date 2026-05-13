@@ -27,6 +27,11 @@ const router = createRouter({
       path: '/multi-pressure',
       name: 'module-multi-pressure',
       component: () => import('../views/multipress/MultiPressView.vue')
+    },
+    {
+      path: '/comm-log',
+      name: 'module-comm-log',
+      component: () => import('../views/CommLogView.vue')
     }
   ]
 })

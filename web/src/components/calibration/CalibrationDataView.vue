@@ -52,44 +52,8 @@
           </el-table-column>
           <el-table-column
             v-if="calibrationStore.controlMode === 'manual'"
-            label="确认"
-            width="95"
-          >
-            <template #default="{ row }">
-              <el-button
-                class="row-btn"
-                size="small"
-                :type="getConfirmButtonType(row.status)"
-                :disabled="!canConfirm(row.status)"
-                :data-testid="`confirm-btn-point-${row.index}`"
-                @click="calibrationStore.confirmPressure(row.id)"
-              >
-                确认
-              </el-button>
-            </template>
-          </el-table-column>
-          <el-table-column
-            v-if="calibrationStore.controlMode === 'manual'"
-            label="采集"
-            width="95"
-          >
-            <template #default="{ row }">
-              <el-button
-                class="row-btn"
-                size="small"
-                type="info"
-                :disabled="!canCollect(row.status)"
-                :data-testid="`collect-btn-point-${row.index}`"
-                @click="calibrationStore.collectData(row.id)"
-              >
-                采集
-              </el-button>
-            </template>
-          </el-table-column>
-          <el-table-column
-            v-if="calibrationStore.controlMode === 'manual'"
             label="操作"
-            min-width="120"
+            min-width="170"
           >
             <template #default="{ row }">
               <div class="row-actions">
@@ -103,16 +67,20 @@
                 >
                   打压
                 </el-button>
+                <el-button
+                  size="small"
+                  type="info"
+                  :disabled="!canCollect(row.status)"
+                  @click="calibrationStore.collectData(row.id)"
+                >
+                  采集
+                </el-button>
                 <span
-                  v-else-if="row.status === 'pending' && manualModeWithoutPressDevice"
-                  class="idle-text"
-                >{{ manualPendingActionText }}</span>
-                <span
-                  v-else-if="row.status === 'collecting'"
+                  v-if="row.status === 'collecting'"
                   class="collecting-text"
                 >采集中...</span>
                 <span
-                  v-else
+                  v-if="row.status !== 'pending' && row.status !== 'collecting' && !canCollect(row.status)"
                   class="idle-text"
                 >--</span>
               </div>
@@ -242,7 +210,7 @@ const getPointStatusType = (status: string) => {
 
 const getPointStatusText = (status: string) => {
   if (manualModeWithoutPressDevice.value) {
-    if (status === 'pending') return '待确认'
+    if (status === 'pending') return '待采集'
     if (status === 'stabilizing') return '待采集'
   }
 
@@ -301,10 +269,6 @@ const manualModeWithoutPressDevice = computed(() =>
   calibrationStore.controlMode === 'manual' && !calibrationStore.pressDeviceConnected
 )
 
-const manualPendingActionText = computed(() =>
-  canOperatePointActions.value ? '手动确认' : '--'
-)
-
 const canPressurize = (status: string) =>
   canOperatePointActions.value && status === 'pending' && !manualModeWithoutPressDevice.value
 
@@ -318,15 +282,9 @@ const canCollect = (status: string) =>
   canOperatePointActions.value && (
     status === 'stabilizing' ||
     status === 'completed' ||
-    status === 'error'
+    status === 'error' ||
+    (status === 'pending' && manualModeWithoutPressDevice.value)
   )
-
-const getConfirmButtonType = (status: string) => {
-  if (manualModeWithoutPressDevice.value && status === 'pending') {
-    return 'primary'
-  }
-  return 'warning'
-}
 
 const getChannelClass = (row: TableRow, index: number) => {
   const value = row.channelValues[index]

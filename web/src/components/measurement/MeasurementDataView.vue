@@ -74,7 +74,7 @@
               <td v-for="ch in channelCount" :key="ch" class="cell-channel">
                 <div
                   v-if="pt.collectedData && pt.collectedData[ch - 1] !== undefined"
-                  :class="['channel-value', { 'channel-over-limit': isOverLimitChannel(ch) }]"
+                  :class="['channel-value', { 'channel-over-limit': isChannelOverLimit(pt, ch) }]"
                 >
                   {{ pt.collectedData[ch - 1].toFixed(precisionForDisplay) }}
                 </div>
@@ -122,7 +122,7 @@
             <tr v-for="row in tableRows" :key="row.index" class="data-row">
               <td class="cell-index">{{ row.index }}</td>
               <td class="cell-pressure">{{ row.actualPressure }}</td>
-              <td v-for="ch in visibleChannels" :key="`${row.index}-${ch}`" :class="['cell-channel', { 'channel-over-limit': isOverLimitChannel(ch) }]">
+              <td v-for="ch in visibleChannels" :key="`${row.index}-${ch}`" class="cell-channel">
                 {{ row.channelValues[ch] ?? '--' }}
               </td>
               <td class="cell-time">{{ row.collectTime }}</td>
@@ -165,10 +165,38 @@ const currentPointIndex = computed(() => measurementStore.currentPointIndex)
 const precisionStep = computed(() => Math.pow(10, -(measurementStore.measurementParams.precision || 2)))
 
 const alarmEnabled = computed(() => measurementStore.alarmConfig.enabled)
-const overLimitChannels = computed(() => measurementStore.alarmData?.overLimitChannels ?? [])
+const precisionLevel = computed(() => measurementStore.measurementParams.precisionLevel)
+const minPressure = computed(() => measurementStore.measurementParams.minPressure)
+const maxPressure = computed(() => measurementStore.measurementParams.maxPressure)
 
-function isOverLimitChannel(ch: number): boolean {
-  return alarmEnabled.value && overLimitChannels.value.length > 0 && overLimitChannels.value.includes(ch)
+function getPointOverLimitChannels(pt: MeasurementPoint): number[] {
+  if (!alarmEnabled.value) return []
+  if (!pt.collectedData || pt.collectedData.length === 0) return []
+
+  const span = Math.abs(maxPressure.value - minPressure.value)
+  let allowance: number
+  
+  if (span > 1e-10) {
+    allowance = span * precisionLevel.value
+  } else {
+    allowance = Math.abs(pt.targetPressure) * precisionLevel.value
+  }
+
+  const overLimit: number[] = []
+  for (let ch = 1; ch <= pt.collectedData.length; ch++) {
+    const collectedVal = pt.collectedData[ch - 1]
+    const deviation = Math.abs(collectedVal - pt.targetPressure)
+
+    if (deviation > allowance) {
+      overLimit.push(ch)
+    }
+  }
+  return overLimit
+}
+
+function isChannelOverLimit(pt: MeasurementPoint, ch: number): boolean {
+  const overLimit = getPointOverLimitChannels(pt)
+  return overLimit.includes(ch)
 }
 
 function getRowClass(pt: MeasurementPoint): string {

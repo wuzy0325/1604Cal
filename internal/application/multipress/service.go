@@ -369,9 +369,6 @@ func (s *Service) ListDeviceStates() []DevicePressureState {
 		entry.mu.Unlock()
 		result = append(result, snapshot)
 	}
-	for _, st := range result {
-		log.Printf("[multipress.ListDeviceStates] device=%s unit=%q pressure=%f", st.DeviceID, st.Unit, st.CurrentPressure)
-	}
 	return result
 }
 
@@ -492,7 +489,7 @@ func (s *Service) pollAllDevices(ctx context.Context) {
 				log.Printf("[multipress.poll] %s ReadCurrentPressure error: %v", e.state.DeviceID, pErr)
 			} else {
 				result.pressure = pressure
-				log.Printf("[multipress.poll] %s ReadCurrentPressure ok pressure=%f", e.state.DeviceID, pressure)
+				// log.Printf("[multipress.poll] %s ReadCurrentPressure ok pressure=%f", e.state.DeviceID, pressure)
 			}
 			if sErr == nil {
 				result.stable = stable

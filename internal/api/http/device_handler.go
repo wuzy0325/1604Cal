@@ -3,7 +3,6 @@ package http
 import (
 	"context"
 	"errors"
-	"log"
 	"net/http"
 	"strings"
 
@@ -76,9 +75,6 @@ func (s *apiServer) listDevicesHandler(w http.ResponseWriter, _ *http.Request) {
 	devices := s.deviceManager.List()
 	if devices == nil {
 		devices = make([]domain.Device, 0)
-	}
-	for _, d := range devices {
-		log.Printf("[API devices] %s status=%q unit=%q", d.ID, d.Status, d.Unit)
 	}
 	writeSuccess(w, http.StatusOK, devices)
 }

@@ -75,7 +75,6 @@ export async function apiDelete<T>(path: string): Promise<T> {
 export async function requestJSON<T>(path: string, init?: RequestInit): Promise<T> {
   const resp = await fetch(`${API_BASE}${path}`, init)
   if (!resp.ok) {
-    // 尝试解析后端返回的错误详情
     let detail = ''
     try {
       const body = await resp.json()

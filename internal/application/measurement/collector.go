@@ -150,6 +150,35 @@ func (s *Service) ManualCollect(ctx context.Context, pointIndex int) error {
 	updatedPoint := s.getPoint(pointIndex)
 	if alarm, _ := s.CheckAlarm(updatedPoint); alarm != nil {
 		s.publish(events.EventMeasurementAlarmTriggered, alarm)
+
+		// 阻塞等待用户确认报警决定
+		s.mu.Lock()
+		s.alarmCh = make(chan string, 1)
+		alarmCh := s.alarmCh
+		s.mu.Unlock()
+
+		select {
+		case decision := <-alarmCh:
+			s.mu.Lock()
+			s.alarmPending = false
+			s.alarmCh = nil
+			s.mu.Unlock()
+
+			switch decision {
+			case workflow.AlarmDecisionStop:
+				return fmt.Errorf("alarm: user stopped after point %d", pointIndex)
+			case workflow.AlarmDecisionSkip:
+				// 跳过，继续下一个点
+			default:
+				// continue / recollect：继续流程
+			}
+		case <-ctx.Done():
+			s.mu.Lock()
+			s.alarmPending = false
+			s.alarmCh = nil
+			s.mu.Unlock()
+			return ctx.Err()
+		}
 	}
 
 	nextState := domain.SessionStateReady

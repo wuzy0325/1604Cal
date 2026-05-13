@@ -372,6 +372,10 @@ import {
   fetchUnitConsistency,
   upsertDevice
 } from "@/api/device"
+import {
+  multipressRegister,
+  multipressUnregister
+} from "@/api/multipress"
 import { createEventStream } from "@/api/client"
 import type {
   DeviceConnectConfigDTO,
@@ -655,9 +659,17 @@ async function toggleConnection(device: DeviceDTO) {
   errorMessage.value = ''
   try {
     if (device.status === 'connected') {
-      await disconnectDevice(device.id)
+      if (device.type === 'pressure') {
+        await multipressUnregister(device.id)
+      } else {
+        await disconnectDevice(device.id)
+      }
     } else {
-      await connectDevice(device.id)
+      if (device.type === 'pressure') {
+        await multipressRegister(device.id)
+      } else {
+        await connectDevice(device.id)
+      }
     }
     await refreshAll()
   } catch (error) {

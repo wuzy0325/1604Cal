@@ -107,19 +107,25 @@ func (s *Service) IsAlarmPending() bool {
 
 func (s *Service) ResolveAlarm(decision string) error {
 	s.mu.Lock()
-	defer s.mu.Unlock()
-
 	if !s.alarmPending {
+		s.mu.Unlock()
 		return fmt.Errorf("no alarm pending")
+	}
+
+	alarmCh := s.alarmCh
+	s.mu.Unlock()
+
+	// 通过 channel 将决定发送给阻塞等待的采集流程
+	if alarmCh != nil {
+		select {
+		case alarmCh <- decision:
+		default:
+		}
 	}
 
 	s.publish(events.EventMeasurementAlarmResolved, map[string]string{
 		"decision": decision,
-		"pointId":  s.currentAlarm.PointID,
 	})
-
-	s.alarmPending = false
-	s.currentAlarm = nil
 
 	return nil
 }

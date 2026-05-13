@@ -143,27 +143,15 @@ export const usePressurePointStore = defineStore('pressurePoint', () => {
     }
   }
 
-  // 确认压力
-  const confirmPressure = (pointId: string) => {
-    const point = pressurePoints.value.find(p => p.id === pointId)
-    if (!point) return
-
-    if (point.status === 'pressurizing') {
-      point.status = 'stabilizing'
-    }
-
-    if (point.status !== 'stabilizing') {
-      ElMessage.warning('当前点未进入可确认状态')
-      return
-    }
-
-    ElMessage.success('压力已确认，可以进行采集')
-  }
-
   // 采集数据
   const collectData = async (pointId: string) => {
     const point = pressurePoints.value.find(p => p.id === pointId)
     if (!point) return
+
+    // manual mode: pending auto-confirms on collect
+    if (point.status === 'pending') {
+      point.status = 'stabilizing'
+    }
 
     try {
       point.status = 'collecting'
@@ -209,7 +197,6 @@ export const usePressurePointStore = defineStore('pressurePoint', () => {
     removePressurePoint,
     updatePointStatus,
     pressurize,
-    confirmPressure,
     collectData,
     resetCollection,
     clearPoints

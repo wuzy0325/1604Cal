@@ -58,3 +58,6 @@ func (b *Bus) Subscribe() (<-chan Event, func()) {
 
 	return ch, unsubscribe
 }
+
+// GlobalBus 是全局事件总线单例，供 driver 和 api 包共同使用。
+var GlobalBus = NewBus()

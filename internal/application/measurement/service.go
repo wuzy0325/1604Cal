@@ -49,6 +49,9 @@ type Service struct {
 	alarmPending bool
 	currentAlarm *Alarm
 
+	// alarmCh 用于在自动采集过程中阻塞等待用户确认报警。
+	alarmCh chan string
+
 	// collectCtx 用于控制采集 goroutine 的生命周期。
 	collectCtx    context.Context
 	collectCancel context.CancelFunc
@@ -205,6 +208,16 @@ func (s *Service) Stop() error {
 	}
 	now := time.Now()
 	s.finishSessionLocked(domain.SessionStateStopped, &now)
+
+	// 清理报警阻塞等待
+	if s.alarmPending && s.alarmCh != nil {
+		select {
+		case s.alarmCh <- workflow.AlarmDecisionStop:
+		default:
+		}
+		s.alarmPending = false
+		s.alarmCh = nil
+	}
 
 	s.mu.Unlock()
 

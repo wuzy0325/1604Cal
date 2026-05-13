@@ -50,7 +50,7 @@
 import { ref } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import {
-  House, Tools, DataLine, SetUp, Odometer, DArrowRight
+  House, Tools, DataLine, SetUp, Odometer, DArrowRight, Document
 } from '@element-plus/icons-vue'
 
 const router = useRouter()
@@ -61,7 +61,8 @@ const menuItems = [
   { path: '/device-management', icon: Tools, title: '设备管理' },
   { path: '/calibration', icon: SetUp, title: '标定工作台' },
   { path: '/measurement', icon: DataLine, title: '计量工作台' },
-  { path: '/multi-pressure', icon: Odometer, title: '多设备打压' }
+  { path: '/multi-pressure', icon: Odometer, title: '多设备打压' },
+  { path: '/comm-log', icon: Document, title: '通讯日志' }
 ]
 
 function isActive(path: string): boolean {

@@ -8,15 +8,13 @@ import (
 	"cal1604/internal/events"
 )
 
-var defaultBus = events.NewBus()
-
 type sseEventPayload struct {
 	Type string `json:"type"`
 	Data any    `json:"data,omitempty"`
 }
 
 func publishEvent(eventType string, data any) {
-	defaultBus.Publish(events.Event{Type: eventType, Data: data})
+	events.GlobalBus.Publish(events.Event{Type: eventType, Data: data})
 }
 
 func eventsStreamHandler(w http.ResponseWriter, r *http.Request) {
@@ -32,7 +30,7 @@ func eventsStreamHandler(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	flusher.Flush()
 
-	ch, unsubscribe := defaultBus.Subscribe()
+	ch, unsubscribe := events.GlobalBus.Subscribe()
 	defer unsubscribe()
 
 	for {

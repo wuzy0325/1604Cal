@@ -62,3 +62,9 @@ const (
 	EventFittingCompleted = "fitting.completed"
 	EventPressureApplied  = "pressure.applied"
 )
+
+// Hardware 硬件通讯日志事件
+const (
+	EventHardwareCommand = "hardware.command" // 发送命令到设备
+	EventHardwareResponse = "hardware.response" // 收到设备响应
+)
