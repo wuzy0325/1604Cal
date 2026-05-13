@@ -425,7 +425,9 @@ const modelOptions = computed(() => {
   }
   return [
     { value: 'ConST811A', label: 'ConST811A' },
-    { value: 'ConST820', label: 'ConST820' }
+    { value: 'ConST820', label: 'ConST820' },
+    { value: 'ConST860', label: 'ConST860' },
+    { value: 'SPC4000', label: 'SPC4000' }
   ]
 })
 
