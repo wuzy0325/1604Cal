@@ -95,7 +95,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { ArrowLeft } from '@element-plus/icons-vue'
@@ -239,6 +239,13 @@ watch(
   },
   { deep: true }
 )
+
+onUnmounted(() => {
+  if (alarmSaveTimer) {
+    clearTimeout(alarmSaveTimer)
+    alarmSaveTimer = null
+  }
+})
 
 /* ── 报警弹窗 ── */
 const showAlarmDialog = computed(() =>

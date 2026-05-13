@@ -435,12 +435,14 @@ const modelOptions = computed(() => {
   ]
 })
 
-// 切换设备类型时自动设置型号：计量设备唯一型号自动填，打压设备清空等待选择
+// 切换设备类型时自动设置型号：仅在创建模式下生效
 watch(() => form.type, () => {
-  if (form.type === 'measure') {
-    form.model = 'WTN1604'
-  } else {
-    form.model = ''
+  if (dialogMode.value === 'create') {
+    if (form.type === 'measure') {
+      form.model = 'WTN1604'
+    } else {
+      form.model = ''
+    }
   }
 })
 

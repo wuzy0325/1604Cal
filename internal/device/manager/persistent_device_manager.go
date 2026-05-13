@@ -203,9 +203,11 @@ func (m *PersistentDeviceManager) saveToDisk() error {
 		Devices:     m.deviceList(),
 	}
 
-	// 单位从硬件实时读取，不做本地持久化。
+	// 已连接设备的单位保留，未连接设备的单位清空（下次连接时从硬件读取）
 	for i := range data.Devices {
-		data.Devices[i].Unit = ""
+		if data.Devices[i].Status != domain.DeviceStatusConnected {
+			data.Devices[i].Unit = ""
+		}
 	}
 
 	jsonData, err := json.MarshalIndent(data, "", "  ")
