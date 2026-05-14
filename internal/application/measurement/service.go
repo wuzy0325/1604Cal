@@ -19,6 +19,9 @@ import (
 
 var ErrPointSkipped = errors.New("point skipped by user")
 
+// allChannels 全部16个通道，用于始终读取全部通道数据。
+var allChannels = []int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16}
+
 // CollectedRow 单次采集的数据行。
 type CollectedRow struct {
 	Timestamp string             `json:"timestamp"`
@@ -112,8 +115,8 @@ func (s *Service) Start(ctx context.Context, channels []int) error {
 	if currentState != domain.SessionStatePaused {
 		s.rows = nil
 	}
+	// channels 仅用于报警通道配置，不用于限制数据采集（始终全采16通道）
 	s.channels = append([]int(nil), channels...)
-	s.sess.SetChannels(channels)
 
 	switch currentState {
 	case domain.SessionStateIdle, domain.SessionStateCompleted, domain.SessionStateError, domain.SessionStateReady:
@@ -275,13 +278,11 @@ func (s *Service) GetSessionByID(id string) (*Session, error) {
 	return store.Get(id)
 }
 
-// WriteCSV 将已采集数据写入 CSV 格式。
+// WriteCSV 将已采集数据写入 CSV 格式，始终输出全部16通道。
 func (s *Service) WriteCSV(w io.Writer) error {
 	s.mu.Lock()
 	rows := make([]CollectedRow, len(s.rows))
 	copy(rows, s.rows)
-	channels := make([]int, len(s.channels))
-	copy(channels, s.channels)
 	points := make([]domain.PressurePoint, len(s.points))
 	copy(points, s.points)
 	s.mu.Unlock()
@@ -295,24 +296,12 @@ func (s *Service) WriteCSV(w io.Writer) error {
 		return apperrors.ErrNoData
 	}
 
-	// 若 channels 为空，从 points 推断通道数
-	if len(channels) == 0 {
-		for _, p := range points {
-			if len(p.CollectedData) > len(channels) {
-				channels = make([]int, len(p.CollectedData))
-				for i := range channels {
-					channels[i] = i + 1
-				}
-			}
-		}
-	}
-
 	cw := csv.NewWriter(w)
 	defer cw.Flush()
 
-	// 表头
+	// 表头（始终输出全部16通道）
 	header := []string{"timestamp"}
-	for _, ch := range channels {
+	for _, ch := range allChannels {
 		header = append(header, fmt.Sprintf("channel_%d", ch))
 	}
 	if err := cw.Write(header); err != nil {
@@ -322,7 +311,7 @@ func (s *Service) WriteCSV(w io.Writer) error {
 	// 数据行
 	for _, row := range rows {
 		record := []string{row.Timestamp}
-		for _, ch := range channels {
+		for _, ch := range allChannels {
 			key := fmt.Sprintf("%d", ch)
 			if v, ok := row.Channels[key]; ok {
 				record = append(record, fmt.Sprintf("%.4f", v))
@@ -391,7 +380,6 @@ func (s *Service) startCollectLoop(_ context.Context) {
 					s.mu.Unlock()
 					return
 				}
-				channels := s.channels
 				s.mu.Unlock()
 
 				data, err := s.sess.ReadMeasureData(collectCtx)
@@ -411,9 +399,9 @@ func (s *Service) startCollectLoop(_ context.Context) {
 				}
 				consecutiveErrors = 0
 
-				// 构建通道映射
-				chMap := make(map[string]float64, len(channels))
-				for i, ch := range channels {
+				// 构建通道映射（始终包含全部16通道）
+				chMap := make(map[string]float64, 16)
+				for i, ch := range allChannels {
 					if i < len(data) {
 						chMap[fmt.Sprintf("%d", ch)] = data[i]
 					}

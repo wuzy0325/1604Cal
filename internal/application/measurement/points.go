@@ -17,9 +17,6 @@ func (s *Service) SetConfig(config domain.WorkflowConfig) {
 	s.session = nil
 	s.alarmPending = false
 	s.currentAlarm = nil
-	if len(config.Channels) > 0 {
-		s.channels = append([]int(nil), config.Channels...)
-	}
 }
 
 // GetConfig 返回当前计量配置快照。

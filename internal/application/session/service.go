@@ -12,6 +12,9 @@ import (
 	"cal1604/internal/infrastructure/driver"
 )
 
+// allChannels 全部16个通道，用于始终读取全部通道数据。
+var allChannels = []int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16}
+
 var (
 	// ErrMeasureDeviceNotSet 表示计量设备驱动尚未绑定。
 	ErrMeasureDeviceNotSet = errors.New("measure device not set")
@@ -41,9 +44,6 @@ type Service struct {
 	measureDevID   string
 	pressureDevID  string
 	boundBy        string
-
-	// channels 用于 ReadMeasureData 时指定通道，可由调用方设置。
-	channels []int
 
 	publish EventPublisher
 }
@@ -147,20 +147,6 @@ func (s *Service) BindMeasureDevice(measureDevID string, moduleName string) erro
 	return nil
 }
 
-// SetChannels 设置默认读取通道列表。
-func (s *Service) SetChannels(channels []int) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.channels = append([]int(nil), channels...)
-}
-
-// GetChannels 获取当前通道列表。
-func (s *Service) GetChannels() []int {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return append([]int(nil), s.channels...)
-}
-
 // MeasureDeviceID 返回当前绑定的计量设备 ID。
 func (s *Service) MeasureDeviceID() string {
 	s.mu.Lock()
@@ -199,20 +185,16 @@ func (s *Service) ReadStability(ctx context.Context) (bool, error) {
 	return drv.ReadStability(ctx)
 }
 
-// ReadMeasureData 从计量设备读取实时数据。
+// ReadMeasureData 从计量设备读取实时数据，始终读取全部16通道。
 func (s *Service) ReadMeasureData(ctx context.Context) ([]float64, error) {
 	s.mu.Lock()
 	drv := s.measureDriver
-	channels := s.channels
 	s.mu.Unlock()
 
 	if drv == nil {
 		return nil, ErrMeasureDeviceNotSet
 	}
-	if len(channels) == 0 {
-		channels = []int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16}
-	}
-	return drv.CollectData(ctx, channels)
+	return drv.CollectData(ctx, allChannels)
 }
 
 // ReadValveStatus 读取计量设备阀门状态。

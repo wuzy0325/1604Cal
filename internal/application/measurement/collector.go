@@ -229,13 +229,8 @@ func (s *Service) prepareCollectStep(pointIndex int) (device.MeasureDriver, doma
 		return nil, domain.PressurePoint{}, nil, 0, 0, fmt.Errorf("invalid point index: %d", pointIndex)
 	}
 
-	channels := append([]int(nil), s.channels...)
-	if len(channels) == 0 {
-		channels = append([]int(nil), s.config.Channels...)
-	}
-	if len(channels) == 0 {
-		return nil, domain.PressurePoint{}, nil, 0, 0, fmt.Errorf("no measurement channels configured")
-	}
+	// 始终采集全部16通道，通道选择仅用于报警判定
+	channels := allChannels
 
 	averageCount := s.config.AverageCount
 	if averageCount < 1 {

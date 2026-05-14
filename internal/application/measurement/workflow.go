@@ -25,17 +25,11 @@ func (s *Service) StartWorkflow(_ context.Context, channels []int) error {
 		return session.ErrMeasureDeviceNotSet
 	}
 
-	if len(channels) == 0 {
-		return fmt.Errorf("%w: no measurement channels selected", apperrors.ErrInvalidArgument)
-	}
-
 	if len(s.points) == 0 {
 		return fmt.Errorf("%w: measurement points not generated", apperrors.ErrInvalidArgument)
 	}
 
 	s.config.Channels = append([]int(nil), channels...)
-	s.channels = append([]int(nil), channels...)
-	s.sess.SetChannels(channels)
 
 	currentState := s.sessionMachine.State()
 	if currentState != domain.SessionStateReady {

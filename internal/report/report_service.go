@@ -234,10 +234,8 @@ func (s *Service) ExportMeasurementReport(ctx context.Context, points []domain.P
 		return fmt.Errorf("%w: no measurement points", apperrors.ErrNoActiveSession)
 	}
 
-	numChannels := len(config.Channels)
-	if numChannels == 0 {
-		numChannels = 1
-	}
+	// 始终输出全部16通道
+	numChannels := 16
 
 	// 提取正程标准压力值
 	standardValues := collectMeasurementStandardValues(points)
