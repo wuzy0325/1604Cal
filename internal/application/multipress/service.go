@@ -29,9 +29,10 @@ type StatusPublisher func(eventType string, data any)
 
 // deviceEntry 已注册设备的驱动实例与运行状态。
 type deviceEntry struct {
-	driver device.PressureDriver
-	state  DevicePressureState
-	mu     sync.Mutex // 串行化单台设备的命令，多设备可并行
+	driver            device.PressureDriver
+	state             DevicePressureState
+	mu                sync.Mutex // 串行化单台设备的命令，多设备可并行
+	consecutiveErrors int        // 连续轮询失败次数，>=3 时自动标记断连
 }
 
 // Service 多设备打压控制服务。
@@ -506,7 +507,22 @@ func (s *Service) pollAllDevices(ctx context.Context) {
 		entry.mu.Lock()
 		if r.err != nil {
 			entry.state.ErrorMessage = r.err.Error()
+			entry.consecutiveErrors++
+			// 连续 3 次轮询失败 → 自动标记断连
+			if entry.consecutiveErrors >= 3 {
+				entry.state.Status = "error"
+				entry.mu.Unlock()
+				s.deviceManager.UpdateStatus(r.deviceID, domain.DeviceStatusError)
+				s.publish("device.status.changed", map[string]any{
+					"id":          r.deviceID,
+					"type":        "pressure",
+					"status":      string(domain.DeviceStatusError),
+					"errorReason": r.err.Error(),
+				})
+				continue
+			}
 		} else {
+			entry.consecutiveErrors = 0
 			entry.state.CurrentPressure = r.pressure
 			entry.state.Stable = r.stable
 
