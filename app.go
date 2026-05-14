@@ -2,11 +2,11 @@ package main
 
 import (
 	"context"
-	"io"
 	"log"
 	"net"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -18,12 +18,14 @@ import (
 )
 
 const configPathEnvName = "CAL1604_CONFIG"
+const shutdownTimeout = 5 * time.Second
 
 // App 是 Wails 桌面应用的核心结构体，持有内嵌 HTTP 服务器生命周期状态。
 type App struct {
-	ctx    context.Context
-	server *http.Server
-	port   int
+	ctx           context.Context
+	server        *http.Server
+	port          int
+	shutdownFuncs []func(context.Context)
 }
 
 // NewApp 创建 App 实例。
@@ -36,12 +38,18 @@ func NewApp() *App {
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
 
-	// 调试日志：同时输出到 stderr 和 log 文件
-	logFile, err := os.OpenFile("cal1604_debug.log", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
-	if err == nil {
-		log.SetOutput(io.MultiWriter(os.Stderr, logFile))
+	logPath, err := debugLogPath()
+	if err != nil {
+		log.Printf("resolve debug log path failed: %v", err)
 	}
-	log.Printf("[app] startup at %s", time.Now().Format(time.RFC3339))
+	logFile, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
+	if err == nil {
+		// Windows GUI 程序通常没有可靠 stderr，MultiWriter 遇到 stderr 错误会导致文件也写不进去。
+		log.SetOutput(logFile)
+	} else {
+		log.Printf("open debug log %q failed: %v", logPath, err)
+	}
+	log.Printf("[app] startup cwd=%q log=%q at %s", mustGetwd(), logPath, time.Now().Format(time.RFC3339))
 
 	runtimeCfg, err := resolveRuntimeConfig(os.Getenv)
 	if err != nil {
@@ -64,12 +72,15 @@ func (a *App) startup(ctx context.Context) {
 	}
 	log.Printf("[app] reset %d device statuses to disconnected", len(deviceManager.List()))
 
-	router := apihttp.NewRouterWithRuntimeConfig(deviceManager, connectCfg, calibrationCfg, configPath, runtimeCfg)
+	router, shutdownSrv := apihttp.NewRouterWithShutdown(deviceManager, connectCfg, calibrationCfg, configPath, runtimeCfg)
+	if shutdownSrv != nil {
+		a.shutdownFuncs = append(a.shutdownFuncs, shutdownSrv)
+	}
 
 	// 为桌面环境添加 CORS 支持。
 	// Wails webview 使用 wails:// 协议加载前端页面，
 	// 向 http://127.0.0.1 发起的 API 请求需要 CORS 头。
-	corsHandler := withCORS(router)
+	// corsMiddleware 已在 router 层应用，此处无需重复包装。
 
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
@@ -77,7 +88,7 @@ func (a *App) startup(ctx context.Context) {
 	}
 
 	a.port = listener.Addr().(*net.TCPAddr).Port
-	a.server = &http.Server{Handler: corsHandler}
+	a.server = &http.Server{Handler: router}
 
 	go func() {
 		if err := a.server.Serve(listener); err != nil && err != http.ErrServerClosed {
@@ -88,16 +99,68 @@ func (a *App) startup(ctx context.Context) {
 	log.Printf("internal API server started on 127.0.0.1:%d", a.port)
 }
 
-// shutdown 在应用退出时被调用，优雅关闭内嵌 HTTP 服务器。
+// shutdown 在应用退出时被调用，优雅关闭内嵌 HTTP 服务器并释放所有后台资源。
 func (a *App) shutdown(ctx context.Context) {
+	log.Printf("[app] shutdown started")
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
+	defer cancel()
+
+	// 先关闭 HTTP 活动连接，取消正在阻塞的连接请求和 SSE 长连接。
 	if a.server != nil {
-		_ = a.server.Shutdown(ctx)
+		if err := a.server.Close(); err != nil && err != http.ErrServerClosed {
+			log.Printf("[app] force close HTTP server failed: %v", err)
+		}
 	}
+
+	cleanupDone := make(chan struct{})
+	go func() {
+		defer close(cleanupDone)
+		for _, fn := range a.shutdownFuncs {
+			fn(shutdownCtx)
+		}
+	}()
+
+	select {
+	case <-cleanupDone:
+		log.Printf("[app] shutdown cleanup completed")
+	case <-shutdownCtx.Done():
+		log.Printf("[app] shutdown cleanup timeout: %v", shutdownCtx.Err())
+	case <-ctx.Done():
+		log.Printf("[app] wails shutdown context canceled: %v", ctx.Err())
+	}
+
+	a.shutdownFuncs = nil
+
+	// Close 已强制断开活动连接；Shutdown 作为兜底释放内部资源，不能无限等待。
+	if a.server != nil {
+		_ = a.server.Shutdown(shutdownCtx)
+	}
+	log.Printf("[app] shutdown finished")
 }
 
 // GetAPIPort 返回内嵌 HTTP 服务器端口，供前端通过 Wails 绑定调用。
 func (a *App) GetAPIPort() int {
 	return a.port
+}
+
+func debugLogPath() (string, error) {
+	configDir, err := os.UserConfigDir()
+	if err != nil {
+		return "cal1604_debug.log", err
+	}
+	logDir := filepath.Join(configDir, "cal1604", "logs")
+	if err := os.MkdirAll(logDir, 0o755); err != nil {
+		return "cal1604_debug.log", err
+	}
+	return filepath.Join(logDir, "cal1604_debug.log"), nil
+}
+
+func mustGetwd() string {
+	wd, err := os.Getwd()
+	if err != nil {
+		return ""
+	}
+	return wd
 }
 
 // SaveFileContent 将内容写入指定文件（桌面模式导出用）。
@@ -124,23 +187,6 @@ func (a *App) ShowSaveFilePath(defaultName, filterName, filterPattern string) st
 		return ""
 	}
 	return path
-}
-
-// withCORS 包装 handler，添加宽松的 CORS 响应头。
-// 仅用于桌面环境：API 服务器监听 127.0.0.1，不暴露到网络。
-func withCORS(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Access-Control-Allow-Origin", "*")
-		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
-		w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
-
-		if r.Method == http.MethodOptions {
-			w.WriteHeader(http.StatusOK)
-			return
-		}
-
-		next.ServeHTTP(w, r)
-	})
 }
 
 // resolveRuntimeConfig 根据环境变量解析运行时配置。

@@ -2,7 +2,7 @@
   <div class="comm-log-panel">
     <div class="log-toolbar">
       <div class="toolbar-left">
-        <span class="toolbar-title">硬件通讯日志</span>
+        <span class="toolbar-title">系统日志</span>
         <el-tag size="small" type="info" class="count-tag">{{ filtered.length }}</el-tag>
       </div>
       <div class="toolbar-right">
@@ -13,9 +13,10 @@
           clearable
           style="width: 140px"
         />
-        <el-select v-model="filterKind" size="small" style="width: 100px" placeholder="全部类型" clearable>
+        <el-select v-model="filterKind" size="small" style="width: 110px" placeholder="全部类型" clearable>
           <el-option label="发送命令" value="hw-cmd" />
           <el-option label="设备响应" value="hw-res" />
+          <el-option label="系统错误" value="sys-error" />
         </el-select>
         <el-button size="small" @click="store.clear()">清空</el-button>
         <el-button size="small" @click="toggleAutoScroll">
@@ -31,7 +32,7 @@
         <span class="log-proto">{{ entry.proto }}</span>
         <span class="log-detail" :title="entry.detail">{{ entry.detail }}</span>
       </div>
-      <div v-if="filtered.length === 0" class="log-empty">暂无硬件通讯日志</div>
+      <div v-if="filtered.length === 0" class="log-empty">暂无系统日志</div>
     </div>
   </div>
 </template>
@@ -66,7 +67,11 @@ const filtered = computed(() => {
 })
 
 function kindLabel(kind: HwLogKind): string {
-  return kind === 'hw-cmd' ? 'CMD' : 'RES'
+  switch (kind) {
+    case 'hw-cmd': return 'CMD'
+    case 'hw-res': return 'RES'
+    case 'sys-error': return 'ERR'
+  }
 }
 
 function formatTime(ts: number): string {
@@ -175,6 +180,14 @@ watch(
 
   &.hw-cmd .log-kind { color: #569cd6; }
   &.hw-res .log-kind { color: #4ec9b0; }
+  &.sys-error {
+    background: rgba(248, 81, 73, 0.08);
+
+    .log-kind { color: #f85149; }
+    .log-model { color: #ffa198; }
+    .log-proto { color: #ffa198; }
+    .log-detail { color: #ff7b72; }
+  }
 }
 
 .log-time {

@@ -3,6 +3,7 @@ package manager
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"sort"
@@ -33,6 +34,7 @@ type PersistentDeviceManager struct {
 	mu          sync.RWMutex
 	devices     map[string]domain.Device
 	storagePath string
+	dirty       bool
 }
 
 // NewPersistentDeviceManager 创建持久化设备管理器。
@@ -80,7 +82,10 @@ func (m *PersistentDeviceManager) Upsert(dev domain.Device) {
 	defer m.mu.Unlock()
 
 	m.devices[dev.ID] = dev
-	_ = m.saveToDisk()
+	if err := m.saveToDiskLocked(); err != nil {
+		log.Printf("[device] 设备 %s 持久化失败: %v", dev.ID, err)
+		m.dirty = true
+	}
 }
 
 // UpdateStatus 更新设备连接状态，返回是否更新成功。
@@ -95,7 +100,10 @@ func (m *PersistentDeviceManager) UpdateStatus(id string, status domain.DeviceSt
 
 	dev.Status = status
 	m.devices[id] = dev
-	_ = m.saveToDisk()
+	if err := m.saveToDiskLocked(); err != nil {
+		log.Printf("[device] 设备 %s 状态更新持久化失败: %v", id, err)
+		m.dirty = true
+	}
 	return true
 }
 
@@ -120,7 +128,10 @@ func (m *PersistentDeviceManager) Delete(id string) {
 	defer m.mu.Unlock()
 
 	delete(m.devices, id)
-	_ = m.saveToDisk()
+	if err := m.saveToDiskLocked(); err != nil {
+		log.Printf("[device] 删除设备 %s 持久化失败: %v", id, err)
+		m.dirty = true
+	}
 }
 
 // Get 查询指定设备。
@@ -195,8 +206,25 @@ func (m *PersistentDeviceManager) StoragePath() string {
 	return m.storagePath
 }
 
-// saveToDisk 将设备数据保存到磁盘。
-func (m *PersistentDeviceManager) saveToDisk() error {
+// TryPersist 尝试将脏标记的数据持久化到磁盘。
+// 如果 dirty 为 false 或持久化失败，返回错误。
+func (m *PersistentDeviceManager) TryPersist() error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if !m.dirty {
+		return nil
+	}
+
+	if err := m.saveToDiskLocked(); err != nil {
+		return fmt.Errorf("persist dirty devices: %w", err)
+	}
+	m.dirty = false
+	return nil
+}
+
+// saveToDiskLocked 将设备数据保存到磁盘（调用方必须持有锁）。
+func (m *PersistentDeviceManager) saveToDiskLocked() error {
 	data := deviceStorageData{
 		Version:     storageVersion,
 		LastUpdated: time.Now().UTC().Format(time.RFC3339),

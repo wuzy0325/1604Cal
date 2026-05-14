@@ -16,7 +16,7 @@ import (
 // 委托给 session.Service 处理，同时保持本地驱动引用以供标定流程使用。
 func (s *Service) SetDevices(measureDevID, pressureDevID string) error {
 	if s.sessionService != nil {
-		if err := s.sessionService.BindDevices(measureDevID, pressureDevID); err != nil {
+		if err := s.sessionService.BindDevices(measureDevID, pressureDevID, "calibration"); err != nil {
 			return err
 		}
 		s.mu.Lock()

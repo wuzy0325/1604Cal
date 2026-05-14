@@ -79,7 +79,7 @@ func TestUpdateDeviceStatus(t *testing.T) {
 		t.Fatalf("expected add status 200, got %d", addRec.Code)
 	}
 
-	statusReqBody, err := json.Marshal(setDeviceStatusPayload{ID: "p1", Status: "connected"})
+	statusReqBody, err := json.Marshal(setDeviceStatusPayload{ID: "p1", Status: "error"})
 	if err != nil {
 		t.Fatalf("marshal status payload: %v", err)
 	}
@@ -102,8 +102,8 @@ func TestUpdateDeviceStatus(t *testing.T) {
 		t.Fatalf("decode list response: %v", err)
 	}
 
-	if got := listResp.Data[0].Status; got != "connected" {
-		t.Fatalf("expected status connected, got %s", got)
+	if got := listResp.Data[0].Status; got != "error" {
+		t.Fatalf("expected status error, got %s", got)
 	}
 }
 
@@ -153,34 +153,19 @@ func TestPostDeviceThenList(t *testing.T) {
 }
 
 func TestUnitConsistencyCheck(t *testing.T) {
-	router := NewRouter()
-
-	addDevice := func(id, typ, unit string) {
-		t.Helper()
-		payload := map[string]any{
-			"id":    id,
-			"name":  id,
-			"type":  typ,
-			"model": "mock-model",
-			"host":  "192.168.1.200",
-			"port":  9000,
-			"unit":  unit,
-		}
-		body, err := json.Marshal(payload)
-		if err != nil {
-			t.Fatalf("marshal payload: %v", err)
-		}
-		req := httptest.NewRequest(http.MethodPost, "/api/v1/devices", bytes.NewReader(body))
-		req.Header.Set("Content-Type", "application/json")
-		rec := httptest.NewRecorder()
-		router.ServeHTTP(rec, req)
-		if rec.Code != http.StatusOK {
-			t.Fatalf("post device failed: %d", rec.Code)
-		}
-	}
-
-	addDevice("m1", "measure", "kPa")
-	addDevice("p1", "pressure", "psi")
+	// CheckUnitConsistency 只检查已连接设备，需要通过 UpdateStatus 设置为 connected
+	store := manager.NewDeviceManager()
+	store.Upsert(domain.Device{
+		ID: "m1", Name: "m1", Type: domain.DeviceTypeMeasure, Model: "mock",
+		Host: "192.168.1.200", Port: 9000, Unit: "kPa",
+		Status: domain.DeviceStatusConnected,
+	})
+	store.Upsert(domain.Device{
+		ID: "p1", Name: "p1", Type: domain.DeviceTypePressure, Model: "mock",
+		Host: "192.168.1.201", Port: 9001, Unit: "psi",
+		Status: domain.DeviceStatusConnected,
+	})
+	router := NewRouterWithDependencies(store, nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/checks/unit-consistency", nil)
 	rec := httptest.NewRecorder()

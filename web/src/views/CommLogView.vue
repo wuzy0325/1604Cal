@@ -1,7 +1,7 @@
 <template>
   <PageLayout>
     <div class="comm-log-page">
-      <PageHeader title="通讯日志" subtitle="查看前端与后端之间的 API 调用和 SSE 事件流" />
+      <PageHeader title="系统日志" subtitle="硬件通讯日志与系统错误日志" />
       <CommLogPanel />
     </div>
   </PageLayout>

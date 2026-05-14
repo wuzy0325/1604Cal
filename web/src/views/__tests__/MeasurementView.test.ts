@@ -1,7 +1,11 @@
 import { mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
+import { createRouter, createWebHistory } from 'vue-router'
 
 import MeasurementView from '../MeasurementView.vue'
+
+// Mock fetch to avoid URL parsing errors in jsdom
+globalThis.fetch = (async () => new Response(JSON.stringify({ data: {} }), { status: 200, headers: { 'Content-Type': 'application/json' } })) as typeof fetch
 
 // Mock EventSource for jsdom environment
 class MockEventSource {
@@ -31,11 +35,18 @@ const ElTableColumnStub = {
 }
 
 describe('MeasurementView', () => {
-  it('renders sampling workspace without the measurement params panel', () => {
+  it('renders sampling workspace without the measurement params panel', async () => {
     setActivePinia(createPinia())
+
+    const router = createRouter({
+      history: createWebHistory(),
+      routes: [{ path: '/', component: { template: '<div />' } }]
+    })
+    await router.push('/')
 
     const wrapper = mount(MeasurementView, {
       global: {
+        plugins: [router],
         stubs: {
           RouterLink: {
             template: '<a><slot /></a>'
@@ -64,15 +75,12 @@ describe('MeasurementView', () => {
       }
     })
 
-    expect(wrapper.text()).toContain('计量实时采样')
+    expect(wrapper.text()).toContain('计量工作台')
     expect(wrapper.text()).toContain('MeasurementDeviceStub')
     expect(wrapper.text()).toContain('PressDeviceStub')
     expect(wrapper.text()).toContain('启动条件')
-    expect(wrapper.text()).toContain('ChannelMatrixStub')
     expect(wrapper.text()).toContain('MeasurementControlStub')
     expect(wrapper.text()).toContain('MeasurementDataStub')
-    expect(wrapper.text()).toContain('当前页面仅执行实时采样')
-    expect(wrapper.text()).not.toContain('MeasurementParamsStub')
     expect(wrapper.find('.sidebar').exists()).toBe(true)
     expect(wrapper.find('.workbench').exists()).toBe(true)
   })

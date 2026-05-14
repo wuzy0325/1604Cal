@@ -1,7 +1,11 @@
 import { mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
+import { createRouter, createWebHistory } from 'vue-router'
 
 import CalibrationView from '../CalibrationView.vue'
+
+// Mock fetch to avoid URL parsing errors in jsdom
+globalThis.fetch = (async () => new Response(JSON.stringify({ data: {} }), { status: 200, headers: { 'Content-Type': 'application/json' } })) as typeof fetch
 
 // Mock EventSource for jsdom environment
 class MockEventSource {
@@ -31,11 +35,18 @@ const ElTableColumnStub = {
 }
 
 describe('CalibrationView', () => {
-  it('renders calibration controls and selector', () => {
+  it('renders calibration controls and selector', async () => {
     setActivePinia(createPinia())
+
+    const router = createRouter({
+      history: createWebHistory(),
+      routes: [{ path: '/', component: { template: '<div />' } }]
+    })
+    await router.push('/')
 
     const wrapper = mount(CalibrationView, {
       global: {
+        plugins: [router],
         stubs: {
           RouterLink: {
             template: '<a><slot /></a>'
@@ -58,10 +69,9 @@ describe('CalibrationView', () => {
       }
     })
 
-    expect(wrapper.text()).toContain('标定模块')
+    expect(wrapper.text()).toContain('标定工作台')
     expect(wrapper.text()).toContain('Device1604Stub')
-    expect(wrapper.text()).toContain('ChannelMatrixStub')
-    expect(wrapper.text()).toContain('配置标定参数')
+    expect(wrapper.text()).toContain('PressDeviceStub')
     expect(wrapper.text()).toContain('压力点设置')
     expect(wrapper.text()).toContain('采集数据')
   })

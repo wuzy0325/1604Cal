@@ -7,6 +7,7 @@ export const EVENT_SESSION_STATE_CHANGED = 'session.state.changed'
 
 // Device 设备状态事件
 export const EVENT_DEVICE_STATUS_CHANGED = 'device.status.changed'
+export const EVENT_DEVICE_CONNECT_PROGRESS = 'device.connect_progress'
 
 // Measurement 计量工作流事件
 export const EVENT_MEASUREMENT_STATE_CHANGED = 'measurement.state_changed'
@@ -56,3 +57,6 @@ export const EVENT_ALARM_TRIGGERED = 'alarm.triggered'
 // Hardware 硬件通讯日志事件
 export const EVENT_HARDWARE_COMMAND = 'hardware.command'
 export const EVENT_HARDWARE_RESPONSE = 'hardware.response'
+
+// System 系统级事件
+export const EVENT_SYSTEM_ERROR = 'system.error'

@@ -63,13 +63,14 @@ func TestMeasurementStartCreatesWorkflowSession(t *testing.T) {
 		t.Fatalf("expected points generate status 200, got %d", generateRec.Code)
 	}
 
+	// StartWorkflow 完成后状态变为 ready，自动采集是异步的
 	startState := callMeasurementStateEndpoint(t, router, http.MethodPost, "/api/v1/measurement/start", `{"channels":[1,2]}`)
-	if startState != "collecting" {
-		t.Fatalf("expected start state collecting, got %s", startState)
+	if startState != "ready" {
+		t.Fatalf("expected start state ready, got %s", startState)
 	}
 
-	if state := callMeasurementStateEndpoint(t, router, http.MethodGet, "/api/v1/measurement/state", ""); state != "collecting" {
-		t.Fatalf("expected current measurement state collecting, got %s", state)
+	if state := callMeasurementStateEndpoint(t, router, http.MethodGet, "/api/v1/measurement/state", ""); state != "ready" {
+		t.Fatalf("expected current measurement state ready, got %s", state)
 	}
 
 	listReq := httptest.NewRequest(http.MethodGet, "/api/v1/measurement/points", nil)
@@ -123,13 +124,14 @@ func TestMeasurementStartRequiresBoundMeasureDevice(t *testing.T) {
 func TestMeasurementStartRequiresGeneratedPoints(t *testing.T) {
 	router := newSessionRouterWithMeasureDriver(t)
 
+	// handler 内部会调用 GeneratePressurePoints 自动生成测点，不再返回 400
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/measurement/start", bytes.NewReader([]byte(`{"channels":[1]}`)))
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
 
-	if rec.Code != http.StatusBadRequest {
-		t.Fatalf("expected status 400 when points not generated, got %d", rec.Code)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status 200 when points auto-generated, got %d", rec.Code)
 	}
 }
 
@@ -177,16 +179,17 @@ func TestMeasurementGeneratePointsEndpointUsesMeasurementConfig(t *testing.T) {
 		t.Fatalf("decode measurement points response: %v", err)
 	}
 
-	if len(resp.Data) != 9 {
-		t.Fatalf("expected 9 measurement points (5 forward + 4 backward), got %d", len(resp.Data))
+	// roundTrip 生成完整正程+回程：5 forward + 5 backward = 10 points
+	if len(resp.Data) != 10 {
+		t.Fatalf("expected 10 measurement points (5 forward + 5 backward), got %d", len(resp.Data))
 	}
 
 	if resp.Data[0].Direction != "forward" || resp.Data[len(resp.Data)-1].Direction != "backward" {
 		t.Fatalf("unexpected point directions: %+v", resp.Data)
 	}
 
-	// verify forward: [0, 25, 50, 75, 100], backward: [100, 75, 50, 25]
-	expected := []float64{0, 25, 50, 75, 100, 100, 75, 50, 25}
+	// verify forward: [0, 25, 50, 75, 100], backward: [100, 75, 50, 25, 0]
+	expected := []float64{0, 25, 50, 75, 100, 100, 75, 50, 25, 0}
 	for i, exp := range expected {
 		if resp.Data[i].TargetPressure != exp {
 			t.Fatalf("points[%d].TargetPressure = %v, want %v", i, resp.Data[i].TargetPressure, exp)

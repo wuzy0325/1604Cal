@@ -3,6 +3,7 @@ package session
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log"
 	"sync"
 
@@ -18,6 +19,8 @@ var (
 	ErrPressureDeviceNotSet = errors.New("pressure device not set")
 	// ErrDeviceNotFound 表示设备不存在。
 	ErrDeviceNotFound = errors.New("device not found")
+	// ErrDeviceBindingConflict 表示设备已被其他模块绑定，不允许覆盖。
+	ErrDeviceBindingConflict = errors.New("device binding conflict: device is already bound by another module")
 )
 
 // EventPublisher 广播事件。
@@ -25,6 +28,7 @@ type EventPublisher func(eventType string, data any)
 
 // Service 设备会话服务，管理计量设备和打压设备的绑定与实时数据读取。
 // 计量和标定模块通过此服务共享设备操作能力。
+// 注意：本服务为全局单例，同一时间只能有一组设备绑定。不同模块需要协调使用。
 type Service struct {
 	mu             sync.Mutex
 	deviceManager  device.DeviceStore
@@ -36,6 +40,7 @@ type Service struct {
 	pressureDriver device.PressureDriver
 	measureDevID   string
 	pressureDevID  string
+	boundBy        string
 
 	// channels 用于 ReadMeasureData 时指定通道，可由调用方设置。
 	channels []int
@@ -73,9 +78,19 @@ func (s *Service) Resolver() *DriverResolver {
 }
 
 // BindDevices 绑定计量设备和打压设备到当前会话。
-func (s *Service) BindDevices(measureDevID, pressureDevID string) error {
+// moduleName 用于标识调用方，防止不同模块间的绑定冲突。
+// 同一设备 ID 允许更新（用于 refreshPressure 等临时读取场景）。
+// 只有不同模块绑定不同设备时才报错，防止标定和计量相互覆盖对方的设备上下文。
+func (s *Service) BindDevices(measureDevID, pressureDevID string, moduleName string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+
+	if s.measureDevID != "" && s.measureDevID != measureDevID && s.boundBy != "" && s.boundBy != moduleName {
+		return fmt.Errorf("%w: measure device %s already bound by %s", ErrDeviceBindingConflict, s.measureDevID, s.boundBy)
+	}
+	if s.pressureDevID != "" && s.pressureDevID != pressureDevID && s.boundBy != "" && s.boundBy != moduleName {
+		return fmt.Errorf("%w: pressure device %s already bound by %s", ErrDeviceBindingConflict, s.pressureDevID, s.boundBy)
+	}
 
 	mDrv, err := s.resolver.ResolveMeasureDriver(measureDevID)
 	if err != nil {
@@ -94,19 +109,25 @@ func (s *Service) BindDevices(measureDevID, pressureDevID string) error {
 	s.pressureDevID = pressureDevID
 	s.measureDriver = mDrv
 	s.pressureDriver = pDrv
+	s.boundBy = moduleName
 
 	s.publish(events.EventSessionDeviceBound, map[string]any{
 		"measureDeviceId":  measureDevID,
 		"pressureDeviceId": pressureDevID,
+		"boundBy":         moduleName,
 	})
 
 	return nil
 }
 
 // BindMeasureDevice 仅绑定计量设备驱动。
-func (s *Service) BindMeasureDevice(measureDevID string) error {
+func (s *Service) BindMeasureDevice(measureDevID string, moduleName string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+
+	if s.measureDevID != "" && s.measureDevID != measureDevID && s.boundBy != "" && s.boundBy != moduleName {
+		return fmt.Errorf("%w: measure device %s already bound by %s", ErrDeviceBindingConflict, s.measureDevID, s.boundBy)
+	}
 
 	mDrv, err := s.resolver.ResolveMeasureDriver(measureDevID)
 	if err != nil {
@@ -115,10 +136,12 @@ func (s *Service) BindMeasureDevice(measureDevID string) error {
 
 	s.measureDevID = measureDevID
 	s.measureDriver = mDrv
+	s.boundBy = moduleName
 
 	s.publish(events.EventSessionDeviceBound, map[string]any{
 		"measureDeviceId":  measureDevID,
 		"pressureDeviceId": s.pressureDevID,
+		"boundBy":         moduleName,
 	})
 
 	return nil

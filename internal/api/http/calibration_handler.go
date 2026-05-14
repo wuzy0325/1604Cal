@@ -9,7 +9,7 @@ import (
 	apperrors "cal1604/internal/errors"
 )
 
-type setDevicesRequest struct {
+type calibrationSetDevicesRequest struct {
 	MeasureDeviceID  string `json:"measureDeviceId"`
 	PressureDeviceID string `json:"pressureDeviceId"`
 }
@@ -44,7 +44,7 @@ type alarmDecisionRequest struct {
 }
 
 func (s *apiServer) calibrationSetDevicesHandler(w http.ResponseWriter, r *http.Request) {
-	req, err := decodeJSON[setDevicesRequest](r)
+	req, err := decodeJSON[calibrationSetDevicesRequest](r)
 	if err != nil {
 		writeError(w, err)
 		return

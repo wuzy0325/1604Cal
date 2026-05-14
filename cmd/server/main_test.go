@@ -15,8 +15,8 @@ func TestResolveConnectConfigUsesDefaultsWhenEnvMissing(t *testing.T) {
 		t.Fatalf("resolve config returned unexpected error: %v", err)
 	}
 
-	if cfg.ConnectMaxAttempts != 3 {
-		t.Fatalf("expected default connect max attempts 3, got %d", cfg.ConnectMaxAttempts)
+	if cfg.ConnectMaxAttempts != 5 {
+		t.Fatalf("expected default connect max attempts 5, got %d", cfg.ConnectMaxAttempts)
 	}
 }
 

@@ -83,6 +83,7 @@ func newFakeStore(devs ...domain.Device) *fakeStore {
 
 func (s *fakeStore) Upsert(dev domain.Device)                      { s.devices[dev.ID] = dev }
 func (s *fakeStore) UpdateStatus(string, domain.DeviceStatus) bool { return true }
+func (s *fakeStore) UpdateUnit(string, string) bool                { return true }
 func (s *fakeStore) Delete(string)                                 {}
 func (s *fakeStore) Get(id string) (domain.Device, bool)           { d, ok := s.devices[id]; return d, ok }
 func (s *fakeStore) List() []domain.Device                         { return nil }
@@ -135,7 +136,7 @@ func setupService() (*session.Service, *fakeMeasureDriver, *fakePressureDriver, 
 
 func TestBindDevicesSuccess(t *testing.T) {
 	svc, _, _, pub := setupService()
-	if err := svc.BindDevices("m1", "p1"); err != nil {
+	if err := svc.BindDevices("m1", "p1", "test"); err != nil {
 		t.Fatalf("BindDevices: %v", err)
 	}
 	if len(pub.events) != 1 || pub.events[0] != events.EventSessionDeviceBound {
@@ -151,7 +152,7 @@ func TestBindDevicesSuccess(t *testing.T) {
 
 func TestBindDevicesMeasureNotFound(t *testing.T) {
 	svc := session.NewService(newFakeStore(), driver.NewFactory(), func(string, any) {}, nil)
-	err := svc.BindDevices("nonexistent", "p1")
+	err := svc.BindDevices("nonexistent", "p1", "test")
 	if err == nil {
 		t.Fatal("expected error for nonexistent device")
 	}
@@ -159,7 +160,7 @@ func TestBindDevicesMeasureNotFound(t *testing.T) {
 
 func TestBindMeasureDeviceSuccess(t *testing.T) {
 	svc, _, _, pub := setupService()
-	if err := svc.BindMeasureDevice("m1"); err != nil {
+	if err := svc.BindMeasureDevice("m1", "test"); err != nil {
 		t.Fatalf("BindMeasureDevice: %v", err)
 	}
 	if len(pub.events) != 1 {
@@ -180,7 +181,7 @@ func TestReadPressureWithoutDevice(t *testing.T) {
 
 func TestReadPressureAfterBind(t *testing.T) {
 	svc, _, pDrv, _ := setupService()
-	_ = svc.BindDevices("m1", "p1")
+	_ = svc.BindDevices("m1", "p1", "test")
 	pDrv.pressure = 200.5
 	val, err := svc.ReadPressure(context.Background())
 	if err != nil {
@@ -193,7 +194,7 @@ func TestReadPressureAfterBind(t *testing.T) {
 
 func TestReadStabilityAfterBind(t *testing.T) {
 	svc, _, pDrv, _ := setupService()
-	_ = svc.BindDevices("m1", "p1")
+	_ = svc.BindDevices("m1", "p1", "test")
 	pDrv.stable = false
 	val, err := svc.ReadStability(context.Background())
 	if err != nil {
@@ -214,7 +215,7 @@ func TestReadMeasureDataWithoutDevice(t *testing.T) {
 
 func TestReadMeasureDataAfterBind(t *testing.T) {
 	svc, mDrv, _, _ := setupService()
-	_ = svc.BindMeasureDevice("m1")
+	_ = svc.BindMeasureDevice("m1", "test")
 	mDrv.collectData = []float64{10.1, 20.2, 30.3}
 	data, err := svc.ReadMeasureData(context.Background())
 	if err != nil {
@@ -227,7 +228,7 @@ func TestReadMeasureDataAfterBind(t *testing.T) {
 
 func TestReadValveStatus(t *testing.T) {
 	svc, mDrv, _, _ := setupService()
-	_ = svc.BindMeasureDevice("m1")
+	_ = svc.BindMeasureDevice("m1", "test")
 	mDrv.valveStatus = "calibration"
 	val, err := svc.ReadValveStatus(context.Background())
 	if err != nil {
@@ -240,7 +241,7 @@ func TestReadValveStatus(t *testing.T) {
 
 func TestReadMeasureUnit(t *testing.T) {
 	svc, mDrv, _, _ := setupService()
-	_ = svc.BindMeasureDevice("m1")
+	_ = svc.BindMeasureDevice("m1", "test")
 	mDrv.unit = "MPa"
 	val, err := svc.ReadMeasureUnit(context.Background())
 	if err != nil {
@@ -253,7 +254,7 @@ func TestReadMeasureUnit(t *testing.T) {
 
 func TestReadDeviceInfo(t *testing.T) {
 	svc, mDrv, _, _ := setupService()
-	_ = svc.BindMeasureDevice("m1")
+	_ = svc.BindMeasureDevice("m1", "test")
 	mDrv.info = map[string]string{"model": "WTN1604", "version": "2.0"}
 	info, err := svc.ReadDeviceInfo(context.Background())
 	if err != nil {
@@ -266,7 +267,7 @@ func TestReadDeviceInfo(t *testing.T) {
 
 func TestResetDevice(t *testing.T) {
 	svc, mDrv, _, _ := setupService()
-	_ = svc.BindMeasureDevice("m1")
+	_ = svc.BindMeasureDevice("m1", "test")
 	if err := svc.ResetDevice(context.Background()); err != nil {
 		t.Fatalf("ResetDevice: %v", err)
 	}
@@ -278,7 +279,7 @@ func TestResetDevice(t *testing.T) {
 
 func TestBindDevicesOnlyMeasure(t *testing.T) {
 	svc, _, _, _ := setupService()
-	if err := svc.BindDevices("m1", ""); err != nil {
+	if err := svc.BindDevices("m1", "", "test"); err != nil {
 		t.Fatalf("BindDevices with empty pressure: %v", err)
 	}
 	if svc.MeasureDriver() == nil {

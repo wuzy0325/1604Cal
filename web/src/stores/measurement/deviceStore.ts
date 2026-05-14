@@ -92,10 +92,26 @@ function measureDeviceToDto(device: MeasureDevice): DeviceDTO {
     host: device.ip || '192.168.1.100',
     port: device.port || 9000,
     unit: 'kPa',
-    status: device.status === 'connected' ? 'connected' :
-            device.status === 'connecting' ? 'connecting' :
-            device.status === 'error' ? 'error' : 'disconnected'
+    status: mapDTOStatus(device.status)
   }
+}
+
+function mapDTOStatus(s: 'connected' | 'disconnected' | 'connecting' | 'error'): DeviceDTO['status'] {
+  if (s === 'connected') return 'connected'
+  if (s === 'connecting') return 'connecting'
+  if (s === 'error') return 'error'
+  return 'disconnected'
+}
+
+/** 合并本地状态与后端状态：本地已连接不降级，否则以后端状态为准 */
+function mergeStatus(
+  local: 'connected' | 'disconnected' | 'connecting' | 'error',
+  remote: DeviceDTO['status']
+): 'connected' | 'disconnected' | 'connecting' | 'error' {
+  if (local === 'connected') return 'connected'
+  if (remote === 'connecting') return 'connecting'
+  if (remote === 'error') return 'error'
+  return 'disconnected'
 }
 
 export const useMeasurementDeviceStore = defineStore('measurementDevices', () => {
@@ -104,17 +120,66 @@ export const useMeasurementDeviceStore = defineStore('measurementDevices', () =>
   const measureDevices = ref<MeasureDevice[]>([])
   const loading = ref(false)
 
-  // 从后端加载设备列表
+  // 从后端加载设备列表（增量合并，不覆盖本地实时状态如 currentPressure）
   const loadDevices = async (silent = false) => {
     try {
       loading.value = true
       const devices = await fetchDevices()
-      pressureDevices.value = devices
-        .filter(d => d.type === 'pressure')
-        .map(dtoToPressureDevice)
-      measureDevices.value = devices
-        .filter(d => d.type === 'measure')
-        .map(dtoToMeasureDevice)
+
+      // 增量合并打压设备列表，保留本地实时状态
+      const backendPressureIds = new Set(
+        devices.filter(d => d.type === 'pressure').map(d => d.id)
+      )
+      // 移除后端已删除的设备
+      pressureDevices.value = pressureDevices.value.filter(
+        p => backendPressureIds.has(p.id)
+      )
+
+      for (const dto of devices.filter(d => d.type === 'pressure')) {
+        const local = pressureDevices.value.find(p => p.id === dto.id)
+        if (local) {
+          // 保留 currentPressure 等本地实时状态，只更新配置信息
+          local.name = dto.name
+          local.model = dto.model
+          local.ip = dto.host
+          local.port = dto.port
+          local.unit = dto.unit || 'kPa'
+          // 同步连接状态：如果后端状态为 connected 但本地不是，标记为 connected
+          if (dto.status === 'connected' && local.status !== 'connected') {
+            local.status = 'connected'
+          } else if (dto.status !== 'connected') {
+            local.status = mergeStatus(local.status, dto.status)
+          }
+        } else {
+          // 新设备
+          pressureDevices.value.push(dtoToPressureDevice(dto))
+        }
+      }
+
+      // 增量合并计量设备列表
+      const backendMeasureIds = new Set(
+        devices.filter(d => d.type === 'measure').map(d => d.id)
+      )
+      measureDevices.value = measureDevices.value.filter(
+        m => backendMeasureIds.has(m.id)
+      )
+
+      for (const dto of devices.filter(d => d.type === 'measure')) {
+        const local = measureDevices.value.find(m => m.id === dto.id)
+        if (local) {
+          local.name = dto.name
+          local.model = dto.model
+          local.ip = dto.host
+          local.port = dto.port
+          if (dto.status === 'connected' && local.status !== 'connected') {
+            local.status = 'connected'
+          } else if (dto.status !== 'connected') {
+            local.status = mergeStatus(local.status, dto.status)
+          }
+        } else {
+          measureDevices.value.push(dtoToMeasureDevice(dto))
+        }
+      }
     } catch (error) {
       console.error('加载设备列表失败:', error)
       if (!silent) {
@@ -175,12 +240,11 @@ export const useMeasurementDeviceStore = defineStore('measurementDevices', () =>
   // 刷新打压设备的实时压力值
   const refreshPressureForDevice = async (pressureId: string) => {
     try {
-      // 优先选择已连接的计量设备，回退到列表中的第一个设备。
       const anyMeasure = measureDevices.value.find(d => d.status === 'connected') ?? measureDevices.value[0]
       const measureId = anyMeasure?.id || '__none__'
       if (measureId === '__none__') return
 
-      await bindSessionDevices(measureId, pressureId)
+      await bindSessionDevices(measureId, pressureId, 'pressureRefresh')
       const pressure = await readSessionPressure()
       const device = pressureDevices.value.find(d => d.id === pressureId)
       if (device) {

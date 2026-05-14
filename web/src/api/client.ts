@@ -88,8 +88,25 @@ export async function requestJSON<T>(path: string, init?: RequestInit): Promise<
   return (await resp.json()) as T
 }
 
-export function createEventStream(onEvent: (payload: StreamEventPayload) => void): EventSource {
+export interface EventStreamOptions {
+  onEvent: (payload: StreamEventPayload) => void
+  onError?: (error: Event) => void
+  onOpen?: () => void
+}
+
+export function createEventStream(options: EventStreamOptions): EventSource {
+  const { onEvent, onError, onOpen } = options
   const source = new EventSource(`${API_BASE}/events/stream`)
+
+  if (onOpen) {
+    source.onopen = onOpen
+  }
+
+  if (onError) {
+    source.onerror = (error) => {
+      onError(error)
+    }
+  }
 
   source.onmessage = (event) => {
     try {

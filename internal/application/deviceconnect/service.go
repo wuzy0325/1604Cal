@@ -10,6 +10,7 @@ import (
 	"cal1604/internal/device"
 	"cal1604/internal/domain"
 	apperrors "cal1604/internal/errors"
+	"cal1604/internal/events"
 )
 
 // DeviceStore 抽象设备读写能力，保持应用层不依赖具体存储实现。
@@ -60,12 +61,14 @@ type Service struct {
 }
 
 // DefaultConfig 返回默认连接可靠性配置。
+// 连接超时设置为 3s×2 次，总计约 6s。局域网设备通常在 1s 内建立 TCP 连接，
+// 3s 足内应覆盖大多数情况；2 次重试用于短时网络抖动。
 func DefaultConfig() Config {
 	return Config{
-		ConnectAttemptTimeout:    600 * time.Millisecond,
-		ConnectMaxAttempts:       3,
-		ConnectInitialBackoff:    80 * time.Millisecond,
-		ConnectMaxBackoff:        300 * time.Millisecond,
+		ConnectAttemptTimeout:    3 * time.Second,
+		ConnectMaxAttempts:       2,
+		ConnectInitialBackoff:    500 * time.Millisecond,
+		ConnectMaxBackoff:        1 * time.Second,
 		DisconnectAttemptTimeout: 400 * time.Millisecond,
 		DisconnectMaxAttempts:    2,
 		DisconnectInitialBackoff: 40 * time.Millisecond,
@@ -130,10 +133,22 @@ func NewService(
 }
 
 // Connect 执行设备连接流程，严格遵循 connecting -> connected/error 状态迁移。
+// 若设备已处于 connecting 或 connected 状态，直接返回现有状态，避免并发重复连接。
 func (s *Service) Connect(ctx context.Context, id string) (domain.Device, error) {
+	s.mu.Lock()
 	dev, ok := s.store.Get(id)
 	if !ok {
+		s.mu.Unlock()
 		return domain.Device{}, apperrors.ErrNotFound
+	}
+
+	switch dev.Status {
+	case domain.DeviceStatusConnected:
+		s.mu.Unlock()
+		return dev, nil
+	case domain.DeviceStatusConnecting:
+		s.mu.Unlock()
+		return dev, fmt.Errorf("device %s is already connecting", id)
 	}
 
 	dev.Status = domain.DeviceStatusConnecting
@@ -141,12 +156,14 @@ func (s *Service) Connect(ctx context.Context, id string) (domain.Device, error)
 	dev.LastErrorAt = nil
 	s.store.Upsert(dev)
 	s.publish(dev)
+	s.mu.Unlock()
 
 	drv, err := s.factory.Create(dev)
 	if err != nil {
 		return s.markError(dev, fmt.Errorf("create driver: %w", err))
 	}
 
+	s.publishConnectProgress(dev.ID, "正在连接 TCP...")
 	err = s.retryWithBackoff(
 		ctx,
 		s.config.ConnectAttemptTimeout,
@@ -156,13 +173,17 @@ func (s *Service) Connect(ctx context.Context, id string) (domain.Device, error)
 		drv.Connect,
 	)
 	if err != nil {
+		s.publishConnectProgress(dev.ID, "TCP 连接失败")
 		return s.markError(dev, fmt.Errorf("connect failed after retries: %w", err))
 	}
 
 	s.setActiveDriver(id, drv)
+	s.publishConnectProgress(dev.ID, "TCP 已连接，读取设备配置...")
 
 	// 连接成功后从硬件读取实际单位，确保显示单位与设备真实单位一致。
-	if reader, ok := drv.(interface{ ReadUnit(context.Context) (string, error) }); ok {
+	if reader, ok := drv.(interface {
+		ReadUnit(context.Context) (string, error)
+	}); ok {
 		if unit, err := reader.ReadUnit(ctx); err == nil {
 			dev.Unit = unit
 		}
@@ -212,6 +233,13 @@ func (s *Service) Disconnect(ctx context.Context, id string) (domain.Device, err
 	return dev, nil
 }
 
+func (s *Service) publishConnectProgress(deviceID, message string) {
+	events.GlobalBus.Publish(events.Event{Type: events.EventDeviceConnectProgress, Data: map[string]any{
+		"deviceId": deviceID,
+		"message":  message,
+	}})
+}
+
 func (s *Service) markError(dev domain.Device, err error) (domain.Device, error) {
 	now := s.nowFn()
 	dev.Status = domain.DeviceStatusError
@@ -250,6 +278,24 @@ func (s *Service) clearActiveDriver(id string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	delete(s.activeDrivers, id)
+}
+
+// Remove 断开设备连接（如果已连接）并从活跃驱动池中移除。
+// 用于设备删除前确保清理所有相关资源。
+func (s *Service) Remove(ctx context.Context, id string) error {
+	s.mu.Lock()
+	drv, exists := s.activeDrivers[id]
+	s.mu.Unlock()
+	if !exists {
+		return nil
+	}
+
+	if err := drv.Disconnect(ctx); err != nil {
+		s.clearActiveDriver(id)
+		return fmt.Errorf("disconnect driver on remove: %w", err)
+	}
+	s.clearActiveDriver(id)
+	return nil
 }
 
 func (s *Service) retryWithBackoff(

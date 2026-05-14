@@ -31,62 +31,67 @@ export function useMeasurementSync() {
 
   function setupSSE() {
     if (eventSource) return
-    eventSource = createEventStream((payload: StreamEventPayload) => {
-      switch (payload.type) {
-        case EVENT_MEASUREMENT_STATE_CHANGED: {
-          const newState = (payload.data as { state: MeasurementState }).state
-          store.syncState(newState)
-          // 进入打压状态时清除旧报警标记，避免上个点的报警残留到当前点
-          if (newState === 'pressurizing') {
+    eventSource = createEventStream({
+      onEvent: (payload: StreamEventPayload) => {
+        switch (payload.type) {
+          case EVENT_MEASUREMENT_STATE_CHANGED: {
+            const newState = (payload.data as { state: MeasurementState }).state
+            store.syncState(newState)
+            // 进入打压状态时清除旧报警标记，避免上个点的报警残留到当前点
+            if (newState === 'pressurizing') {
+              store.alarmData = null
+            }
+            break
+          }
+          case EVENT_MEASUREMENT_DATA_UPDATED: {
+            const data = payload.data as { timestamp: string; channels: Record<string, number> }
+            store.rows.push({ timestamp: data.timestamp, channels: data.channels })
+            break
+          }
+          case EVENT_MEASUREMENT_STABILITY_UPDATE: {
+            const status = payload.data as StabilityUpdate
+            store.stabilityState = status
+            break
+          }
+          case EVENT_MEASUREMENT_ALARM_TRIGGERED:
+            store.alarmPending = true
+            store.alarmData = payload.data as AlarmData
+            break
+          case EVENT_MEASUREMENT_STABILITY_TIMEOUT:
+            store.stabilityTimeoutPending = true
+            break
+          case EVENT_MEASUREMENT_ALARM_RESOLVED:
+            store.alarmPending = false
             store.alarmData = null
+            break
+          case EVENT_MEASUREMENT_POINT_STATUS: {
+            const updated = payload.data as MeasurementPoint
+            const idx = store.points.findIndex(p => p.id === updated.id)
+            if (idx >= 0) store.points[idx] = updated
+            break
           }
-          break
-        }
-        case EVENT_MEASUREMENT_DATA_UPDATED: {
-          const data = payload.data as { timestamp: string; channels: Record<string, number> }
-          store.rows.push({ timestamp: data.timestamp, channels: data.channels })
-          break
-        }
-        case EVENT_MEASUREMENT_STABILITY_UPDATE: {
-          const status = payload.data as StabilityUpdate
-          store.stabilityState = status
-          break
-        }
-        case EVENT_MEASUREMENT_ALARM_TRIGGERED:
-          store.alarmPending = true
-          store.alarmData = payload.data as AlarmData
-          break
-        case EVENT_MEASUREMENT_STABILITY_TIMEOUT:
-          store.stabilityTimeoutPending = true
-          break
-        case EVENT_MEASUREMENT_ALARM_RESOLVED:
-          store.alarmPending = false
-          store.alarmData = null
-          break
-        case EVENT_MEASUREMENT_POINT_STATUS: {
-          const updated = payload.data as MeasurementPoint
-          const idx = store.points.findIndex(p => p.id === updated.id)
-          if (idx >= 0) store.points[idx] = updated
-          break
-        }
-        case EVENT_MEASUREMENT_DATA_COLLECTED: {
-          const collected = payload.data as { pointIndex: number; channels: number[]; data: number[] }
-          const ptIdx = store.points.findIndex(p => p.index === collected.pointIndex)
-          if (ptIdx >= 0) {
-            store.points[ptIdx] = { ...store.points[ptIdx], collectedData: collected.data, status: 'completed' }
+          case EVENT_MEASUREMENT_DATA_COLLECTED: {
+            const collected = payload.data as { pointIndex: number; channels: number[]; data: number[] }
+            const ptIdx = store.points.findIndex(p => p.index === collected.pointIndex)
+            if (ptIdx >= 0) {
+              store.points[ptIdx] = { ...store.points[ptIdx], collectedData: collected.data, status: 'completed' }
+            }
+            break
           }
-          break
-        }
-        case EVENT_MULTIPRESS_PRESSURE_UPDATE: {
-          const data = payload.data as Record<string, unknown>
-          const deviceId = data?.deviceId as string | undefined
-          const pressure = data?.currentPressure as number | undefined
-          if (deviceId && typeof pressure === 'number') {
-            store.updateDevicePressure(deviceId, pressure)
-            deviceStore.updateDevicePressure(deviceId, pressure)
+          case EVENT_MULTIPRESS_PRESSURE_UPDATE: {
+            const data = payload.data as Record<string, unknown>
+            const deviceId = data?.deviceId as string | undefined
+            const pressure = data?.currentPressure as number | undefined
+            if (deviceId && typeof pressure === 'number') {
+              store.updateDevicePressure(deviceId, pressure)
+              deviceStore.updateDevicePressure(deviceId, pressure)
+            }
+            break
           }
-          break
         }
+      },
+      onError: (error) => {
+        console.warn('[useMeasurementSync] SSE 连接断开:', error)
       }
     })
   }

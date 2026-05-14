@@ -123,6 +123,11 @@ func (s *Service) ResolveAlarm(decision string) error {
 		}
 	}
 
+	s.mu.Lock()
+	s.alarmPending = false
+	s.currentAlarm = nil
+	s.mu.Unlock()
+
 	s.publish(events.EventMeasurementAlarmResolved, map[string]string{
 		"decision": decision,
 	})

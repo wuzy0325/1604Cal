@@ -26,7 +26,9 @@ vi.mock('@/api/measurement', () => ({
   startMeasurement: vi.fn(),
   pauseMeasurement: vi.fn(),
   stopMeasurement: vi.fn(),
-  fetchMeasurementData: vi.fn()
+  fetchMeasurementData: vi.fn(),
+  generateMeasurementPoints: vi.fn(),
+  saveMeasurementParamsConfig: vi.fn()
 }))
 
 vi.mock('element-plus', async () => {
@@ -105,7 +107,7 @@ describe('useMeasurementStore', () => {
       vi.mocked(sessionApi.bindDevices).mockResolvedValue(undefined)
       const store = useMeasurementStore()
       await store.bindDevices('m1', 'p1')
-      expect(sessionApi.bindDevices).toHaveBeenCalledWith('m1', 'p1')
+      expect(sessionApi.bindDevices).toHaveBeenCalledWith('m1', 'p1', 'measurement')
       expect(store.measureDeviceId).toBe('m1')
       expect(store.pressureDeviceId).toBe('p1')
       expect(store.deviceBound).toBe(true)
@@ -117,7 +119,7 @@ describe('useMeasurementStore', () => {
       vi.mocked(sessionApi.bindMeasureDevice).mockResolvedValue(undefined)
       const store = useMeasurementStore()
       await store.bindMeasureDevice('m2')
-      expect(sessionApi.bindMeasureDevice).toHaveBeenCalledWith('m2')
+      expect(sessionApi.bindMeasureDevice).toHaveBeenCalledWith('m2', 'measurement')
       expect(store.measureDeviceId).toBe('m2')
       expect(store.deviceBound).toBe(true)
     })
@@ -237,6 +239,8 @@ describe('useMeasurementStore', () => {
 
     it('calls API, updates state, clears rows on success', async () => {
       vi.mocked(sessionApi.bindMeasureDevice).mockResolvedValue(undefined)
+      vi.mocked(measurementApi.saveMeasurementParamsConfig).mockResolvedValue(undefined)
+      vi.mocked(measurementApi.generateMeasurementPoints).mockResolvedValue([])
       vi.mocked(measurementApi.startMeasurement).mockResolvedValue('collecting')
       const store = useMeasurementStore()
       await store.bindMeasureDevice('m1')
@@ -253,6 +257,8 @@ describe('useMeasurementStore', () => {
     it('shows error on API failure', async () => {
       const { ElMessage } = await import('element-plus')
       vi.mocked(sessionApi.bindMeasureDevice).mockResolvedValue(undefined)
+      vi.mocked(measurementApi.saveMeasurementParamsConfig).mockResolvedValue(undefined)
+      vi.mocked(measurementApi.generateMeasurementPoints).mockResolvedValue([])
       vi.mocked(measurementApi.startMeasurement).mockRejectedValue(new Error('transition denied'))
       const store = useMeasurementStore()
       await store.bindMeasureDevice('m1')

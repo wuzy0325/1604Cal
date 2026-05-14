@@ -305,6 +305,10 @@ func (c *sessionTestConnector) Disconnect(_ context.Context, id string) (domain.
 	return domain.Device{ID: id, Status: domain.DeviceStatusDisconnected}, nil
 }
 
+func (c *sessionTestConnector) Remove(_ context.Context, id string) error {
+	return nil
+}
+
 func (c *sessionTestConnector) GetActiveDriver(id string) device.ConnectionDriver {
 	if c.activeDrivers == nil {
 		return nil

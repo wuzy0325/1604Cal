@@ -3,6 +3,7 @@ package driver
 import (
 	"context"
 	"fmt"
+	"log"
 	"strings"
 	"time"
 )
@@ -18,15 +19,25 @@ type constBaseDriver struct {
 }
 
 // constConnect 公共连接逻辑：先建立 TCP，再轮询稳定状态直到设备就绪。
+// 若 10 次判稳查询全部失败，说明设备虽然 TCP 连通但 SCPI 无响应，返回错误。
 func (d *constBaseDriver) constConnect(ctx context.Context, stableCmd string) error {
 	if err := d.base.Connect(ctx); err != nil {
 		return err
 	}
+	stableOk := false
 	for i := 0; i < 10; i++ {
 		resp, err := d.base.sendSCPICommand(ctx, stableCmd, 2*time.Second)
 		if err == nil && (resp == "0" || resp == "1") {
+			stableOk = true
 			break
 		}
+		if err != nil {
+			log.Printf("[constConnect] %s attempt %d: %v", d.base.model, i+1, err)
+		}
+	}
+	if !stableOk {
+		_ = d.base.Disconnect(ctx)
+		return fmt.Errorf("%s: TCP connected but SCPI %q not responding after 10 attempts (check cable / IP / firewall)", d.base.model, stableCmd)
 	}
 	return nil
 }

@@ -14,6 +14,7 @@ import (
 	"cal1604/internal/config"
 	"cal1604/internal/events"
 	"cal1604/internal/domain"
+	"fmt"
 	apperrors "cal1604/internal/errors"
 	"cal1604/internal/report"
 	"cal1604/internal/workflow"
@@ -48,17 +49,19 @@ type apiServer struct {
 type deviceConnector interface {
 	Connect(ctx context.Context, id string) (domain.Device, error)
 	Disconnect(ctx context.Context, id string) (domain.Device, error)
+	Remove(ctx context.Context, id string) error
 }
 
 type upsertDeviceRequest struct {
-	ID     string `json:"id"`
-	Name   string `json:"name"`
-	Type   string `json:"type"`
-	Model  string `json:"model"`
-	Host   string `json:"host"`
-	Port   int    `json:"port"`
-	Unit   string `json:"unit"`
-	Status string `json:"status"`
+	ID        string `json:"id"`
+	Name      string `json:"name"`
+	Type      string `json:"type"`
+	Model     string `json:"model"`
+	Host      string `json:"host"`
+	Port      int    `json:"port"`
+	Unit      string `json:"unit"`
+	LocalAddr string `json:"localAddr"`
+	Status    string `json:"status"`
 }
 
 type setDeviceStatusRequest struct {
@@ -90,6 +93,11 @@ func (s *apiServer) deviceStatusHandler(w http.ResponseWriter, r *http.Request) 
 	status := domain.DeviceStatus(strings.TrimSpace(req.Status))
 	if id == "" || !status.IsValid() {
 		writeError(w, apperrors.ErrInvalidArgument)
+		return
+	}
+
+	if status != domain.DeviceStatusError {
+		writeError(w, fmt.Errorf("direct status update only supports 'error' status, use connect/disconnect for other states"))
 		return
 	}
 
@@ -183,14 +191,15 @@ func (s *apiServer) handleUpsertDevice(w http.ResponseWriter, r *http.Request) {
 	status := domain.ResolveStatus(requestedStatus, old, existed)
 
 	dev := domain.Device{
-		ID:     id,
-		Name:   strings.TrimSpace(req.Name),
-		Type:   deviceType,
-		Model:  strings.TrimSpace(req.Model),
-		Host:   host,
-		Port:   req.Port,
-		Unit:   unit,
-		Status: status,
+		ID:        id,
+		Name:      strings.TrimSpace(req.Name),
+		Type:      deviceType,
+		Model:     strings.TrimSpace(req.Model),
+		Host:      host,
+		Port:      req.Port,
+		Unit:      unit,
+		LocalAddr: strings.TrimSpace(req.LocalAddr),
+		Status:    status,
 	}
 
 	if err := dev.Validate(); err != nil {
@@ -236,12 +245,16 @@ func (s *apiServer) unitConsistencyHandler(w http.ResponseWriter, _ *http.Reques
 	})
 }
 
-// handleDeleteDevice 删除指定设备。
+// handleDeleteDevice 删除指定设备，先断开连接并清理驱动资源。
 func (s *apiServer) handleDeleteDevice(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	if id == "" {
 		writeError(w, apperrors.ErrInvalidArgument)
 		return
+	}
+
+	if s.deviceConnector != nil {
+		_ = s.deviceConnector.Remove(r.Context(), id)
 	}
 
 	s.deviceManager.Delete(id)

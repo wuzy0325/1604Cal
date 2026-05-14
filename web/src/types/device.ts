@@ -7,6 +7,7 @@ export interface DeviceDTO {
   port: number
   unit?: string
   status: 'disconnected' | 'connecting' | 'connected' | 'error'
+  localAddr?: string
   lastErrorReason?: string
   lastErrorAt?: string
 }

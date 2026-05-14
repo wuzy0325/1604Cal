@@ -1,4 +1,4 @@
-import { apiGet, apiPost, getApiBase } from './client'
+import { apiGet, apiPost } from './client'
 
 export interface CollectedRow {
   timestamp: string

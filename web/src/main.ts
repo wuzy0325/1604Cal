@@ -7,7 +7,7 @@ import 'element-plus/dist/index.css'
 import App from './App.vue'
 import router from './router'
 import { initDesktopApiBase, createEventStream } from './api/client'
-import { EVENT_HARDWARE_COMMAND, EVENT_HARDWARE_RESPONSE } from './shared/events'
+import { EVENT_HARDWARE_COMMAND, EVENT_HARDWARE_RESPONSE, EVENT_SYSTEM_ERROR } from './shared/events'
 import { useHardwareLogStore } from './stores/hardwareLog'
 import type { StreamEventPayload } from './types/api'
 import './styles/global.scss'
@@ -28,17 +28,26 @@ async function bootstrap() {
   app.use(router)
   app.use(ElementPlus)
 
-  // 全局监听硬件通讯事件
+  // 全局监听硬件通讯事件与系统错误事件
   const hardwareLog = useHardwareLogStore()
-  createEventStream((payload: StreamEventPayload) => {
-    if (payload.type === EVENT_HARDWARE_COMMAND) {
-      const data = payload.data as { model?: string; proto?: string; cmd?: string }
-      hardwareLog.addEntry('hw-cmd', data?.model ?? '', data?.proto ?? '', data?.cmd ?? '')
-    }
-    if (payload.type === EVENT_HARDWARE_RESPONSE) {
-      const data = payload.data as { model?: string; proto?: string; resp?: string; cmd?: string }
-      const detail = data?.resp ?? ''
-      hardwareLog.addEntry('hw-res', data?.model ?? '', data?.proto ?? '', detail.length > 200 ? detail.slice(0, 200) + '...' : detail)
+  createEventStream({
+    onEvent: (payload: StreamEventPayload) => {
+      if (payload.type === EVENT_HARDWARE_COMMAND) {
+        const data = payload.data as { model?: string; proto?: string; cmd?: string }
+        hardwareLog.addEntry('hw-cmd', data?.model ?? '', data?.proto ?? '', data?.cmd ?? '')
+      }
+      if (payload.type === EVENT_HARDWARE_RESPONSE) {
+        const data = payload.data as { model?: string; proto?: string; resp?: string; cmd?: string }
+        const detail = data?.resp ?? ''
+        hardwareLog.addEntry('hw-res', data?.model ?? '', data?.proto ?? '', detail.length > 200 ? detail.slice(0, 200) + '...' : detail)
+      }
+      if (payload.type === EVENT_SYSTEM_ERROR) {
+        const data = payload.data as { code?: string; status?: number; message?: string }
+        hardwareLog.addEntry('sys-error', data?.code ?? '', String(data?.status ?? ''), data?.message ?? '')
+      }
+    },
+    onError: (error) => {
+      console.warn('[main] SSE 连接断开:', error)
     }
   })
 

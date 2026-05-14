@@ -1,13 +1,17 @@
 import { apiGet, apiPost } from './client'
 
 /** 绑定计量设备和打压设备到会话 */
-export async function bindDevices(measureDeviceId: string, pressureDeviceId: string): Promise<void> {
-  await apiPost('/session/devices', { measureDeviceId, pressureDeviceId })
+export async function bindDevices(
+  measureDeviceId: string,
+  pressureDeviceId: string,
+  moduleName = 'measurement'
+): Promise<void> {
+  await apiPost('/session/devices', { measureDeviceId, pressureDeviceId, moduleName })
 }
 
 /** 仅绑定计量设备 */
-export async function bindMeasureDevice(measureDeviceId: string): Promise<void> {
-  await apiPost('/session/measure-device', { measureDeviceId })
+export async function bindMeasureDevice(measureDeviceId: string, moduleName = 'measurement'): Promise<void> {
+  await apiPost('/session/measure-device', { measureDeviceId, moduleName })
 }
 
 /** 读取当前压力 */

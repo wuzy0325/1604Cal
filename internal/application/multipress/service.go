@@ -74,11 +74,12 @@ func (s *Service) StartPolling() {
 		return
 	}
 	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
 	s.pollCancel = cancel
-	s.pollDone = make(chan struct{})
+	s.pollDone = done
 	s.mu.Unlock()
 
-	go s.pollLoop(ctx)
+	go s.pollLoop(ctx, done)
 }
 
 // StopPolling 停止后台轮询。
@@ -423,14 +424,8 @@ func (s *Service) GetActiveDriver(id string) device.ConnectionDriver {
 }
 
 // pollLoop 后台轮询所有打压中设备的压力和稳定状态。
-func (s *Service) pollLoop(ctx context.Context) {
-	defer func() {
-		s.mu.Lock()
-		if s.pollDone != nil {
-			close(s.pollDone)
-		}
-		s.mu.Unlock()
-	}()
+func (s *Service) pollLoop(ctx context.Context, done chan<- struct{}) {
+	defer close(done)
 
 	ticker := time.NewTicker(500 * time.Millisecond)
 	defer ticker.Stop()

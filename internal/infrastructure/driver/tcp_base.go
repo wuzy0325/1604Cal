@@ -3,8 +3,10 @@ package driver
 import (
 	"context"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"io"
+	"log"
 	"net"
 	"strconv"
 	"strings"
@@ -14,14 +16,17 @@ import (
 	"cal1604/internal/events"
 )
 
+const defaultTCPDialTimeout = 3 * time.Second
+
 // tcpConnectionDriver 负责维护 TCP 级别连接与命令交互。
 type tcpConnectionDriver struct {
-	model    string
-	address  string
-	mu       sync.Mutex
-	conn     net.Conn
-	breaker  *CircuitBreaker
-	retryCfg RetryConfig
+	model     string
+	address   string
+	localAddr string
+	mu        sync.Mutex
+	conn      net.Conn
+	breaker   *CircuitBreaker
+	retryCfg  RetryConfig
 }
 
 func newTCPConnectionDriver(model string, host string, port int) *tcpConnectionDriver {
@@ -33,11 +38,23 @@ func newTCPConnectionDriver(model string, host string, port int) *tcpConnectionD
 	}
 }
 
+// newTCPConnectionDriverWithLocalAddr 创建绑定指定本地地址的 TCP 驱动。
+// localAddr 为空时等价于 newTCPConnectionDriver，由操作系统自动选择路由。
+func newTCPConnectionDriverWithLocalAddr(model string, host string, port int, localAddr string) *tcpConnectionDriver {
+	d := newTCPConnectionDriver(model, host, port)
+	d.localAddr = localAddr
+	return d
+}
+
 func (d *tcpConnectionDriver) Connect(ctx context.Context) error {
 	if !d.breaker.AllowRequest() {
 		return fmt.Errorf("%s: circuit breaker is open", d.model)
 	}
 
+	connectCmd := "CONNECT " + d.address
+	if d.localAddr != "" {
+		connectCmd += " (bind " + d.localAddr + ")"
+	}
 	var lastErr error
 	rs := NewRetryStrategy(d.retryCfg)
 	for attempt := 0; rs.ShouldRetry(attempt); attempt++ {
@@ -55,30 +72,108 @@ func (d *tcpConnectionDriver) Connect(ctx context.Context) error {
 			_ = d.conn.Close()
 			d.conn = nil
 		}
+		d.mu.Unlock()
+
+		d.mu.Lock()
+		events.GlobalBus.Publish(events.Event{Type: events.EventHardwareCommand, Data: map[string]any{
+			"model": d.model,
+			"proto": "TCP",
+			"cmd":   connectCmd,
+		}})
+		d.mu.Unlock()
+		log.Printf("[tcp] %s attempt %d/%d %s", d.model, attempt+1, d.retryCfg.MaxAttempts, connectCmd)
+
 		var dialer net.Dialer
-		conn, err := dialer.DialContext(ctx, "tcp", d.address)
+		dialer.Timeout = defaultTCPDialTimeout
+		if d.localAddr != "" {
+			localTCPAddr, addrErr := net.ResolveTCPAddr("tcp", net.JoinHostPort(d.localAddr, "0"))
+			if addrErr != nil {
+				lastErr = fmt.Errorf("%s resolve local addr %s: %w", d.model, d.localAddr, addrErr)
+				log.Printf("[tcp] %v", lastErr)
+				events.GlobalBus.Publish(events.Event{Type: events.EventHardwareResponse, Data: map[string]any{
+					"model": d.model,
+					"proto": "TCP",
+					"resp":  "ERROR: " + lastErr.Error(),
+					"cmd":   connectCmd,
+				}})
+				continue
+			}
+			dialer.LocalAddr = localTCPAddr
+		}
+		conn, err := d.dialWithTimeout(ctx, dialer, attempt+1)
 		if err != nil {
 			lastErr = fmt.Errorf("%s dial %s: %w", d.model, d.address, err)
-			d.mu.Unlock()
+			if errors.Is(err, context.DeadlineExceeded) {
+				lastErr = fmt.Errorf("%s dial %s timeout after %s: %w", d.model, d.address, defaultTCPDialTimeout, err)
+			}
+			log.Printf("[tcp] %v", lastErr)
+			events.GlobalBus.Publish(events.Event{Type: events.EventHardwareResponse, Data: map[string]any{
+				"model": d.model,
+				"proto": "TCP",
+				"resp":  "ERROR: " + lastErr.Error(),
+				"cmd":   connectCmd,
+			}})
 			continue
 		}
 		if tcpConn, ok := conn.(*net.TCPConn); ok {
 			_ = tcpConn.SetKeepAlive(true)
 			_ = tcpConn.SetKeepAlivePeriod(30 * time.Second)
 		}
-		_ = conn.SetReadDeadline(time.Now().Add(200 * time.Millisecond))
-		drainBuf := make([]byte, 4096)
-		_, _ = conn.Read(drainBuf)
-		_ = conn.SetReadDeadline(time.Time{})
+		d.mu.Lock()
+		if d.conn != nil {
+			_ = d.conn.Close()
+		}
 		d.conn = conn
 		d.mu.Unlock()
 
 		d.breaker.RecordSuccess()
+		log.Printf("[tcp] %s connected %s", d.model, d.address)
+		events.GlobalBus.Publish(events.Event{Type: events.EventHardwareResponse, Data: map[string]any{
+			"model": d.model,
+			"proto": "TCP",
+			"resp":  "CONNECTED " + d.address,
+			"cmd":   connectCmd,
+		}})
 		return nil
 	}
 
 	d.breaker.RecordFailure()
+	log.Printf("[tcp] %s connect failed after %d attempts: %v", d.model, d.retryCfg.MaxAttempts, lastErr)
 	return fmt.Errorf("%s connect failed after %d attempts: %w", d.model, d.retryCfg.MaxAttempts, lastErr)
+}
+
+func (d *tcpConnectionDriver) dialWithTimeout(ctx context.Context, dialer net.Dialer, attempt int) (net.Conn, error) {
+	type dialResult struct {
+		conn net.Conn
+		err  error
+	}
+	resultCh := make(chan dialResult, 1)
+	dialCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	go func() {
+		conn, err := dialer.DialContext(dialCtx, "tcp", d.address)
+		resultCh <- dialResult{conn: conn, err: err}
+	}()
+
+	timer := time.NewTimer(defaultTCPDialTimeout)
+	defer timer.Stop()
+
+	select {
+	case result := <-resultCh:
+		return result.conn, result.err
+	case <-timer.C:
+		message := fmt.Sprintf("%s %s 第 %d 次 TCP 连接超过 %s 未返回", d.model, d.address, attempt, defaultTCPDialTimeout)
+		log.Printf("[tcp] %s", message)
+		events.GlobalBus.Publish(events.Event{Type: events.EventSystemError, Data: map[string]any{
+			"code":    "TCP_DIAL_TIMEOUT",
+			"status":  0,
+			"message": message,
+		}})
+		return nil, context.DeadlineExceeded
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
 }
 
 func (d *tcpConnectionDriver) Disconnect(_ context.Context) error {
@@ -105,6 +200,11 @@ func (d *tcpConnectionDriver) closeConn() {
 // sendSCPICommand 发送 SCPI 命令并读取响应（带超时）。
 // 对于设置类命令（不含 ?），设备通常不回复，直接返回空响应以免阻塞 3 秒。
 func (d *tcpConnectionDriver) sendSCPICommand(ctx context.Context, cmd string, readTimeout time.Duration) (string, error) {
+	commandData := map[string]any{
+		"model": d.model,
+		"proto": "SCPI",
+		"cmd":   cmd,
+	}
 	events.GlobalBus.Publish(events.Event{Type: events.EventHardwareCommand, Data: map[string]any{
 		"model": d.model,
 		"proto": "SCPI",
@@ -113,36 +213,39 @@ func (d *tcpConnectionDriver) sendSCPICommand(ctx context.Context, cmd string, r
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	if d.conn == nil {
-		return "", fmt.Errorf("%s: not connected", d.model)
+		err := fmt.Errorf("%s: not connected", d.model)
+		publishHardwareError(commandData, err)
+		return "", err
 	}
 	// 检查 context 是否已过期，避免将过期期限设置到 socket 导致 Windows WSAECONNABORTED
 	if err := ctx.Err(); err != nil {
-		return "", fmt.Errorf("%s write SCPI command %q: context error: %w", d.model, cmd, err)
-	}
-	_ = d.conn.SetReadDeadline(time.Now().Add(50 * time.Millisecond))
-	drainBuf := make([]byte, 4096)
-	for {
-		if _, err := d.conn.Read(drainBuf); err != nil {
-			break
-		}
+		wrapped := fmt.Errorf("%s write SCPI command %q: context error: %w", d.model, cmd, err)
+		publishHardwareError(commandData, wrapped)
+		return "", wrapped
 	}
 	deadline, ok := ctx.Deadline()
 	if !ok {
 		deadline = time.Now().Add(5 * time.Second)
 	}
 	if err := d.conn.SetWriteDeadline(deadline); err != nil {
-		return "", fmt.Errorf("%s set write deadline: %w", d.model, err)
+		wrapped := fmt.Errorf("%s set write deadline: %w", d.model, err)
+		publishHardwareError(commandData, wrapped)
+		return "", wrapped
 	}
 	if _, err := fmt.Fprintf(d.conn, "%s\r\n", cmd); err != nil {
 		d.closeConn()
-		return "", fmt.Errorf("%s write SCPI command %q: %w", d.model, cmd, err)
+		wrapped := fmt.Errorf("%s write SCPI command %q: %w", d.model, cmd, err)
+		publishHardwareError(commandData, wrapped)
+		return "", wrapped
 	}
 	// 设置类命令（不含 ?）通常无响应，跳过读取避免 3 秒超时阻塞
 	if !strings.Contains(cmd, "?") {
 		return "", nil
 	}
 	if err := d.conn.SetReadDeadline(time.Now().Add(readTimeout)); err != nil {
-		return "", fmt.Errorf("%s set read deadline: %w", d.model, err)
+		wrapped := fmt.Errorf("%s set read deadline: %w", d.model, err)
+		publishHardwareError(commandData, wrapped)
+		return "", wrapped
 	}
 	var resp strings.Builder
 	buf := make([]byte, 4096)
@@ -158,12 +261,21 @@ func (d *tcpConnectionDriver) sendSCPICommand(ctx context.Context, cmd string, r
 	}
 	response := strings.TrimSpace(resp.String())
 	events.GlobalBus.Publish(events.Event{Type: events.EventHardwareResponse, Data: map[string]any{
-		"model":  d.model,
-		"proto":  "SCPI",
-		"resp":   response,
-		"cmd":    cmd,
+		"model": d.model,
+		"proto": "SCPI",
+		"resp":  response,
+		"cmd":   cmd,
 	}})
 	return response, nil
+}
+
+func publishHardwareError(commandData map[string]any, err error) {
+	events.GlobalBus.Publish(events.Event{Type: events.EventHardwareResponse, Data: map[string]any{
+		"model": commandData["model"],
+		"proto": commandData["proto"],
+		"resp":  "ERROR: " + err.Error(),
+		"cmd":   commandData["cmd"],
+	}})
 }
 
 // sendWTN1604Command 发送 WTN1604 命令并读取长度前缀响应。
@@ -217,10 +329,10 @@ func (d *tcpConnectionDriver) sendWTN1604Command(ctx context.Context, cmd string
 	}
 	response := strings.TrimSpace(strings.ReplaceAll(string(data), "\x00", ""))
 	events.GlobalBus.Publish(events.Event{Type: events.EventHardwareResponse, Data: map[string]any{
-		"model":  d.model,
-		"proto":  "WTN1604",
-		"resp":   response,
-		"cmd":    cmd,
+		"model": d.model,
+		"proto": "WTN1604",
+		"resp":  response,
+		"cmd":   cmd,
 	}})
 	return response, nil
 }

@@ -235,6 +235,20 @@
     </section>
 
     <el-dialog
+      v-model="showConnectDialog"
+      title="设备连接中"
+      width="400px"
+      :close-on-click-modal="false"
+      :show-close="false"
+      :close-on-press-escape="false"
+    >
+      <div style="text-align:center;padding:20px 0">
+        <el-icon style="font-size:36px;margin-bottom:12px" class="is-loading"><Loading /></el-icon>
+        <p style="margin:8px 0 0;color:#666;font-size:14px">{{ connectProgressMessage }}</p>
+      </div>
+    </el-dialog>
+
+    <el-dialog
       v-model="dialogVisible"
       :title="dialogMode === 'create' ? '新增设备配置' : '编辑设备配置'"
       width="520px"
@@ -303,6 +317,16 @@
             data-test="form-port"
             type="number"
             placeholder="9000"
+          >
+        </label>
+
+        <label>
+          <span>绑定本地IP</span>
+          <input
+            v-model.trim="form.localAddr"
+            data-test="form-localAddr"
+            type="text"
+            placeholder="留空自动选择 / 多网卡时指定"
           >
         </label>
 
@@ -377,6 +401,7 @@ import {
   multipressUnregister
 } from "@/api/multipress"
 import { createEventStream } from "@/api/client"
+import { EVENT_DEVICE_CONNECT_PROGRESS } from "@/shared/events"
 import type {
   DeviceConnectConfigDTO,
   DeviceDTO,
@@ -394,6 +419,7 @@ type DeviceFormState = {
   model: string
   host: string
   port: number
+  localAddr: string
   status: DeviceDTO['status']
 }
 
@@ -412,6 +438,11 @@ const dialogVisible = ref(false)
 const dialogMode = ref<'create' | 'edit'>('create')
 const lastRefreshAt = ref<Date | null>(null)
 
+const showConnectDialog = ref(false)
+const connectingDeviceId = ref<string | null>(null)
+const connectProgressMessage = ref('')
+let connectTimeoutTimer: ReturnType<typeof setTimeout> | null = null
+
 const form = reactive<DeviceFormState>({
   id: '',
   name: '',
@@ -419,6 +450,7 @@ const form = reactive<DeviceFormState>({
   model: '',
   host: '',
   port: 9000,
+  localAddr: '',
   status: 'disconnected'
 })
 
@@ -602,6 +634,7 @@ function openCreateDialog() {
   form.model = ''
   form.host = ''
   form.port = 9000
+  form.localAddr = ''
   form.status = 'disconnected'
   formError.value = ''
   dialogVisible.value = true
@@ -622,6 +655,7 @@ function openEditDialog(device: DeviceDTO) {
   form.model = device.model
   form.host = device.host
   form.port = device.port
+  form.localAddr = device.localAddr ?? ''
   form.status = device.status
   formError.value = ''
   dialogVisible.value = true
@@ -648,6 +682,7 @@ async function submitForm() {
       model: form.model,
       host: form.host,
       port: form.port,
+      localAddr: form.localAddr || undefined,
       status: form.status
     })
     dialogVisible.value = false
@@ -659,6 +694,12 @@ async function submitForm() {
 
 async function toggleConnection(device: DeviceDTO) {
   errorMessage.value = ''
+
+  if (device.status === 'connecting') {
+    errorMessage.value = '设备正在连接中，请稍候'
+    return
+  }
+
   try {
     if (device.status === 'connected') {
       if (device.type === 'pressure') {
@@ -667,15 +708,40 @@ async function toggleConnection(device: DeviceDTO) {
         await disconnectDevice(device.id)
       }
     } else {
+      device.status = 'connecting'
+      connectingDeviceId.value = device.id
+      connectProgressMessage.value = '准备连接...'
+      showConnectDialog.value = true
+
+      // 前端超时兜底
+      connectTimeoutTimer = setTimeout(() => {
+        if (showConnectDialog.value) {
+          showConnectDialog.value = false
+          connectingDeviceId.value = null
+          errorMessage.value = '连接超时，请检查设备网络和地址'
+        }
+      }, 12000)
+
       if (device.type === 'pressure') {
         await multipressRegister(device.id)
       } else {
-        await connectDevice(device.id)
+        const result = await connectDevice(device.id)
+        if (result.status === 'error') {
+          errorMessage.value = result.lastErrorReason || '连接失败，请检查设备地址和网络'
+        }
       }
     }
     await refreshAll()
   } catch (error) {
+    device.status = 'disconnected'
     errorMessage.value = error instanceof Error ? error.message : '切换连接状态失败'
+  } finally {
+    showConnectDialog.value = false
+    connectingDeviceId.value = null
+    if (connectTimeoutTimer) {
+      clearTimeout(connectTimeoutTimer)
+      connectTimeoutTimer = null
+    }
   }
 }
 
@@ -702,7 +768,6 @@ function validateForm() {
   }
 
   if (dialogMode.value === 'create' && devices.value.some((item) => item.id === form.id)) {
-    // ID冲突极少发生，但保险起见重新生成
     form.id = generateDeviceId()
   }
 
@@ -712,6 +777,10 @@ function validateForm() {
 
   if (!Number.isInteger(form.port) || form.port < 1 || form.port > 65535) {
     return '端口必须在1-65535之间'
+  }
+
+  if (!form.model) {
+    return '请选择设备型号'
   }
 
   return ''
@@ -747,13 +816,24 @@ function startEventStream() {
     return
   }
 
-  eventSource = createEventStream((payload: StreamEventPayload) => {
-    if (payload.type === 'device.status.changed') {
-      if (isDeviceStatusChangedEventData(payload.data)) {
-        applyDeviceStatusChangedEvent(payload.data)
-      } else {
-        void refreshAll()
+  eventSource = createEventStream({
+    onEvent: (payload: StreamEventPayload) => {
+      if (payload.type === 'device.status.changed') {
+        if (isDeviceStatusChangedEventData(payload.data)) {
+          applyDeviceStatusChangedEvent(payload.data)
+        } else {
+          void refreshAll()
+        }
       }
+      if (payload.type === EVENT_DEVICE_CONNECT_PROGRESS) {
+        const data = payload.data as { deviceId?: string; message?: string }
+        if (data.deviceId && data.message) {
+          connectProgressMessage.value = data.message
+        }
+      }
+    },
+    onError: (error) => {
+      console.warn('[DeviceManagementPanel] SSE 连接断开:', error)
     }
   })
 }
@@ -792,6 +872,10 @@ onMounted(() => {
 onUnmounted(() => {
   stopPolling()
   stopEventStream()
+  if (connectTimeoutTimer) {
+    clearTimeout(connectTimeoutTimer)
+    connectTimeoutTimer = null
+  }
 })
 </script>
 

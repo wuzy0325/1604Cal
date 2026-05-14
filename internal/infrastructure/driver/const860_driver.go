@@ -21,6 +21,12 @@ func newConST860Driver(host string, port int) *ConST860Driver {
 	}
 }
 
+func newConST860DriverWithLocalAddr(host string, port int, localAddr string) *ConST860Driver {
+	return &ConST860Driver{
+		constBaseDriver: constBaseDriver{base: newTCPConnectionDriverWithLocalAddr("ConST 860", host, port, localAddr)},
+	}
+}
+
 func (d *ConST860Driver) Connect(ctx context.Context) error {
 	return d.constConnect(ctx, "PRESsure:STABle?")
 }

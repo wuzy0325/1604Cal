@@ -6,6 +6,12 @@ import * as apiDevice from '@/api/device'
 import * as apiClient from '@/api/client'
 import type { StreamEventPayload } from '@/types/api'
 
+const ElDialogStub = {
+  name: 'ElDialog',
+  template: '<div v-if="modelValue"><h3>{{ title }}</h3><slot /><slot name="footer" /></div>',
+  props: ['modelValue', 'title', 'width', 'closeOnClickModal', 'destroyOnClose']
+}
+
 vi.mock('@/api/device', () => ({
   fetchDevices: vi.fn(),
   fetchDeviceConnectConfig: vi.fn(),
@@ -39,8 +45,8 @@ describe('DeviceManagementPanel', () => {
 
     streamCallback = null
 
-    vi.mocked(apiClient.createEventStream).mockImplementation((onEvent) => {
-      streamCallback = onEvent
+    vi.mocked(apiClient.createEventStream).mockImplementation((options) => {
+      streamCallback = options.onEvent
       return {
         close: closeSpy
       } as unknown as EventSource
@@ -93,19 +99,21 @@ describe('DeviceManagementPanel', () => {
   })
 
   it('opens create dialog and submits form', async () => {
-    const wrapper = mount(DeviceManagementPanel)
+    const wrapper = mount(DeviceManagementPanel, {
+      global: { stubs: { ElDialog: ElDialogStub } }
+    })
     await flushPromises()
 
     await wrapper.get('[data-test="add-device"]').trigger('click')
+    await flushPromises()
     expect(wrapper.text()).toContain('新增设备配置')
 
-    await wrapper.get('[data-test="form-id"]').setValue('p9')
+    // form-id 仅在编辑模式下显示，创建模式自动生成 ID，无需填写
     await wrapper.get('[data-test="form-name"]').setValue('pressure-9')
     await wrapper.get('[data-test="form-type"]').setValue('pressure')
-    await wrapper.get('[data-test="form-model"]').setValue('ConST 820')
+    await wrapper.get('[data-test="form-model"]').setValue('ConST820')
     await wrapper.get('[data-test="form-host"]').setValue('192.168.1.109')
     await wrapper.get('[data-test="form-port"]').setValue('7009')
-    await wrapper.get('[data-test="form-unit"]').setValue('kPa')
 
     await wrapper.get('[data-test="submit-form"]').trigger('click')
     await flushPromises()
@@ -130,37 +138,48 @@ describe('DeviceManagementPanel', () => {
     expect(apiDevice.connectDevice).toHaveBeenCalledWith('m1')
   })
 
-  it('shows duplicate id validation error in create mode', async () => {
-    const wrapper = mount(DeviceManagementPanel)
+  it('auto-generates id when submitting duplicate id in create mode', async () => {
+    const wrapper = mount(DeviceManagementPanel, {
+      global: { stubs: { ElDialog: ElDialogStub } }
+    })
     await flushPromises()
 
     await wrapper.get('[data-test="add-device"]').trigger('click')
-    await wrapper.get('[data-test="form-id"]').setValue('m1')
+    await flushPromises()
+    // 创建模式下 form-id 不显示，自动生成唯一 ID，提交时不阻塞
+    await wrapper.get('[data-test="form-name"]').setValue('dup-device')
     await wrapper.get('[data-test="form-host"]').setValue('192.168.1.109')
     await wrapper.get('[data-test="form-port"]').setValue('7009')
-    await wrapper.get('[data-test="form-unit"]').setValue('kPa')
+    await wrapper.get('[data-test="form-model"]').setValue('WTN1604')
     await wrapper.get('[data-test="submit-form"]').trigger('click')
+    await flushPromises()
 
-    expect(wrapper.text()).toContain('设备ID已存在')
-    expect(apiDevice.upsertDevice).not.toHaveBeenCalled()
+    // 即使 ID 重复也自动生成新 ID 并保存（不显示错误）
+    expect(wrapper.text()).not.toContain('设备ID已存在')
+    expect(apiDevice.upsertDevice).toHaveBeenCalled()
   })
 
   it('shows ip and port validation errors', async () => {
-    const wrapper = mount(DeviceManagementPanel)
+    const wrapper = mount(DeviceManagementPanel, {
+      global: { stubs: { ElDialog: ElDialogStub } }
+    })
     await flushPromises()
 
     await wrapper.get('[data-test="add-device"]').trigger('click')
-    await wrapper.get('[data-test="form-id"]').setValue('m9')
+    await flushPromises()
+    // 创建模式下无需填写 form-id，自动生成
     await wrapper.get('[data-test="form-host"]').setValue('invalid-ip')
     await wrapper.get('[data-test="form-port"]').setValue('7009')
-    await wrapper.get('[data-test="form-unit"]').setValue('kPa')
+    await wrapper.get('[data-test="form-model"]').setValue('WTN1604')
     await wrapper.get('[data-test="submit-form"]').trigger('click')
+    await flushPromises()
 
     expect(wrapper.text()).toContain('IP地址格式不正确')
 
     await wrapper.get('[data-test="form-host"]').setValue('192.168.1.110')
     await wrapper.get('[data-test="form-port"]').setValue('70000')
     await wrapper.get('[data-test="submit-form"]').trigger('click')
+    await flushPromises()
 
     expect(wrapper.text()).toContain('端口必须在1-65535之间')
     expect(apiDevice.upsertDevice).not.toHaveBeenCalled()

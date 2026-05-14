@@ -1,7 +1,9 @@
 package http
 
 import (
+	"context"
 	"net/http"
+	"time"
 
 	"cal1604/internal/application/calibration"
 	"cal1604/internal/application/deviceconnect"
@@ -11,6 +13,7 @@ import (
 	"cal1604/internal/config"
 	"cal1604/internal/device"
 	"cal1604/internal/device/manager"
+	"cal1604/internal/domain"
 	"cal1604/internal/infrastructure/driver"
 	"cal1604/internal/report"
 	"cal1604/internal/workflow"
@@ -64,17 +67,54 @@ func NewRouterWithConnectConfig(deviceManager deviceManager, connectConfig devic
 }
 
 // NewRouterWithRuntimeConfig 基于连接配置、标定门禁配置和应用配置创建路由。
-
 func NewRouterWithRuntimeConfig(deviceManager deviceManager, connectConfig deviceconnect.Config, calibrationConfig CalibrationRuntimeConfig, configPath string, appCfg ...config.AppConfig) http.Handler {
 	var cfg *config.AppConfig
 	if len(appCfg) > 0 {
 		cfg = &appCfg[0]
 	}
 	// 使用相对于可执行文件的templates/reports目录
-	return newRouter(deviceManager, nil, connectConfig, calibrationConfig, cfg, configPath, "templates/reports")
+	handler, _ := newRouterWithServer(deviceManager, nil, connectConfig, calibrationConfig, cfg, configPath, "templates/reports")
+	return handler
 }
 
-func newRouter(
+// NewRouterWithShutdown 创建路由并返回清理函数，应用退出时调用以释放所有后台资源。
+func NewRouterWithShutdown(deviceManager deviceManager, connectConfig deviceconnect.Config, calibrationConfig CalibrationRuntimeConfig, configPath string, appCfg ...config.AppConfig) (http.Handler, func(context.Context)) {
+	var cfg *config.AppConfig
+	if len(appCfg) > 0 {
+		cfg = &appCfg[0]
+	}
+	handler, srv := newRouterWithServer(deviceManager, nil, connectConfig, calibrationConfig, cfg, configPath, "templates/reports")
+
+	cleanup := func(ctx context.Context) {
+		// 用 Wails shutdown context 并加超时兜底
+		cleanupCtx, cancel := context.WithTimeout(ctx, 8*time.Second)
+		defer cancel()
+
+		// 停止后台轮询（无 I/O）
+		srv.multipressService.StopPolling()
+
+		// 停止计量自动采集和采集循环
+		srv.measurementService.StopAutoCollect()
+		_ = srv.measurementService.Stop()
+
+		// 结束标定流程（停止压力控制和 WTN1604 校准）
+		_ = srv.calibrationService.EndCalibration(cleanupCtx)
+
+		// 停止所有已注册打压设备
+		_ = srv.multipressService.StopAll(cleanupCtx)
+
+		// 断开所有已连接设备
+		for _, dev := range deviceManager.List() {
+			if dev.Status == domain.DeviceStatusConnected {
+				_, _ = srv.deviceConnector.Disconnect(cleanupCtx, dev.ID)
+			}
+		}
+	}
+
+	return handler, cleanup
+}
+
+func newRouterWithServer(
 	deviceManager deviceManager,
 	connector deviceConnector,
 	connectConfig deviceconnect.Config,
@@ -82,7 +122,7 @@ func newRouter(
 	appCfg *config.AppConfig,
 	configPath string,
 	templateDir string,
-) http.Handler {
+) (http.Handler, *apiServer) {
 	if deviceManager == nil {
 		deviceManager = manager.NewDeviceManager()
 	}
@@ -269,7 +309,21 @@ func newRouter(
 	mux.HandleFunc("POST /api/v1/reports/export", server.exportReportHandler)
 	mux.HandleFunc("GET /api/v1/reports/templates", server.listTemplatesHandler)
 
-	return corsMiddleware(mux)
+	return corsMiddleware(mux), server
+}
+
+// newRouter 是兼容旧调用的封装，返回 HTTP handler，忽略 apiServer。
+func newRouter(
+	deviceManager deviceManager,
+	connector deviceConnector,
+	connectConfig deviceconnect.Config,
+	calibrationConfig CalibrationRuntimeConfig,
+	appCfg *config.AppConfig,
+	configPath string,
+	templateDir string,
+) http.Handler {
+	h, _ := newRouterWithServer(deviceManager, connector, connectConfig, calibrationConfig, appCfg, configPath, templateDir)
+	return h
 }
 
 // corsMiddleware 为所有 API 响应添加 CORS 头，处理 OPTIONS 预检请求。

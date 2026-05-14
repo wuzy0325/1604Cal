@@ -11,6 +11,12 @@ type setMeasureDeviceRequest struct {
 	MeasureDeviceID string `json:"measureDeviceId"`
 }
 
+type setDevicesRequest struct {
+	MeasureDeviceID  string `json:"measureDeviceId"`
+	PressureDeviceID string `json:"pressureDeviceId"`
+	ModuleName       string `json:"moduleName"`
+}
+
 type pressureResponse struct {
 	Pressure float64 `json:"pressure"`
 }
@@ -56,7 +62,12 @@ func (s *apiServer) sessionSetDevicesHandler(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	if err := s.sessionService.BindDevices(req.MeasureDeviceID, req.PressureDeviceID); err != nil {
+	moduleName := req.ModuleName
+	if moduleName == "" {
+		moduleName = "measurement"
+	}
+
+	if err := s.sessionService.BindDevices(req.MeasureDeviceID, req.PressureDeviceID, moduleName); err != nil {
 		writeError(w, err)
 		return
 	}
@@ -76,7 +87,7 @@ func (s *apiServer) sessionSetMeasureDeviceHandler(w http.ResponseWriter, r *htt
 		return
 	}
 
-	if err := s.sessionService.BindMeasureDevice(req.MeasureDeviceID); err != nil {
+	if err := s.sessionService.BindMeasureDevice(req.MeasureDeviceID, "measurement"); err != nil {
 		writeError(w, err)
 		return
 	}

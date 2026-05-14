@@ -175,7 +175,7 @@ const isConnecting = computed(() => device.value?.status === 'connecting')
 const deviceStatus = computed(() => {
   if (!device.value) return 'disconnected'
   if (device.value.status === 'connected') return 'connected'
-  if (device.value.status === 'connecting') return 'disconnected'
+  if (device.value.status === 'connecting') return 'connecting'
   if (device.value.status === 'error') return 'error'
   return 'disconnected'
 })

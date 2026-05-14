@@ -20,6 +20,10 @@ func newWTN1604Driver(host string, port int) *WTN1604Driver {
 	return &WTN1604Driver{base: newTCPConnectionDriver("WTN1604", host, port)}
 }
 
+func newWTN1604DriverWithLocalAddr(host string, port int, localAddr string) *WTN1604Driver {
+	return &WTN1604Driver{base: newTCPConnectionDriverWithLocalAddr("WTN1604", host, port, localAddr)}
+}
+
 func (d *WTN1604Driver) Connect(ctx context.Context) error    { return d.base.Connect(ctx) }
 func (d *WTN1604Driver) Disconnect(ctx context.Context) error { return d.base.Disconnect(ctx) }
 

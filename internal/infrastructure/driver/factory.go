@@ -31,15 +31,15 @@ func (f *Factory) Create(dev domain.Device) (device.ConnectionDriver, error) {
 	model := normalizeModel(dev.Model)
 	switch model {
 	case "WTN1604":
-		return newWTN1604Driver(dev.Host, dev.Port), nil
+		return newWTN1604DriverWithLocalAddr(dev.Host, dev.Port, dev.LocalAddr), nil
 	case "CONST811A", "811A":
-		return newConST811ADriver(dev.Host, dev.Port), nil
+		return newConST811ADriverWithLocalAddr(dev.Host, dev.Port, dev.LocalAddr), nil
 	case "CONST820", "820":
-		return newConST820Driver(dev.Host, dev.Port), nil
+		return newConST820DriverWithLocalAddr(dev.Host, dev.Port, dev.LocalAddr), nil
 	case "CONST860", "860":
-		return newConST860Driver(dev.Host, dev.Port), nil
+		return newConST860DriverWithLocalAddr(dev.Host, dev.Port, dev.LocalAddr), nil
 	case "SPC4000":
-		return newSPC4000Driver(dev.Host, dev.Port), nil
+		return newSPC4000DriverWithLocalAddr(dev.Host, dev.Port, dev.LocalAddr), nil
 	case "SIMULATED", "GENERIC_SIMULATOR", "SIMULATOR":
 		switch dev.Type {
 		case domain.DeviceTypeMeasure:
@@ -62,7 +62,7 @@ func (f *Factory) CreateMeasureDriver(dev domain.Device) (device.MeasureDriver, 
 	model := normalizeModel(dev.Model)
 	switch model {
 	case "WTN1604":
-		return newWTN1604Driver(dev.Host, dev.Port), nil
+		return newWTN1604DriverWithLocalAddr(dev.Host, dev.Port, dev.LocalAddr), nil
 	case "SIMULATED", "GENERIC_SIMULATOR", "SIMULATOR":
 		return NewSimulatedMeasureDriver(), nil
 	default:
@@ -78,13 +78,13 @@ func (f *Factory) CreatePressureDriver(dev domain.Device) (device.PressureDriver
 	model := normalizeModel(dev.Model)
 	switch model {
 	case "CONST811A", "811A":
-		return newConST811ADriver(dev.Host, dev.Port), nil
+		return newConST811ADriverWithLocalAddr(dev.Host, dev.Port, dev.LocalAddr), nil
 	case "CONST820", "820":
-		return newConST820Driver(dev.Host, dev.Port), nil
+		return newConST820DriverWithLocalAddr(dev.Host, dev.Port, dev.LocalAddr), nil
 	case "CONST860", "860":
-		return newConST860Driver(dev.Host, dev.Port), nil
+		return newConST860DriverWithLocalAddr(dev.Host, dev.Port, dev.LocalAddr), nil
 	case "SPC4000":
-		return newSPC4000Driver(dev.Host, dev.Port), nil
+		return newSPC4000DriverWithLocalAddr(dev.Host, dev.Port, dev.LocalAddr), nil
 	case "SIMULATED", "GENERIC_SIMULATOR", "SIMULATOR":
 		return NewSimulatedPressureDriver(), nil
 	default:

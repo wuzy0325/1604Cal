@@ -1,6 +1,7 @@
 import { defineComponent } from 'vue'
 import { mount } from '@vue/test-utils'
-import { describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it } from 'vitest'
+import { createPinia, setActivePinia } from 'pinia'
 
 import MeasurementDataView from '../MeasurementDataView.vue'
 
@@ -10,6 +11,10 @@ const ElIconStub = defineComponent({
 })
 
 describe('MeasurementDataView', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+  })
+
   it('renders raw sampling rows even when no pressure targets are configured', () => {
     const wrapper = mount(MeasurementDataView, {
       props: {

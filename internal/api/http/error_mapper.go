@@ -9,6 +9,7 @@ import (
 	"cal1604/internal/application/calibration"
 	"cal1604/internal/application/session"
 	apperrors "cal1604/internal/errors"
+	"cal1604/internal/events"
 )
 
 func writeError(w http.ResponseWriter, err error) {
@@ -66,6 +67,13 @@ func writeError(w http.ResponseWriter, err error) {
 	if err != nil && err.Error() != message {
 		message = message + ": " + err.Error()
 	}
+
+	// 广播系统错误事件到前端日志面板
+	events.GlobalBus.Publish(events.Event{Type: events.EventSystemError, Data: map[string]any{
+		"code":    code,
+		"status":  status,
+		"message": message,
+	}})
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)

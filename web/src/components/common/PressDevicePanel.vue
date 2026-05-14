@@ -161,7 +161,7 @@ const isConnecting = computed(() => device.value?.status === 'connecting')
 const deviceStatus = computed(() => {
   if (!device.value) return 'disconnected'
   if (device.value.status === 'connected') return 'connected'
-  if (device.value.status === 'connecting') return 'disconnected'
+  if (device.value.status === 'connecting') return 'connecting'
   if (device.value.status === 'error') return 'error'
   return 'disconnected'
 })
@@ -249,20 +249,20 @@ const setPressure = async () => {
   if (!device.value) return
   try {
     await multipressSetPressure(device.value.id, targetPressure.value)
-  } catch {
-    // 静默失败
+    emit('set-pressure', device.value.id, targetPressure.value)
+  } catch (err) {
+    console.warn('[PressDevicePanel] 设置压力失败:', err)
   }
-  emit('set-pressure', device.value.id, targetPressure.value)
 }
 
 const exhaustPressure = async () => {
   if (!device.value) return
   try {
     await multipressExhaust(device.value.id)
-  } catch {
-    // 静默失败
+    emit('exhaust', device.value.id)
+  } catch (err) {
+    console.warn('[PressDevicePanel] 排气失败:', err)
   }
-  emit('exhaust', device.value.id)
 }
 </script>
 

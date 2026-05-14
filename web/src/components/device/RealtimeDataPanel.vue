@@ -364,30 +364,35 @@ let eventSource: EventSource | null = null
 let pollInterval: ReturnType<typeof setInterval> | null = null
 
 function setupSSE() {
-  eventSource = createEventStream((payload: StreamEventPayload) => {
-    const now = new Date()
-    lastUpdateTime.value = now.toLocaleTimeString('zh-CN')
+  eventSource = createEventStream({
+    onEvent: (payload: StreamEventPayload) => {
+      const now = new Date()
+      lastUpdateTime.value = now.toLocaleTimeString('zh-CN')
 
-    if (payload.type === 'device.status.changed') {
-      // 设备状态变化时，重新同步连接状态
-      void syncConnectionFromDevices()
-    }
+      if (payload.type === 'device.status.changed') {
+        // 设备状态变化时，重新同步连接状态
+        void syncConnectionFromDevices()
+      }
 
-    if (payload.type === 'pressure.applied') {
-      const data = payload.data as { actualPressure?: number; targetPressure?: number }
-      if (data?.actualPressure !== undefined) {
-        currentPressure.value = data.actualPressure
+      if (payload.type === 'pressure.applied') {
+        const data = payload.data as { actualPressure?: number; targetPressure?: number }
+        if (data?.actualPressure !== undefined) {
+          currentPressure.value = data.actualPressure
+        }
+        if (data?.targetPressure !== undefined) {
+          eventTargetPressure.value = data.targetPressure
+        }
       }
-      if (data?.targetPressure !== undefined) {
-        eventTargetPressure.value = data.targetPressure
-      }
-    }
 
-    if (payload.type === 'data.collected') {
-      const data = payload.data as { data?: number[]; channels?: number[] }
-      if (data?.data && data?.channels) {
-        updateChannelData(data.data, data.channels)
+      if (payload.type === 'data.collected') {
+        const data = payload.data as { data?: number[]; channels?: number[] }
+        if (data?.data && data?.channels) {
+          updateChannelData(data.data, data.channels)
+        }
       }
+    },
+    onError: (error) => {
+      console.warn('[RealtimeDataPanel] SSE 连接断开:', error)
     }
   })
 }

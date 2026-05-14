@@ -14,9 +14,14 @@ export function useMultiPressSync() {
 
   function setupSSE() {
     if (eventSource) return
-    eventSource = createEventStream((payload: StreamEventPayload) => {
-      if (payload.type.startsWith('multipress.')) {
-        store.handleSSEEvent(payload)
+    eventSource = createEventStream({
+      onEvent: (payload: StreamEventPayload) => {
+        if (payload.type.startsWith('multipress.')) {
+          store.handleSSEEvent(payload)
+        }
+      },
+      onError: (error) => {
+        console.warn('[useMultiPressSync] SSE 连接断开:', error)
       }
     })
   }

@@ -114,13 +114,13 @@ export const useMeasurementStore = defineStore('measurement', () => {
   // ── 设备绑定 ──
 
   const bindDevices = async (measureDevId: string, pressureDevId: string) => {
-    await apiBindDevices(measureDevId, pressureDevId)
+    await apiBindDevices(measureDevId, pressureDevId, 'measurement')
     measureDeviceId.value = measureDevId
     pressureDeviceId.value = pressureDevId
   }
 
   const bindMeasureDevice = async (measureDevId: string) => {
-    await apiBindMeasureDevice(measureDevId)
+    await apiBindMeasureDevice(measureDevId, 'measurement')
     measureDeviceId.value = measureDevId
   }
 

@@ -71,6 +71,7 @@
                   size="small"
                   type="info"
                   :disabled="!canCollect(row.status)"
+                  :data-testid="`collect-btn-point-${row.index}`"
                   @click="calibrationStore.collectData(row.id)"
                 >
                   采集

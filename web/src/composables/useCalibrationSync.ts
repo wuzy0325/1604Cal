@@ -120,31 +120,32 @@ export function useCalibrationSync() {
   }
 
   function setupSSE() {
-    eventSource = createEventStream((payload: StreamEventPayload) => {
-      if (payload.type === EVENT_SESSION_STATE_CHANGED) {
-        const data = payload.data as { state: SessionState }
-        if (data?.state) {
-          calibrationStore.syncSessionState(data.state)
-        }
-      }
-      if (payload.type === EVENT_DEVICE_STATUS_CHANGED) {
-        void deviceStore.loadDevices(true).then(bindConnectedMeasureDevice)
-      }
-      // 压力点状态更新（采集数据、打压进度等）
-      if (payload.type === EVENT_CALIBRATION_POINT_STATUS) {
-        const data = payload.data as { index?: number; status?: string; collectedData?: number[]; actualPressure?: number }
-        if (typeof data?.index === 'number') {
-          const point = calibrationStore.pressurePoints.find(p => p.index === data.index)
-          if (point) {
-            if (data.status) point.status = data.status as typeof point.status
-            if (data.collectedData) point.collectedData = data.collectedData
-            if (data.actualPressure !== undefined) point.actualPressure = data.actualPressure
+    eventSource = createEventStream({
+      onEvent: (payload: StreamEventPayload) => {
+        if (payload.type === EVENT_SESSION_STATE_CHANGED) {
+          const data = payload.data as { state: SessionState }
+          if (data?.state) {
+            calibrationStore.syncSessionState(data.state)
           }
         }
-      }
-      // 稳定性 SSE 事件
-      if (payload.type?.startsWith(EVENT_CALIBRATION_STABILITY_PREFIX)) {
-        stabilityStatus.value = payload.data as StabilityEventData
+        if (payload.type === EVENT_DEVICE_STATUS_CHANGED) {
+          void deviceStore.loadDevices(true).then(bindConnectedMeasureDevice)
+        }
+        // 压力点状态更新（采集数据、打压进度等）
+        if (payload.type === EVENT_CALIBRATION_POINT_STATUS) {
+          const data = payload.data as { index?: number; status?: string; collectedData?: number[]; actualPressure?: number }
+          if (typeof data?.index === 'number') {
+            const point = calibrationStore.pressurePoints.find(p => p.index === data.index)
+            if (point) {
+              if (data.status) point.status = data.status as typeof point.status
+              if (data.collectedData) point.collectedData = data.collectedData
+              if (data.actualPressure !== undefined) point.actualPressure = data.actualPressure
+            }
+          }
+        }
+        // 稳定性 SSE 事件
+        if (payload.type?.startsWith(EVENT_CALIBRATION_STABILITY_PREFIX)) {
+          stabilityStatus.value = payload.data as StabilityEventData
       }
       // 报警事件
       if (payload.type === EVENT_ALARM_TRIGGERED) {
@@ -164,6 +165,10 @@ export function useCalibrationSync() {
           deviceStore.updateDevicePressure(data.deviceId, data.currentPressure)
         }
       }
+    },
+    onError: (error) => {
+      console.warn('[useCalibrationSync] SSE 连接断开:', error)
+    }
     })
   }
 

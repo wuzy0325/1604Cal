@@ -73,6 +73,12 @@ type Device struct {
 	Unit   string       `json:"unit"`
 	Status DeviceStatus `json:"status"`
 
+	// LocalAddr 指定 TCP 拨号绑定的本地 IP 地址。
+	// 多网卡环境下，Windows 可能将流量路由到错误的网卡，导致连接超时。
+	// 设置此字段后，TCP 拨号会绑定到指定本地地址，确保流量从正确的网卡发出。
+	// 留空时由操作系统自动选择路由。
+	LocalAddr string `json:"localAddr,omitempty"`
+
 	// IsSimulated 为 true 时使用模拟驱动，不连接真实设备。
 	IsSimulated bool `json:"isSimulated"`
 

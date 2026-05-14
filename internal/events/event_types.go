@@ -11,7 +11,8 @@ const (
 
 // Device 设备状态事件
 const (
-	EventDeviceStatusChanged = "device.status.changed"
+	EventDeviceStatusChanged   = "device.status.changed"
+	EventDeviceConnectProgress = "device.connect_progress" // 连接阶段进度
 )
 
 // Measurement 计量工作流事件
@@ -65,6 +66,11 @@ const (
 
 // Hardware 硬件通讯日志事件
 const (
-	EventHardwareCommand = "hardware.command" // 发送命令到设备
+	EventHardwareCommand  = "hardware.command"  // 发送命令到设备
 	EventHardwareResponse = "hardware.response" // 收到设备响应
+)
+
+// System 系统级事件
+const (
+	EventSystemError = "system.error" // 系统错误日志
 )

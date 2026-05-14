@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 
-export type HwLogKind = 'hw-cmd' | 'hw-res'
+export type HwLogKind = 'hw-cmd' | 'hw-res' | 'sys-error'
 
 export interface HwLogEntry {
   id: number

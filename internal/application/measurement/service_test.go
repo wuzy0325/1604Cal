@@ -81,6 +81,7 @@ type fakeStore struct {
 
 func (s *fakeStore) Upsert(dev domain.Device)                      { s.devices[dev.ID] = dev }
 func (s *fakeStore) UpdateStatus(string, domain.DeviceStatus) bool { return true }
+func (s *fakeStore) UpdateUnit(string, string) bool                { return true }
 func (s *fakeStore) Delete(string)                                 {}
 func (s *fakeStore) Get(id string) (domain.Device, bool)           { d, ok := s.devices[id]; return d, ok }
 func (s *fakeStore) List() []domain.Device                         { return nil }
@@ -104,7 +105,7 @@ func setupMeasurementService() (*measurement.Service, *fakeMeasureDriver) {
 	sessSvc := session.NewService(store, driver.NewFactory(), func(string, any) {}, &mapProvider{
 		drivers: map[string]device.ConnectionDriver{"m1": embedMD{mDrv}},
 	})
-	_ = sessSvc.BindMeasureDevice("m1")
+	_ = sessSvc.BindMeasureDevice("m1", "test")
 	svc := measurement.NewService(sessSvc, func(string, any) {})
 	return svc, mDrv
 }
@@ -122,7 +123,7 @@ func setupMeasurementServiceWithPressure() (*measurement.Service, *fakeMeasureDr
 			"p1": embedPD{pDrv},
 		},
 	})
-	_ = sessSvc.BindDevices("m1", "p1")
+	_ = sessSvc.BindDevices("m1", "p1", "test")
 	svc := measurement.NewService(sessSvc, func(string, any) {})
 	return svc, mDrv, pDrv
 }
@@ -391,7 +392,7 @@ func TestManualCollectFlatStorage(t *testing.T) {
 	sessSvc := session.NewService(store, driver.NewFactory(), func(string, any) {}, &mapProvider{
 		drivers: map[string]device.ConnectionDriver{"m1": embedMD{seqDrv}},
 	})
-	_ = sessSvc.BindMeasureDevice("m1")
+	_ = sessSvc.BindMeasureDevice("m1", "test")
 	svc := measurement.NewService(sessSvc, func(string, any) {})
 
 	svc.SetConfig(domain.WorkflowConfig{
@@ -772,7 +773,7 @@ func TestManualPressurizeSCPIStability(t *testing.T) {
 			"p1": embedPD{stableDrv},
 		},
 	})
-	_ = sessSvc.BindDevices("m1", "p1")
+	_ = sessSvc.BindDevices("m1", "p1", "test")
 	svc := measurement.NewService(sessSvc, func(string, any) {})
 
 	svc.SetConfig(domain.WorkflowConfig{
