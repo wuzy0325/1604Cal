@@ -9,6 +9,7 @@ import (
 
 type setMeasureDeviceRequest struct {
 	MeasureDeviceID string `json:"measureDeviceId"`
+	ModuleName      string `json:"moduleName"`
 }
 
 type setDevicesRequest struct {
@@ -87,7 +88,12 @@ func (s *apiServer) sessionSetMeasureDeviceHandler(w http.ResponseWriter, r *htt
 		return
 	}
 
-	if err := s.sessionService.BindMeasureDevice(req.MeasureDeviceID, "measurement"); err != nil {
+	moduleName := req.ModuleName
+	if moduleName == "" {
+		moduleName = "measurement"
+	}
+
+	if err := s.sessionService.BindMeasureDevice(req.MeasureDeviceID, moduleName); err != nil {
 		writeError(w, err)
 		return
 	}

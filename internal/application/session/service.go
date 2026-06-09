@@ -265,8 +265,8 @@ func (s *Service) ReadMeasureUnit(ctx context.Context) (string, error) {
 	}
 	log.Printf("[1604单位读取] 从硬件读取到单位: %s", unit)
 
-	// 同步硬件单位到设备配置存储
-	if devID != "" {
+	// 同步硬件单位到设备配置存储（仅非空覆盖，避免空响应擦除有效配置）
+	if unit != "" && devID != "" {
 		if dev, ok := s.deviceManager.Get(devID); ok && dev.Unit != unit {
 			dev.Unit = unit
 			s.deviceManager.Upsert(dev)

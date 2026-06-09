@@ -315,6 +315,10 @@ func (d *tcpConnectionDriver) sendWTN1604Command(ctx context.Context, cmd string
 		return "", fmt.Errorf("%s read length prefix: %w", d.model, err)
 	}
 	totalLen := int(binary.BigEndian.Uint16(lenBuf))
+	if totalLen == 0 {
+		// 空响应（00-00）：设备已接受命令但无数据返回。不关闭连接，避免后续命令失败。
+		return "", nil
+	}
 	if totalLen < 2 {
 		d.closeConn()
 		return "", fmt.Errorf("%s invalid response length: %d", d.model, totalLen)

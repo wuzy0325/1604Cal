@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 	"sync"
 	"time"
 
@@ -181,10 +182,22 @@ func (s *Service) Connect(ctx context.Context, id string) (domain.Device, error)
 	s.publishConnectProgress(dev.ID, "TCP 已连接，读取设备配置...")
 
 	// 连接成功后从硬件读取实际单位，确保显示单位与设备真实单位一致。
+	// 设备可能在新 TCP 连接后立即关闭连接（预期先收命令再返回），首次读取失败时重连重试一次。
 	if reader, ok := drv.(interface {
 		ReadUnit(context.Context) (string, error)
 	}); ok {
-		if unit, err := reader.ReadUnit(ctx); err == nil {
+		unit, readErr := reader.ReadUnit(ctx)
+		if readErr != nil {
+			log.Printf("[connect] ReadUnit first attempt failed, reconnecting: %v", readErr)
+			// 连接已被 ReadUnit 关闭，需重新建链
+			if connectErr := drv.Connect(ctx); connectErr != nil {
+				log.Printf("[connect] reconnect after ReadUnit failure: %v", connectErr)
+			} else if unit2, err2 := reader.ReadUnit(ctx); err2 == nil && unit2 != "" {
+				unit = unit2
+				readErr = nil
+			}
+		}
+		if readErr == nil && unit != "" {
 			dev.Unit = unit
 		}
 	}

@@ -10,6 +10,7 @@ import (
 	"cal1604/internal/application/deviceconnect"
 	"cal1604/internal/config"
 	"cal1604/internal/device/manager"
+	"cal1604/internal/domain"
 )
 
 const configPathEnvName = "CAL1604_CONFIG"
@@ -32,6 +33,12 @@ func main() {
 	if err != nil {
 		log.Fatalf("init persistent device manager failed: %v", err)
 	}
+
+	// 启动时重置所有设备为断开状态，避免上次会话的 "connected" 残留
+	for _, dev := range deviceManager.List() {
+		deviceManager.UpdateStatus(dev.ID, domain.DeviceStatusDisconnected)
+	}
+	log.Printf("[server] reset %d device statuses to disconnected", len(deviceManager.List()))
 
 	router := apihttp.NewRouterWithRuntimeConfig(deviceManager, connectCfg, calibrationCfg, configPath, runtimeCfg)
 
