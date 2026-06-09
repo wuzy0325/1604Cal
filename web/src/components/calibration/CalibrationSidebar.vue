@@ -70,7 +70,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import {
   ArrowLeft,
   ArrowRight,
@@ -83,6 +83,7 @@ import {
 import Device1604Panel from '@/components/common/Device1604Panel.vue'
 import PressDevicePanel from '@/components/common/PressDevicePanel.vue'
 import { useCalibrationStore } from '@/stores/calibration'
+import { fetchUnitConsistency } from '@/api/device'
 
 defineProps<{
   collapsed: boolean
@@ -94,6 +95,29 @@ defineEmits<{
 
 const calibrationStore = useCalibrationStore()
 
+const unitConsistent = ref(true)
+
+// 当计量设备和打压设备都连接时，自动检查单位一致性
+watch(
+  () => ({
+    measureConnected: calibrationStore.device1604Connected,
+    pressConnected: calibrationStore.pressDeviceConnected
+  }),
+  async ({ measureConnected, pressConnected }) => {
+    if (measureConnected && pressConnected) {
+      try {
+        const result = await fetchUnitConsistency()
+        unitConsistent.value = result.consistent
+      } catch {
+        // 静默失败
+      }
+    } else {
+      unitConsistent.value = true
+    }
+  },
+  { immediate: true }
+)
+
 const prerequisites = computed(() => {
   const items = [
     { label: '1604 设备已连接', satisfied: calibrationStore.device1604Connected },
@@ -102,6 +126,10 @@ const prerequisites = computed(() => {
   // 手动模式下打压设备为可选条件，不作为启动前置要求
   if (calibrationStore.controlMode === 'auto') {
     items.splice(1, 0, { label: '打压设备已连接', satisfied: calibrationStore.pressDeviceConnected })
+  }
+  // 自动模式下需要采集设备和打压设备单位一致
+  if (calibrationStore.controlMode === 'auto') {
+    items.push({ label: '设备单位一致', satisfied: unitConsistent.value })
   }
   return items
 })

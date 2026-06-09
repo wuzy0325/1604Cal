@@ -277,6 +277,14 @@ func (s *Service) ValidateStartPrerequisites(ctx context.Context) error {
 		}
 	}
 
+	// 检查已连接设备单位是否一致
+	if s.deviceManager != nil {
+		consistent, conflictIDs := s.deviceManager.CheckUnitConsistency()
+		if !consistent {
+			return fmt.Errorf("device unit mismatch among connected devices: %v", conflictIDs)
+		}
+	}
+
 	return nil
 }
 

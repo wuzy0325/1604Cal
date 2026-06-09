@@ -16,6 +16,7 @@ import { useDeviceControlStore } from './deviceControl'
 import { sessionStateToStep, isSessionRunning } from '@/composables/useCalibrationFlow'
 import { useCalibrationConfig } from '@/composables/useCalibrationConfig'
 import { CalibrationStep } from './types'
+import { fetchUnitConsistency } from '@/api/device'
 
 export { CalibrationStep } from './types'
 export type { PressurePoint, CalibrationParams } from './types'
@@ -139,6 +140,20 @@ export const useCalibrationStore = defineStore('calibration', () => {
     if (activeControlMode === 'auto' && !pressDeviceConnected.value) {
       ElMessage.warning('自动模式需要连接打压设备')
       return
+    }
+
+    // 自动模式校验采集设备和打压设备单位一致
+    if (activeControlMode === 'auto') {
+      try {
+        const unitCheck = await fetchUnitConsistency()
+        if (!unitCheck.consistent) {
+          ElMessage.warning('采集设备与打压设备压力单位不一致，请统一单位后再开始标定')
+          return
+        }
+      } catch {
+        ElMessage.warning('无法检查设备单位一致性，请确认设备连接正常')
+        return
+      }
     }
 
     // 对齐旧模块流程：每次开始标定前都重新生成后端压力点，
