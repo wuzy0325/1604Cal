@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import { ElMessage } from 'element-plus'
+import type { ActionResult } from '@/types/api'
 import {
   bindDevices as apiBindDevices,
   bindMeasureDevice as apiBindMeasureDevice,
@@ -37,6 +37,7 @@ import {
   type MeasurementParamsPayload
 } from '@/api/measurement'
 import type { MeasurementState, CollectedRow, StabilityUpdate, AlarmData } from './types'
+import { ControlMode, PressureMode } from '@/types/calibration'
 import { useMeasurementDeviceStore } from '@/stores/measurement/deviceStore'
 
 export type { MeasurementState, CollectedRow, StabilityUpdate }
@@ -77,8 +78,8 @@ export const useMeasurementStore = defineStore('measurement', () => {
     averageCount: 3,
     stableWaitS: 3,
     precisionLevel: 0.0002,
-    pressureMode: 'single' as 'single' | 'roundTrip',
-    controlMode: 'auto' as 'auto' | 'manual'
+    pressureMode: PressureMode.Single as PressureMode,
+    controlMode: ControlMode.Auto as ControlMode
   })
 
   // 计量工作流相关
@@ -193,10 +194,9 @@ export const useMeasurementStore = defineStore('measurement', () => {
 
   // ── 采集工作流 ──
 
-  const start = async (selectedChannels: number[]) => {
+  const start = async (selectedChannels: number[]): Promise<ActionResult> => {
     if (!deviceBound.value) {
-      ElMessage.warning('请先绑定计量设备')
-      return
+      return { ok: false, error: 'DEVICE_NOT_BOUND', detail: '请先绑定计量设备' }
     }
     try {
       await ensureDevicesBound()
@@ -205,17 +205,16 @@ export const useMeasurementStore = defineStore('measurement', () => {
       const newState = await startMeasurement(selectedChannels)
       state.value = newState as MeasurementState
       rows.value = []
-      ElMessage.success('计量采集已开始')
+      return { ok: true }
     } catch (error) {
       const detail = error instanceof Error ? error.message : String(error)
-      ElMessage.error(`启动采集失败: ${detail}`)
+      return { ok: false, error: 'START_FAILED', detail }
     }
   }
 
-  const manualStart = async (selectedChannels: number[]) => {
+  const manualStart = async (selectedChannels: number[]): Promise<ActionResult> => {
     if (!deviceBound.value) {
-      ElMessage.warning('请先绑定计量设备')
-      return
+      return { ok: false, error: 'DEVICE_NOT_BOUND', detail: '请先绑定计量设备' }
     }
     try {
       await ensureDevicesBound()
@@ -224,30 +223,30 @@ export const useMeasurementStore = defineStore('measurement', () => {
       currentPointIndex.value = 0
       const newState = await manualStartMeasurement(selectedChannels)
       state.value = newState as MeasurementState
-      ElMessage.success('手动模式已就绪')
+      return { ok: true }
     } catch (error) {
       const detail = error instanceof Error ? error.message : String(error)
-      ElMessage.error(`启动手动模式失败: ${detail}`)
+      return { ok: false, error: 'MANUAL_START_FAILED', detail }
     }
   }
 
-  const pause = async () => {
+  const pause = async (): Promise<ActionResult> => {
     try {
       const newState = await pauseMeasurement()
       state.value = newState as MeasurementState
-      ElMessage.info('采集已暂停')
+      return { ok: true }
     } catch (error) {
-      ElMessage.error('暂停采集失败')
+      return { ok: false, error: 'PAUSE_FAILED', detail: '暂停采集失败' }
     }
   }
 
-  const stop = async () => {
+  const stop = async (): Promise<ActionResult> => {
     try {
       const newState = await stopMeasurement()
       state.value = newState as MeasurementState
-      ElMessage.info('采集已停止')
+      return { ok: true }
     } catch (error) {
-      ElMessage.error('停止采集失败')
+      return { ok: false, error: 'STOP_FAILED', detail: '停止采集失败' }
     }
   }
 
@@ -290,8 +289,8 @@ export const useMeasurementStore = defineStore('measurement', () => {
           averageCount: cfg.averageCount,
           stableWaitS: Math.round(cfg.stableDurationMs / 1000),
           precisionLevel: cfg.precisionLevel,
-          pressureMode: cfg.pressureMode as 'single' | 'roundTrip',
-          controlMode: cfg.controlMode as 'auto' | 'manual'
+          pressureMode: cfg.pressureMode as PressureMode,
+          controlMode: cfg.controlMode as ControlMode
         }
       }
     } catch { /* 静默 */ }
@@ -308,29 +307,32 @@ export const useMeasurementStore = defineStore('measurement', () => {
     } catch { /* 静默 */ }
   }
 
-  const generatePoints = async () => {
+  const buildMeasurementPayload = (p: typeof measurementParams.value, customPoints?: number[]): MeasurementParamsPayload => ({
+    minPressure: p.minPressure,
+    maxPressure: p.maxPressure,
+    pointCount: p.pointCount,
+    precision: p.precision,
+    averageCount: p.averageCount,
+    stableDurationMs: p.stableWaitS * 1000,
+    precisionLevel: p.precisionLevel,
+    pressureMode: p.pressureMode,
+    controlMode: p.controlMode,
+    ...(customPoints !== undefined ? { customPoints } : {})
+  })
+
+  const generatePoints = async (): Promise<ActionResult> => {
     try {
       const p = measurementParams.value
-      const payload: MeasurementParamsPayload = {
-        minPressure: p.minPressure,
-        maxPressure: p.maxPressure,
-        pointCount: p.pointCount,
-        precision: p.precision,
-        averageCount: p.averageCount,
-        stableDurationMs: p.stableWaitS * 1000,
-        precisionLevel: p.precisionLevel,
-        pressureMode: p.pressureMode,
-        controlMode: p.controlMode
-      }
+      const payload = buildMeasurementPayload(p)
       await saveMeasurementParamsConfig(payload)
       config.value = payload
       points.value = await generateMeasurementPoints()
       pointsEdited.value = false
       pointsConfigKey.value = measurementParamsKey(p)
-      ElMessage.success('压力点已生成')
+      return { ok: true }
     } catch (error) {
       const detail = error instanceof Error ? error.message : String(error)
-      ElMessage.error(`生成压力点失败: ${detail}`)
+      return { ok: false, error: 'GENERATE_FAILED', detail }
     }
   }
 
@@ -340,18 +342,7 @@ export const useMeasurementStore = defineStore('measurement', () => {
     const customPoints = pointsEdited.value && pointsConfigKey.value === currentConfigKey && points.value.length > 0
       ? points.value.map(point => point.targetPressure)
       : undefined
-    const payload: MeasurementParamsPayload = {
-      minPressure: p.minPressure,
-      maxPressure: p.maxPressure,
-      pointCount: p.pointCount,
-      precision: p.precision,
-      averageCount: p.averageCount,
-      stableDurationMs: p.stableWaitS * 1000,
-      precisionLevel: p.precisionLevel,
-      pressureMode: p.pressureMode,
-      controlMode: p.controlMode,
-      customPoints
-    }
+    const payload = buildMeasurementPayload(p, customPoints)
     await saveMeasurementParamsConfig(payload)
     config.value = payload
     points.value = await generateMeasurementPoints()
@@ -425,33 +416,36 @@ export const useMeasurementStore = defineStore('measurement', () => {
     }
   }
 
-  const autoCollect = async () => {
+  const autoCollect = async (): Promise<ActionResult> => {
     try {
       const newState = await autoCollectMeasurement()
       state.value = newState as MeasurementState
+      return { ok: true }
     } catch (error) {
       const detail = error instanceof Error ? error.message : String(error)
-      ElMessage.error(`自动采集失败: ${detail}`)
+      return { ok: false, error: 'AUTO_COLLECT_FAILED', detail }
     }
   }
 
-  const manualPressurize = async (pointIndex: number) => {
+  const manualPressurize = async (pointIndex: number): Promise<ActionResult> => {
     try {
       const newState = await manualPressurizeMeasurement(pointIndex)
       state.value = newState as MeasurementState
+      return { ok: true }
     } catch (error) {
       const detail = error instanceof Error ? error.message : String(error)
-      ElMessage.error(`手动打压失败: ${detail}`)
+      return { ok: false, error: 'MANUAL_PRESSURIZE_FAILED', detail }
     }
   }
 
-  const manualCollect = async (pointIndex: number) => {
+  const manualCollect = async (pointIndex: number): Promise<ActionResult> => {
     try {
       const newState = await manualCollectMeasurement(pointIndex)
       state.value = newState as MeasurementState
+      return { ok: true }
     } catch (error) {
       const detail = error instanceof Error ? error.message : String(error)
-      ElMessage.error(`手动采集失败: ${detail}`)
+      return { ok: false, error: 'MANUAL_COLLECT_FAILED', detail }
     }
   }
 

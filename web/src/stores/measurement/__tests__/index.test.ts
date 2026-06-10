@@ -230,11 +230,10 @@ describe('useMeasurementStore', () => {
 
   describe('start', () => {
     it('fails with warning when no device bound', async () => {
-      const { ElMessage } = await import('element-plus')
       const store = useMeasurementStore()
-      await store.start([1, 2])
+      const result = await store.start([1, 2])
       expect(measurementApi.startMeasurement).not.toHaveBeenCalled()
-      expect(ElMessage.warning).toHaveBeenCalledWith('请先绑定计量设备')
+      expect(result).toEqual({ ok: false, error: 'DEVICE_NOT_BOUND', detail: '请先绑定计量设备' })
     })
 
     it('calls API, updates state, clears rows on success', async () => {
@@ -246,16 +245,16 @@ describe('useMeasurementStore', () => {
       await store.bindMeasureDevice('m1')
       store.rows = [{ timestamp: 'old', channels: { '1': 0 } }]
 
-      await store.start([1, 2, 3])
+      const result = await store.start([1, 2, 3])
 
       expect(measurementApi.startMeasurement).toHaveBeenCalledWith([1, 2, 3])
       expect(store.state).toBe('collecting')
       expect(store.channels).toEqual([1, 2, 3])
       expect(store.rows).toEqual([])
+      expect(result).toEqual({ ok: true })
     })
 
     it('shows error on API failure', async () => {
-      const { ElMessage } = await import('element-plus')
       vi.mocked(sessionApi.bindMeasureDevice).mockResolvedValue(undefined)
       vi.mocked(measurementApi.saveMeasurementParamsConfig).mockResolvedValue(undefined)
       vi.mocked(measurementApi.generateMeasurementPoints).mockResolvedValue([])
@@ -263,9 +262,9 @@ describe('useMeasurementStore', () => {
       const store = useMeasurementStore()
       await store.bindMeasureDevice('m1')
 
-      await store.start([1])
+      const result = await store.start([1])
 
-      expect(ElMessage.error).toHaveBeenCalled()
+      expect(result).toEqual({ ok: false, error: 'START_FAILED', detail: 'transition denied' })
       expect(store.state).toBe('idle')
     })
   })

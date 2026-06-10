@@ -16,7 +16,7 @@ import {
   multipressListDevices
 } from "@/api/multipress"
 import type { DeviceDTO } from "@/types/device"
-import { ElMessage } from 'element-plus'
+import type { ActionResult } from '@/types/api'
 
 // 前端设备模型
 export interface PressureDevice {
@@ -121,7 +121,7 @@ export const useMeasurementDeviceStore = defineStore('measurementDevices', () =>
   const loading = ref(false)
 
   // 从后端加载设备列表（增量合并，不覆盖本地实时状态如 currentPressure）
-  const loadDevices = async (silent = false) => {
+  const loadDevices = async (): Promise<ActionResult> => {
     try {
       loading.value = true
       const devices = await fetchDevices()
@@ -180,20 +180,19 @@ export const useMeasurementDeviceStore = defineStore('measurementDevices', () =>
           measureDevices.value.push(dtoToMeasureDevice(dto))
         }
       }
+      return { ok: true }
     } catch (error) {
       console.error('加载设备列表失败:', error)
-      if (!silent) {
-        ElMessage.error('加载设备列表失败')
-      }
+      return { ok: false, error: 'LOAD_FAILED', detail: String(error) }
     } finally {
       loading.value = false
     }
   }
 
   // Actions
-  const connectPressureDevice = async (id: string): Promise<boolean> => {
+  const connectPressureDevice = async (id: string): Promise<ActionResult> => {
     const device = pressureDevices.value.find(d => d.id === id)
-    if (!device) return false
+    if (!device) return { ok: false, error: 'DEVICE_NOT_FOUND' }
 
     try {
       device.status = 'connecting'
@@ -224,16 +223,13 @@ export const useMeasurementDeviceStore = defineStore('measurementDevices', () =>
         // 静默失败，使用设备配置中的单位
       }
 
-      ElMessage.success(`设备 ${device.name} 连接成功`)
-
       // 连接成功后尝试读取初始压力值。
       await refreshPressureForDevice(id)
-      return true
+      return { ok: true }
     } catch (error) {
       device.status = 'error'
       console.error('连接设备失败:', error)
-      ElMessage.error(`连接设备 ${device.name} 失败`)
-      return false
+      return { ok: false, error: 'CONNECT_FAILED', detail: String(error) }
     }
   }
 
@@ -272,24 +268,24 @@ export const useMeasurementDeviceStore = defineStore('measurementDevices', () =>
     }
   }
 
-  const disconnectPressureDevice = async (id: string) => {
+  const disconnectPressureDevice = async (id: string): Promise<ActionResult> => {
     const device = pressureDevices.value.find(d => d.id === id)
-    if (!device) return
+    if (!device) return { ok: false, error: 'DEVICE_NOT_FOUND' }
 
     try {
       await multipressUnregister(id)
       device.status = 'disconnected'
       device.currentPressure = undefined
-      ElMessage.success(`设备 ${device.name} 已断开`)
+      return { ok: true }
     } catch (error) {
       console.error('断开设备失败:', error)
-      ElMessage.error(`断开设备 ${device.name} 失败`)
+      return { ok: false, error: 'DISCONNECT_FAILED', detail: String(error) }
     }
   }
 
-  const connectMeasureDevice = async (id: string): Promise<boolean> => {
+  const connectMeasureDevice = async (id: string): Promise<ActionResult> => {
     const device = measureDevices.value.find(d => d.id === id)
-    if (!device) return false
+    if (!device) return { ok: false, error: 'DEVICE_NOT_FOUND' }
 
     try {
       device.status = 'connecting'
@@ -299,63 +295,58 @@ export const useMeasurementDeviceStore = defineStore('measurementDevices', () =>
 
       if (updated.status !== 'connected') {
         const reason = updatedDto.lastErrorReason || '未知原因'
-        ElMessage.error(`连接设备 ${device.name} 失败：${reason}`)
-        return false
+        return { ok: false, error: 'CONNECT_FAILED', detail: reason }
       }
 
-      ElMessage.success(`设备 ${device.name} 连接成功`)
-      return true
+      return { ok: true }
     } catch (error) {
       device.status = 'error'
       console.error('连接设备失败:', error)
-      ElMessage.error(`连接设备 ${device.name} 失败`)
-      return false
+      return { ok: false, error: 'CONNECT_FAILED', detail: String(error) }
     }
   }
 
-  const disconnectMeasureDevice = async (id: string) => {
+  const disconnectMeasureDevice = async (id: string): Promise<ActionResult> => {
     const device = measureDevices.value.find(d => d.id === id)
-    if (!device) return
+    if (!device) return { ok: false, error: 'DEVICE_NOT_FOUND' }
 
     try {
       const updatedDto = await disconnectDevice(id)
       const updated = dtoToMeasureDevice(updatedDto)
       Object.assign(device, updated)
-      ElMessage.success(`设备 ${device.name} 已断开`)
+      return { ok: true }
     } catch (error) {
       console.error('断开设备失败:', error)
-      ElMessage.error(`断开设备 ${device.name} 失败`)
+      return { ok: false, error: 'DISCONNECT_FAILED', detail: String(error) }
     }
   }
 
   // 添加新设备
-  const addPressureDevice = async (device: Omit<PressureDevice, 'id' | 'status'>) => {
+  const addPressureDevice = async (device: Omit<PressureDevice, 'id' | 'status'>): Promise<ActionResult> => {
     try {
       const dto = await upsertDevice({
         ...pressureDeviceToDto({ ...device, id: '', status: 'disconnected' }),
         id: crypto.randomUUID()
       })
       pressureDevices.value.push(dtoToPressureDevice(dto))
-      ElMessage.success('设备添加成功')
+      return { ok: true }
     } catch (error) {
       console.error('添加设备失败:', error)
-      ElMessage.error('添加设备失败')
-      throw error
+      return { ok: false, error: 'ADD_FAILED', detail: String(error) }
     }
   }
 
-  const addMeasureDevice = async (device: Omit<MeasureDevice, 'id' | 'status'>) => {
+  const addMeasureDevice = async (device: Omit<MeasureDevice, 'id' | 'status'>): Promise<ActionResult> => {
     try {
       const dto = await upsertDevice({
         ...measureDeviceToDto({ ...device, id: '', status: 'disconnected' }),
         id: crypto.randomUUID()
       })
       measureDevices.value.push(dtoToMeasureDevice(dto))
-      ElMessage.success('设备添加成功')
+      return { ok: true }
     } catch (error) {
       console.error('添加设备失败:', error)
-      ElMessage.error('添加设备失败')
-      throw error
+      return { ok: false, error: 'ADD_FAILED', detail: String(error) }
     }
   }
 
