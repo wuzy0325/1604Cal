@@ -57,7 +57,7 @@ pointsLoop:
 
 	if s.State() != domain.SessionStateCompleted {
 		s.mu.Lock()
-		if err := s.sessionMachine.Transition(domain.SessionStateCompleted); err != nil {
+		if err := s.coordinator.Machine().Transition(domain.SessionStateCompleted); err != nil {
 			s.mu.Unlock()
 			return fmt.Errorf("complete auto collection: %w", err)
 		}
@@ -242,7 +242,7 @@ func (s *Service) prepareCollectStep(pointIndex int) (device.MeasureDriver, doma
 
 func (s *Service) transitionTo(state domain.SessionState) error {
 	s.mu.Lock()
-	if err := s.sessionMachine.Transition(state); err != nil {
+	if err := s.coordinator.Machine().Transition(state); err != nil {
 		s.mu.Unlock()
 		return fmt.Errorf("transition to %s: %w", state, err)
 	}

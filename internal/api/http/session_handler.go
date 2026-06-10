@@ -13,7 +13,7 @@ type sessionStatePayload struct {
 }
 
 func (s *apiServer) sessionStateHandler(w http.ResponseWriter, _ *http.Request) {
-	writeSuccess(w, http.StatusOK, sessionStatePayload{State: string(s.sessionMachine.State())})
+	writeSuccess(w, http.StatusOK, sessionStatePayload{State: string(s.coordinator.State())})
 }
 
 func (s *apiServer) sessionStartHandler(w http.ResponseWriter, r *http.Request) {
@@ -27,7 +27,7 @@ func (s *apiServer) sessionStartHandler(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	writeSuccess(w, http.StatusOK, sessionStatePayload{State: string(s.sessionMachine.State())})
+	writeSuccess(w, http.StatusOK, sessionStatePayload{State: string(s.coordinator.State())})
 }
 
 func (s *apiServer) sessionPauseHandler(w http.ResponseWriter, _ *http.Request) {
@@ -36,7 +36,7 @@ func (s *apiServer) sessionPauseHandler(w http.ResponseWriter, _ *http.Request) 
 		return
 	}
 
-	writeSuccess(w, http.StatusOK, sessionStatePayload{State: string(s.sessionMachine.State())})
+	writeSuccess(w, http.StatusOK, sessionStatePayload{State: string(s.coordinator.State())})
 }
 
 func (s *apiServer) sessionResumeHandler(w http.ResponseWriter, r *http.Request) {
@@ -45,7 +45,7 @@ func (s *apiServer) sessionResumeHandler(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	writeSuccess(w, http.StatusOK, sessionStatePayload{State: string(s.sessionMachine.State())})
+	writeSuccess(w, http.StatusOK, sessionStatePayload{State: string(s.coordinator.State())})
 }
 
 func (s *apiServer) sessionStopHandler(w http.ResponseWriter, r *http.Request) {
@@ -54,14 +54,14 @@ func (s *apiServer) sessionStopHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	s.sessionMachine.ForceStop()
+	s.coordinator.End()
 	s.publishSessionState()
 
-	writeSuccess(w, http.StatusOK, sessionStatePayload{State: string(s.sessionMachine.State())})
+	writeSuccess(w, http.StatusOK, sessionStatePayload{State: string(s.coordinator.State())})
 }
 
 func (s *apiServer) publishSessionState() {
 	publishEvent(events.EventSessionStateChanged, map[string]any{
-		"state": string(s.sessionMachine.State()),
+		"state": string(s.coordinator.State()),
 	})
 }

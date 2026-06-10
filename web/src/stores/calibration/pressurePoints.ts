@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import { ElMessage } from 'element-plus'
+import type { ActionResult } from '@/types/api'
 import {
   setCalibrationConfig,
   generatePressurePoints as apiGeneratePoints,
@@ -9,6 +9,7 @@ import {
   collectData as apiCollectData
 } from "@/api/calibration"
 import type { FittingResultDTO } from "@/types/calibration"
+import { ControlMode } from "@/types/calibration"
 import type { PressurePoint } from './types'
 
 export type { PressurePoint } from './types'
@@ -56,7 +57,7 @@ export const usePressurePointStore = defineStore('pressurePoint', () => {
     channels?: number[]
     params?: { points: number; averageCount: number; minValue: number; maxValue: number; stableTime: number; precision: number; precisionLevel: string }
     silent?: boolean
-  }) => {
+  }): Promise<ActionResult> => {
     try {
       const channels = opts?.channels ?? []
       const params = opts?.params
@@ -68,7 +69,7 @@ export const usePressurePointStore = defineStore('pressurePoint', () => {
         minPressure: params?.minValue ?? 0,
         maxPressure: params?.maxValue ?? 100,
         stableWaitMs: (params?.stableTime ?? 3) * 1000,
-        controlMode: (opts?.controlMode as 'auto' | 'manual') || undefined,
+        controlMode: (opts?.controlMode as ControlMode) || undefined,
         precision: params?.precision ?? 2,
         precisionLevel: Number(params?.precisionLevel) || 0.05
       })
@@ -83,15 +84,11 @@ export const usePressurePointStore = defineStore('pressurePoint', () => {
         actualPressure: p.actualPressure
       }))
 
-      if (!opts?.silent) {
-        ElMessage.success(`已生成 ${points.length} 个压力点`)
-      }
       savePoints(pressurePoints.value)
-      return true
+      return { ok: true }
     } catch (error) {
       console.error('生成压力点失败:', error)
-      ElMessage.error('生成压力点失败')
-      return false
+      return { ok: false, error: 'GENERATE_FAILED', detail: String(error) }
     }
   }
 
@@ -117,9 +114,9 @@ export const usePressurePointStore = defineStore('pressurePoint', () => {
   }
 
   // 打压
-  const pressurize = async (pointId: string) => {
+  const pressurize = async (pointId: string): Promise<ActionResult> => {
     const point = pressurePoints.value.find(p => p.id === pointId)
-    if (!point) return
+    if (!point) return { ok: false, error: 'MISSING_POINT', detail: '压力点未找到' }
 
     try {
       point.status = 'pressurizing'
@@ -135,18 +132,18 @@ export const usePressurePointStore = defineStore('pressurePoint', () => {
         point.status = 'stabilizing'
       }
 
-      ElMessage.success(`压力点 ${point.index} 打压完成，压力已稳定`)
+      return { ok: true }
     } catch (error) {
       console.error('打压失败:', error)
       point.status = 'error'
-      ElMessage.error('打压失败')
+      return { ok: false, error: 'PRESSURIZE_FAILED', detail: String(error) }
     }
   }
 
   // 采集数据
-  const collectData = async (pointId: string) => {
+  const collectData = async (pointId: string): Promise<ActionResult> => {
     const point = pressurePoints.value.find(p => p.id === pointId)
-    if (!point) return
+    if (!point) return { ok: false, error: 'MISSING_POINT', detail: '压力点未找到' }
 
     // manual mode: pending auto-confirms on collect
     if (point.status === 'pending') {
@@ -160,12 +157,12 @@ export const usePressurePointStore = defineStore('pressurePoint', () => {
       point.collectedData = data
       point.status = 'completed'
 
-      ElMessage.success(`压力点 ${point.index} 采集完成`)
+      return { ok: true }
     } catch (error) {
       console.error('采集数据失败:', error)
       point.status = 'error'
       const detail = error instanceof Error ? error.message : String(error)
-      ElMessage.error(`采集数据失败: ${detail}`)
+      return { ok: false, error: 'COLLECT_FAILED', detail: `采集数据失败: ${detail}` }
     }
   }
 

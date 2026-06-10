@@ -58,16 +58,16 @@
             <button
               type="button"
               class="segment-btn"
-              :class="{ active: calibrationStore.controlMode === 'auto' }"
+              :class="{ active: calibrationStore.controlMode === ControlMode.Auto }"
               :disabled="isRunning"
-              @click="calibrationStore.controlMode = 'auto'"
+              @click="calibrationStore.controlMode = ControlMode.Auto"
             >自动</button>
             <button
               type="button"
               class="segment-btn"
-              :class="{ active: calibrationStore.controlMode === 'manual' }"
+              :class="{ active: calibrationStore.controlMode === ControlMode.Manual }"
               :disabled="isRunning"
-              @click="calibrationStore.controlMode = 'manual'"
+              @click="calibrationStore.controlMode = ControlMode.Manual"
             >手动</button>
           </div>
         </div>
@@ -97,6 +97,7 @@ import { ref, computed, watch } from 'vue'
 import { Grid } from '@element-plus/icons-vue'
 import { useCalibrationStore } from '@/stores/calibration'
 import ChannelSelectDialog from '@/components/common/ChannelSelectDialog.vue'
+import { ControlMode } from '@/types/calibration'
 
 const calibrationStore = useCalibrationStore()
 const channelDialogVisible = ref(false)

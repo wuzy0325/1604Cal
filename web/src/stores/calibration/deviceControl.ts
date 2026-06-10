@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import { ElMessage } from 'element-plus'
+import type { ActionResult } from '@/types/api'
 import {
   bindMeasureDevice,
   bindDevices,
@@ -48,26 +48,25 @@ export const useDeviceControlStore = defineStore('deviceControl', () => {
   })
 
   // 连接1604设备
-  const connectDevice1604 = async (deviceId: string) => {
+  const connectDevice1604 = async (deviceId: string): Promise<ActionResult> => {
     try {
-      const connected = await deviceStore.connectMeasureDevice(deviceId)
-      if (!connected) {
-        return
+      const result = await deviceStore.connectMeasureDevice(deviceId)
+      if (!result.ok) {
+        return result
       }
 
       // 连接成功后立即绑定到设备会话，使其能读取阀门/单位/设备信息
       try {
         await bindMeasureDevice(deviceId)
       } catch (err) {
-        ElMessage.error('绑定计量设备会话失败，无法读取阀门/单位信息')
         console.error('bindMeasureDevice failed:', err)
-        return
+        return { ok: false, error: 'BIND_FAILED', detail: '绑定计量设备会话失败，无法读取阀门/单位信息' }
       }
 
       // 读取设备信息、阀门状态和单位（连接后增加重试，避免设备刚建链时读数失败）
       const loaded = await refreshDeviceInfo({ retries: 3, retryDelayMs: 500 })
       if (!loaded) {
-        ElMessage.warning('设备已连接，但阀门/单位信息读取失败，请稍后重试')
+        console.warn('设备已连接，但阀门/单位信息读取失败，请稍后重试')
       }
 
       // 把从硬件读取到的实际单位同步到设备配置，确保 CheckUnitConsistency 比较的是真实单位
@@ -83,24 +82,26 @@ export const useDeviceControlStore = defineStore('deviceControl', () => {
         }
       }
 
-      return true
+      return { ok: true }
     } catch (error) {
       console.error('连接1604设备失败:', error)
-      return false
+      return { ok: false, error: 'CONNECT_FAILED', detail: String(error) }
     }
   }
 
   // 断开1604设备
-  const disconnectDevice1604 = async (deviceId: string) => {
+  const disconnectDevice1604 = async (deviceId: string): Promise<ActionResult> => {
     try {
-      await deviceStore.disconnectMeasureDevice(deviceId)
+      const result = await deviceStore.disconnectMeasureDevice(deviceId)
+      return result
     } catch (error) {
       console.error('断开1604设备失败:', error)
+      return { ok: false, error: 'DISCONNECT_FAILED', detail: String(error) }
     }
   }
 
   // 连接打压设备：通过 multipress 服务注册（创建驱动 + TCP连接 + 注册到压力控制模块）
-  const connectPressDevice = async (deviceId: string) => {
+  const connectPressDevice = async (deviceId: string): Promise<ActionResult> => {
     try {
       await multipressRegister(deviceId)
       // multipress 服务不更新 DeviceManager 状态，需手动同步前端 store
@@ -129,30 +130,33 @@ export const useDeviceControlStore = defineStore('deviceControl', () => {
       } catch {
         // 静默失败，使用设备配置中的单位
       }
+      return { ok: true }
     } catch (error) {
       console.error('连接打压设备失败:', error)
-      ElMessage.error('连接打压设备失败')
+      return { ok: false, error: 'CONNECT_FAILED', detail: '连接打压设备失败' }
     }
   }
 
   // 断开打压设备：通过 multipress 服务注销（停止控制 + 断开TCP + 移除注册）
-  const disconnectPressDevice = async (deviceId: string) => {
+  const disconnectPressDevice = async (deviceId: string): Promise<ActionResult> => {
     try {
       await multipressUnregister(deviceId)
       deviceStore.updateDeviceStatus(deviceId, 'disconnected')
+      return { ok: true }
     } catch (error) {
       console.error('断开打压设备失败:', error)
-      ElMessage.error('断开打压设备失败')
+      return { ok: false, error: 'DISCONNECT_FAILED', detail: '断开打压设备失败' }
     }
   }
 
   // 设置校准设备（通知后端）
-  const setDevices = async (measureDeviceId: string, pressureDeviceId: string) => {
+  const setDevices = async (measureDeviceId: string, pressureDeviceId: string): Promise<ActionResult> => {
     try {
       await bindDevices(measureDeviceId, pressureDeviceId)
+      return { ok: true }
     } catch (error) {
       console.error('绑定设备会话失败:', error)
-      ElMessage.error('绑定设备会话失败')
+      return { ok: false, error: 'BIND_FAILED', detail: '绑定设备会话失败' }
     }
   }
 
@@ -242,14 +246,14 @@ export const useDeviceControlStore = defineStore('deviceControl', () => {
   }
 
   // 设置阀门状态
-  const setValveStatus = async (status: string) => {
+  const setValveStatus = async (status: string): Promise<ActionResult> => {
     try {
       await apiSetValveStatus(status)
       valveStatus.value = status
-      ElMessage.success(status === 'calibration' ? '阀门已切换到校准模式' : '阀门已切换到测量模式')
+      return { ok: true }
     } catch (error) {
       console.error('设置阀门状态失败:', error)
-      ElMessage.error('设置阀门状态失败')
+      return { ok: false, error: 'VALVE_SET_FAILED', detail: '设置阀门状态失败' }
     }
   }
 
@@ -261,25 +265,25 @@ export const useDeviceControlStore = defineStore('deviceControl', () => {
   }
 
   // 设置计量设备单位
-  const setMeasureUnit = async (unit: string) => {
+  const setMeasureUnit = async (unit: string): Promise<ActionResult> => {
     try {
       await apiSetMeasureUnit(unit)
       measureUnit.value = await readMeasureUnit()
-      ElMessage.success(`单位已切换为 ${measureUnit.value || unit}`)
+      return { ok: true }
     } catch (error) {
       console.error('设置计量设备单位失败:', error)
-      ElMessage.error('设置计量设备单位失败')
+      return { ok: false, error: 'UNIT_SET_FAILED', detail: '设置计量设备单位失败' }
     }
   }
 
   // 复位计量设备
-  const resetDevice = async () => {
+  const resetDevice = async (): Promise<ActionResult> => {
     try {
       await apiResetDevice()
-      ElMessage.success('设备已复位')
+      return { ok: true }
     } catch (error) {
       console.error('复位设备失败:', error)
-      ElMessage.error('复位设备失败')
+      return { ok: false, error: 'RESET_FAILED', detail: '复位设备失败' }
     }
   }
 

@@ -136,8 +136,12 @@ func setupService() (*session.Service, *fakeMeasureDriver, *fakePressureDriver, 
 
 func TestBindDevicesSuccess(t *testing.T) {
 	svc, _, _, pub := setupService()
-	if err := svc.BindDevices("m1", "p1", "test"); err != nil {
+	token, err := svc.BindDevices("m1", "p1", "test")
+	if err != nil {
 		t.Fatalf("BindDevices: %v", err)
+	}
+	if token.BoundBy != "test" || token.MeasureDeviceID != "m1" {
+		t.Fatalf("unexpected token: %+v", token)
 	}
 	if len(pub.events) != 1 || pub.events[0] != events.EventSessionDeviceBound {
 		t.Fatalf("expected session.device_bound, got %v", pub.events)
@@ -152,7 +156,7 @@ func TestBindDevicesSuccess(t *testing.T) {
 
 func TestBindDevicesMeasureNotFound(t *testing.T) {
 	svc := session.NewService(newFakeStore(), driver.NewFactory(), func(string, any) {}, nil)
-	err := svc.BindDevices("nonexistent", "p1", "test")
+	_, err := svc.BindDevices("nonexistent", "p1", "test")
 	if err == nil {
 		t.Fatal("expected error for nonexistent device")
 	}
@@ -160,8 +164,12 @@ func TestBindDevicesMeasureNotFound(t *testing.T) {
 
 func TestBindMeasureDeviceSuccess(t *testing.T) {
 	svc, _, _, pub := setupService()
-	if err := svc.BindMeasureDevice("m1", "test"); err != nil {
+	token, err := svc.BindMeasureDevice("m1", "test")
+	if err != nil {
 		t.Fatalf("BindMeasureDevice: %v", err)
+	}
+	if token.BoundBy != "test" || token.MeasureDeviceID != "m1" {
+		t.Fatalf("unexpected token: %+v", token)
 	}
 	if len(pub.events) != 1 {
 		t.Fatalf("expected 1 event, got %d", len(pub.events))
@@ -173,17 +181,17 @@ func TestBindMeasureDeviceSuccess(t *testing.T) {
 
 func TestReadPressureWithoutDevice(t *testing.T) {
 	svc := session.NewService(newFakeStore(), driver.NewFactory(), func(string, any) {}, nil)
-	_, err := svc.ReadPressure(context.Background())
-	if !errors.Is(err, session.ErrPressureDeviceNotSet) {
-		t.Fatalf("expected ErrPressureDeviceNotSet, got %v", err)
+	_, err := svc.ReadPressure(context.Background(), session.BindingToken{})
+	if !errors.Is(err, session.ErrBindingExpired) {
+		t.Fatalf("expected ErrBindingExpired, got %v", err)
 	}
 }
 
 func TestReadPressureAfterBind(t *testing.T) {
 	svc, _, pDrv, _ := setupService()
-	_ = svc.BindDevices("m1", "p1", "test")
+	token, _ := svc.BindDevices("m1", "p1", "test")
 	pDrv.pressure = 200.5
-	val, err := svc.ReadPressure(context.Background())
+	val, err := svc.ReadPressure(context.Background(), token)
 	if err != nil {
 		t.Fatalf("ReadPressure: %v", err)
 	}
@@ -194,9 +202,9 @@ func TestReadPressureAfterBind(t *testing.T) {
 
 func TestReadStabilityAfterBind(t *testing.T) {
 	svc, _, pDrv, _ := setupService()
-	_ = svc.BindDevices("m1", "p1", "test")
+	token, _ := svc.BindDevices("m1", "p1", "test")
 	pDrv.stable = false
-	val, err := svc.ReadStability(context.Background())
+	val, err := svc.ReadStability(context.Background(), token)
 	if err != nil {
 		t.Fatalf("ReadStability: %v", err)
 	}
@@ -207,17 +215,17 @@ func TestReadStabilityAfterBind(t *testing.T) {
 
 func TestReadMeasureDataWithoutDevice(t *testing.T) {
 	svc := session.NewService(newFakeStore(), driver.NewFactory(), func(string, any) {}, nil)
-	_, err := svc.ReadMeasureData(context.Background())
-	if !errors.Is(err, session.ErrMeasureDeviceNotSet) {
-		t.Fatalf("expected ErrMeasureDeviceNotSet, got %v", err)
+	_, err := svc.ReadMeasureData(context.Background(), session.BindingToken{})
+	if !errors.Is(err, session.ErrBindingExpired) {
+		t.Fatalf("expected ErrBindingExpired, got %v", err)
 	}
 }
 
 func TestReadMeasureDataAfterBind(t *testing.T) {
 	svc, mDrv, _, _ := setupService()
-	_ = svc.BindMeasureDevice("m1", "test")
+	token, _ := svc.BindMeasureDevice("m1", "test")
 	mDrv.collectData = []float64{10.1, 20.2, 30.3}
-	data, err := svc.ReadMeasureData(context.Background())
+	data, err := svc.ReadMeasureData(context.Background(), token)
 	if err != nil {
 		t.Fatalf("ReadMeasureData: %v", err)
 	}
@@ -228,9 +236,9 @@ func TestReadMeasureDataAfterBind(t *testing.T) {
 
 func TestReadValveStatus(t *testing.T) {
 	svc, mDrv, _, _ := setupService()
-	_ = svc.BindMeasureDevice("m1", "test")
+	token, _ := svc.BindMeasureDevice("m1", "test")
 	mDrv.valveStatus = "calibration"
-	val, err := svc.ReadValveStatus(context.Background())
+	val, err := svc.ReadValveStatus(context.Background(), token)
 	if err != nil {
 		t.Fatalf("ReadValveStatus: %v", err)
 	}
@@ -241,9 +249,9 @@ func TestReadValveStatus(t *testing.T) {
 
 func TestReadMeasureUnit(t *testing.T) {
 	svc, mDrv, _, _ := setupService()
-	_ = svc.BindMeasureDevice("m1", "test")
+	token, _ := svc.BindMeasureDevice("m1", "test")
 	mDrv.unit = "MPa"
-	val, err := svc.ReadMeasureUnit(context.Background())
+	val, err := svc.ReadMeasureUnit(context.Background(), token)
 	if err != nil {
 		t.Fatalf("ReadMeasureUnit: %v", err)
 	}
@@ -254,9 +262,9 @@ func TestReadMeasureUnit(t *testing.T) {
 
 func TestReadDeviceInfo(t *testing.T) {
 	svc, mDrv, _, _ := setupService()
-	_ = svc.BindMeasureDevice("m1", "test")
+	token, _ := svc.BindMeasureDevice("m1", "test")
 	mDrv.info = map[string]string{"model": "WTN1604", "version": "2.0"}
-	info, err := svc.ReadDeviceInfo(context.Background())
+	info, err := svc.ReadDeviceInfo(context.Background(), token)
 	if err != nil {
 		t.Fatalf("ReadDeviceInfo: %v", err)
 	}
@@ -267,20 +275,24 @@ func TestReadDeviceInfo(t *testing.T) {
 
 func TestResetDevice(t *testing.T) {
 	svc, mDrv, _, _ := setupService()
-	_ = svc.BindMeasureDevice("m1", "test")
-	if err := svc.ResetDevice(context.Background()); err != nil {
+	token, _ := svc.BindMeasureDevice("m1", "test")
+	if err := svc.ResetDevice(context.Background(), token); err != nil {
 		t.Fatalf("ResetDevice: %v", err)
 	}
 	mDrv.resetErr = errors.New("reset failed")
-	if err := svc.ResetDevice(context.Background()); err == nil {
+	if err := svc.ResetDevice(context.Background(), token); err == nil {
 		t.Fatal("expected reset error")
 	}
 }
 
 func TestBindDevicesOnlyMeasure(t *testing.T) {
 	svc, _, _, _ := setupService()
-	if err := svc.BindDevices("m1", "", "test"); err != nil {
+	token, err := svc.BindDevices("m1", "", "test")
+	if err != nil {
 		t.Fatalf("BindDevices with empty pressure: %v", err)
+	}
+	if token.PressureDeviceID != "" {
+		t.Fatalf("expected empty pressure device id, got %q", token.PressureDeviceID)
 	}
 	if svc.MeasureDriver() == nil {
 		t.Fatal("measure driver not bound")

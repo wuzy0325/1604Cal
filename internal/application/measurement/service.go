@@ -33,10 +33,10 @@ type EventPublisher func(eventType string, data any)
 
 // Service 计量模块服务，管理简化的采集工作流。
 type Service struct {
-	mu             sync.Mutex
-	sessionMachine *workflow.SessionMachine
-	sess           *session.Service
-	publish        EventPublisher
+	mu          sync.Mutex
+	coordinator *workflow.WorkflowCoordinator
+	sess        *session.Service
+	publish     EventPublisher
 
 	config  domain.WorkflowConfig
 	points  []domain.PressurePoint
@@ -75,12 +75,12 @@ type Service struct {
 }
 
 // NewService 创建计量服务。
-func NewService(sess *session.Service, publisher EventPublisher) *Service {
+func NewService(sess *session.Service, publisher EventPublisher, coordinator *workflow.WorkflowCoordinator) *Service {
 	if publisher == nil {
 		publisher = func(string, any) {}
 	}
 	return &Service{
-		sessionMachine:     workflow.NewSessionMachine(),
+		coordinator:        coordinator,
 		sess:               sess,
 		publish:            publisher,
 		stabilityTimeoutCh: make(chan string, 1),
@@ -96,7 +96,7 @@ func (s *Service) SetSessionStore(store *SessionStore) {
 
 // State 返回当前计量状态。
 func (s *Service) State() domain.SessionState {
-	return s.sessionMachine.State()
+	return s.coordinator.State()
 }
 
 // Start 启动计量采集。
@@ -107,9 +107,16 @@ func (s *Service) Start(ctx context.Context, channels []int) error {
 		s.mu.Unlock()
 		return session.ErrMeasureDeviceNotSet
 	}
+	s.mu.Unlock()
 
+	// 单活工作流冲突校验
+	if err := s.coordinator.Begin(workflow.OwnerMeasurement); err != nil {
+		return err
+	}
+
+	s.mu.Lock()
 	stateChanges := make([]domain.SessionState, 0, 3)
-	currentState := s.sessionMachine.State()
+	currentState := s.coordinator.State()
 
 	// 从暂停恢复时保留已采集数据；其他入口重置数据。
 	if currentState != domain.SessionStatePaused {
@@ -120,13 +127,13 @@ func (s *Service) Start(ctx context.Context, channels []int) error {
 
 	switch currentState {
 	case domain.SessionStateIdle, domain.SessionStateCompleted, domain.SessionStateError, domain.SessionStateReady:
-		if err := s.sessionMachine.Transition(domain.SessionStateCollecting); err != nil {
+		if err := s.coordinator.Machine().Transition(domain.SessionStateCollecting); err != nil {
 			s.mu.Unlock()
 			return fmt.Errorf("start measurement: %w", err)
 		}
 		stateChanges = append(stateChanges, domain.SessionStateCollecting)
 	case domain.SessionStatePaused:
-		if err := s.sessionMachine.Transition(domain.SessionStateCollecting); err != nil {
+		if err := s.coordinator.Machine().Transition(domain.SessionStateCollecting); err != nil {
 			s.mu.Unlock()
 			return fmt.Errorf("resume measurement: %w", err)
 		}
@@ -136,7 +143,7 @@ func (s *Service) Start(ctx context.Context, channels []int) error {
 		s.mu.Unlock()
 		return fmt.Errorf("start measurement: %w", err)
 	}
-	s.syncSessionStatusLocked(s.sessionMachine.State())
+	s.syncSessionStatusLocked(s.coordinator.State())
 
 	s.mu.Unlock()
 
@@ -153,7 +160,7 @@ func (s *Service) Start(ctx context.Context, channels []int) error {
 // Pause 暂停计量采集。
 func (s *Service) Pause() error {
 	s.mu.Lock()
-	if err := s.sessionMachine.Transition(domain.SessionStatePaused); err != nil {
+	if err := s.coordinator.Machine().Transition(domain.SessionStatePaused); err != nil {
 		s.mu.Unlock()
 		return fmt.Errorf("pause measurement: %w", err)
 	}
@@ -170,44 +177,44 @@ func (s *Service) Pause() error {
 // Stop 停止计量采集，重置为 idle。
 func (s *Service) Stop() error {
 	s.mu.Lock()
-	if s.sessionMachine.State() == domain.SessionStateIdle {
+	if s.coordinator.State() == domain.SessionStateIdle {
 		s.mu.Unlock()
 		return fmt.Errorf("not running")
 	}
 
 	stateChanges := make([]domain.SessionState, 0, 2)
-	switch s.sessionMachine.State() {
+	switch s.coordinator.State() {
 	case domain.SessionStateCollecting:
-		if err := s.sessionMachine.Transition(domain.SessionStateCompleted); err != nil {
+		if err := s.coordinator.Machine().Transition(domain.SessionStateCompleted); err != nil {
 			s.mu.Unlock()
 			return fmt.Errorf("stop measurement: %w", err)
 		}
 		stateChanges = append(stateChanges, domain.SessionStateCompleted)
-		if err := s.sessionMachine.Transition(domain.SessionStateIdle); err != nil {
+		if err := s.coordinator.Machine().Transition(domain.SessionStateIdle); err != nil {
 			s.mu.Unlock()
 			return fmt.Errorf("stop measurement: %w", err)
 		}
 		stateChanges = append(stateChanges, domain.SessionStateIdle)
 	case domain.SessionStatePressurizing, domain.SessionStateStabilizing:
-		if err := s.sessionMachine.Transition(domain.SessionStatePaused); err != nil {
+		if err := s.coordinator.Machine().Transition(domain.SessionStatePaused); err != nil {
 			s.mu.Unlock()
 			return fmt.Errorf("stop measurement: %w", err)
 		}
 		stateChanges = append(stateChanges, domain.SessionStatePaused)
-		if err := s.sessionMachine.Transition(domain.SessionStateIdle); err != nil {
+		if err := s.coordinator.Machine().Transition(domain.SessionStateIdle); err != nil {
 			s.mu.Unlock()
 			return fmt.Errorf("stop measurement: %w", err)
 		}
 		stateChanges = append(stateChanges, domain.SessionStateIdle)
 	case domain.SessionStateReady, domain.SessionStatePaused, domain.SessionStateCompleted, domain.SessionStateError:
-		if err := s.sessionMachine.Transition(domain.SessionStateIdle); err != nil {
+		if err := s.coordinator.Machine().Transition(domain.SessionStateIdle); err != nil {
 			s.mu.Unlock()
 			return fmt.Errorf("stop measurement: %w", err)
 		}
 		stateChanges = append(stateChanges, domain.SessionStateIdle)
 	default:
 		s.mu.Unlock()
-		return fmt.Errorf("stop measurement: unsupported state %s", s.sessionMachine.State())
+		return fmt.Errorf("stop measurement: unsupported state %s", s.coordinator.State())
 	}
 	now := time.Now()
 	s.finishSessionLocked(domain.SessionStateStopped, &now)
@@ -230,13 +237,15 @@ func (s *Service) Stop() error {
 		s.publish(events.EventMeasurementStateChanged, map[string]any{"state": string(state)})
 	}
 
+	s.coordinator.End()
+
 	return nil
 }
 
 // SetState 进行显式状态切换，并发布状态变化事件。
 func (s *Service) SetState(state domain.SessionState) error {
 	s.mu.Lock()
-	if err := s.sessionMachine.Transition(state); err != nil {
+	if err := s.coordinator.Machine().Transition(state); err != nil {
 		s.mu.Unlock()
 		return err
 	}
@@ -376,13 +385,13 @@ func (s *Service) startCollectLoop(_ context.Context) {
 				return
 			case <-ticker.C:
 				s.mu.Lock()
-				if s.sessionMachine.State() != domain.SessionStateCollecting {
+				if s.coordinator.State() != domain.SessionStateCollecting {
 					s.mu.Unlock()
 					return
 				}
 				s.mu.Unlock()
 
-				data, err := s.sess.ReadMeasureData(collectCtx)
+				data, err := s.sess.ReadMeasureData(collectCtx, s.sess.Token())
 				if err != nil {
 					consecutiveErrors++
 					if consecutiveErrors >= maxConsecutiveErrors {
@@ -391,7 +400,7 @@ func (s *Service) startCollectLoop(_ context.Context) {
 							"error": fmt.Sprintf("连续%d次采集失败: %v", consecutiveErrors, err),
 						})
 						s.mu.Lock()
-						_ = s.sessionMachine.Transition(domain.SessionStateError)
+						_ = s.coordinator.Machine().Transition(domain.SessionStateError)
 						s.mu.Unlock()
 						return
 					}

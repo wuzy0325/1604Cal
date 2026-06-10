@@ -51,7 +51,7 @@
             </template>
           </el-table-column>
           <el-table-column
-            v-if="calibrationStore.controlMode === 'manual'"
+            v-if="calibrationStore.controlMode === ControlMode.Manual"
             label="操作"
             min-width="170"
           >
@@ -187,7 +187,7 @@ import {
   SetUp
 } from '@element-plus/icons-vue'
 import { useCalibrationStore } from '@/stores/calibration'
-import type { SessionState } from '@/types/calibration'
+import { type SessionState, ControlMode } from '@/types/calibration'
 
 defineEmits<{
 }>()
@@ -267,7 +267,7 @@ const canOperatePointActions = computed(() =>
 )
 
 const manualModeWithoutPressDevice = computed(() =>
-  calibrationStore.controlMode === 'manual' && !calibrationStore.pressDeviceConnected
+  calibrationStore.controlMode === ControlMode.Manual && !calibrationStore.pressDeviceConnected
 )
 
 const canPressurize = (status: string) =>
@@ -275,8 +275,8 @@ const canPressurize = (status: string) =>
 
 const canConfirm = (status: string) =>
   canOperatePointActions.value && (
-    (calibrationStore.controlMode === 'manual' && status === 'stabilizing') ||
-    (calibrationStore.controlMode === 'manual' && status === 'pending')
+    (calibrationStore.controlMode === ControlMode.Manual && status === 'stabilizing') ||
+    (calibrationStore.controlMode === ControlMode.Manual && status === 'pending')
   )
 
 const canCollect = (status: string) =>
@@ -298,26 +298,6 @@ const getChannelClass = (row: TableRow, index: number) => {
 </script>
 
 <style scoped lang="scss">
-/* ── 设计系统令牌 ── */
-$font-sans: 'Inter', 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
-$font-mono: 'JetBrains Mono', 'Fira Code', 'SF Mono', Consolas, monospace;
-$mint: #10b981;
-$mint-light: #34d399;
-$mint-dark: #059669;
-$slate-50: #f9fafb;
-$slate-100: #f3f4f6;
-$slate-200: #e5e7eb;
-$slate-300: #d1d5db;
-$slate-400: #9ca3af;
-$slate-500: #6b7280;
-$slate-600: #4b5563;
-$slate-700: #374151;
-$slate-800: #1f2937;
-$green: #22c55e;
-$red: #ef4444;
-$blue: #3b82f6;
-$amber: #f59e0b;
-
 @use "@/styles/calibration-table" as *;
 
 .data-section {

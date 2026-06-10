@@ -28,8 +28,8 @@
           1604 计量设备
         </h3>
         <Device1604Panel
-          @connect="calibrationStore.connectDevice1604"
-          @disconnect="calibrationStore.disconnectDevice1604"
+          @connect="calibrationUI.connectDevice1604"
+          @disconnect="calibrationUI.disconnectDevice1604"
         />
       </div>
 
@@ -40,8 +40,8 @@
           打压设备
         </h3>
         <PressDevicePanel
-          @connect="calibrationStore.connectPressDevice"
-          @disconnect="calibrationStore.disconnectPressDevice"
+          @connect="calibrationUI.connectPressDevice"
+          @disconnect="calibrationUI.disconnectPressDevice"
         />
       </div>
 
@@ -83,7 +83,9 @@ import {
 import Device1604Panel from '@/components/common/Device1604Panel.vue'
 import PressDevicePanel from '@/components/common/PressDevicePanel.vue'
 import { useCalibrationStore } from '@/stores/calibration'
+import { useCalibrationUI } from '@/composables/useCalibrationUI'
 import { fetchUnitConsistency } from '@/api/device'
+import { ControlMode } from '@/types/calibration'
 
 defineProps<{
   collapsed: boolean
@@ -94,6 +96,7 @@ defineEmits<{
 }>()
 
 const calibrationStore = useCalibrationStore()
+const calibrationUI = useCalibrationUI()
 
 const unitConsistent = ref(true)
 
@@ -124,11 +127,11 @@ const prerequisites = computed(() => {
     { label: '已选择采集通道', satisfied: calibrationStore.channelsSelected }
   ]
   // 手动模式下打压设备为可选条件，不作为启动前置要求
-  if (calibrationStore.controlMode === 'auto') {
+  if (calibrationStore.controlMode === ControlMode.Auto) {
     items.splice(1, 0, { label: '打压设备已连接', satisfied: calibrationStore.pressDeviceConnected })
   }
   // 自动模式下需要采集设备和打压设备单位一致
-  if (calibrationStore.controlMode === 'auto') {
+  if (calibrationStore.controlMode === ControlMode.Auto) {
     items.push({ label: '设备单位一致', satisfied: unitConsistent.value })
   }
   return items
@@ -136,23 +139,6 @@ const prerequisites = computed(() => {
 </script>
 
 <style scoped lang="scss">
-/* ── 设计系统令牌 ── */
-$font-sans: 'Inter', 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
-$font-mono: 'JetBrains Mono', 'Fira Code', 'SF Mono', Consolas, monospace;
-$mint: #10b981;
-$mint-dark: #059669;
-$slate-50: #f9fafb;
-$slate-100: #f3f4f6;
-$slate-200: #e5e7eb;
-$slate-300: #d1d5db;
-$slate-400: #9ca3af;
-$slate-500: #6b7280;
-$slate-600: #4b5563;
-$slate-700: #374151;
-$slate-800: #1f2937;
-$green: #22c55e;
-$red: #ef4444;
-
 .sidebar {
   width: 280px;
   background: #f6f7f6;

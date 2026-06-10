@@ -95,9 +95,16 @@ func NewSessionMachine() *SessionMachine {
 				domain.SessionStateStopped:      {},
 			},
 			domain.SessionStateError: {
-				domain.SessionStateIdle:      {},
-				domain.SessionStateRecovering: {},
-				domain.SessionStateStopped:    {},
+				domain.SessionStateIdle:                     {},
+				domain.SessionStateRecovering:               {},
+				domain.SessionStateStopped:                  {},
+				domain.SessionStateReady:                    {},
+				domain.SessionStateRequiresManualIntervention: {},
+			},
+			domain.SessionStateRequiresManualIntervention: {
+				domain.SessionStateIdle:   {},
+				domain.SessionStateError:  {},
+				domain.SessionStateStopped: {},
 			},
 			domain.SessionStateStopped: {
 				domain.SessionStateReady: {},

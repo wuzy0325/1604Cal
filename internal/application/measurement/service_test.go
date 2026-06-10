@@ -10,6 +10,7 @@ import (
 	"cal1604/internal/device"
 	"cal1604/internal/domain"
 	"cal1604/internal/infrastructure/driver"
+	"cal1604/internal/workflow"
 )
 
 func float64Ptr(v float64) *float64 { return &v }
@@ -105,8 +106,8 @@ func setupMeasurementService() (*measurement.Service, *fakeMeasureDriver) {
 	sessSvc := session.NewService(store, driver.NewFactory(), func(string, any) {}, &mapProvider{
 		drivers: map[string]device.ConnectionDriver{"m1": embedMD{mDrv}},
 	})
-	_ = sessSvc.BindMeasureDevice("m1", "test")
-	svc := measurement.NewService(sessSvc, func(string, any) {})
+	_, _ = sessSvc.BindMeasureDevice("m1", "test")
+	svc := measurement.NewService(sessSvc, func(string, any) {}, workflow.NewWorkflowCoordinator())
 	return svc, mDrv
 }
 
@@ -123,8 +124,8 @@ func setupMeasurementServiceWithPressure() (*measurement.Service, *fakeMeasureDr
 			"p1": embedPD{pDrv},
 		},
 	})
-	_ = sessSvc.BindDevices("m1", "p1", "test")
-	svc := measurement.NewService(sessSvc, func(string, any) {})
+	_, _ = sessSvc.BindDevices("m1", "p1", "test")
+	svc := measurement.NewService(sessSvc, func(string, any) {}, workflow.NewWorkflowCoordinator())
 	return svc, mDrv, pDrv
 }
 
@@ -144,7 +145,7 @@ func TestGeneratePressurePointsUsesMeasurementConfig(t *testing.T) {
 		MaxPressure:  100,
 		PointCount:   5,
 		Precision:    2,
-		PressureMode: "roundTrip",
+		PressureMode: domain.PressureModeRoundTrip,
 	})
 
 	points, err := svc.GeneratePressurePoints()
@@ -300,7 +301,7 @@ func TestRunAutoCollectionAdvancesMeasurementPoints(t *testing.T) {
 		Precision:    2,
 		AverageCount: 1,
 		StableWaitMs: 10,
-		ControlMode:  "auto",
+		ControlMode:  domain.ControlModeAuto,
 	})
 	if _, err := svc.GeneratePressurePoints(); err != nil {
 		t.Fatalf("GeneratePressurePoints: %v", err)
@@ -334,7 +335,7 @@ func TestManualCollectCapturesPointData(t *testing.T) {
 		Precision:    2,
 		AverageCount: 1,
 		StableWaitMs: 10,
-		ControlMode:  "manual",
+		ControlMode:  domain.ControlModeManual,
 	})
 	if _, err := svc.GeneratePressurePoints(); err != nil {
 		t.Fatalf("GeneratePressurePoints: %v", err)
@@ -381,9 +382,9 @@ func (d *fakeSequentialMeasureDriver) CollectData(_ context.Context, _ []int) ([
 func TestManualCollectFlatStorage(t *testing.T) {
 	seqDrv := &fakeSequentialMeasureDriver{
 		allData: [][]float64{
-			{1.0, 2.0}, // 第 1 次采样 2 通道
-			{1.1, 2.1}, // 第 2 次采样
-			{1.2, 2.2}, // 第 3 次采样
+			{1.0, 2.0},
+			{1.1, 2.1},
+			{1.2, 2.2},
 		},
 	}
 	store := &fakeStore{devices: map[string]domain.Device{
@@ -392,8 +393,8 @@ func TestManualCollectFlatStorage(t *testing.T) {
 	sessSvc := session.NewService(store, driver.NewFactory(), func(string, any) {}, &mapProvider{
 		drivers: map[string]device.ConnectionDriver{"m1": embedMD{seqDrv}},
 	})
-	_ = sessSvc.BindMeasureDevice("m1", "test")
-	svc := measurement.NewService(sessSvc, func(string, any) {})
+	_, _ = sessSvc.BindMeasureDevice("m1", "test")
+	svc := measurement.NewService(sessSvc, func(string, any) {}, workflow.NewWorkflowCoordinator())
 
 	svc.SetConfig(domain.WorkflowConfig{
 		MinPressure:  0,
@@ -512,7 +513,7 @@ func TestStartTransition(t *testing.T) {
 
 func TestStartWithoutDevice(t *testing.T) {
 	sessSvc := session.NewService(&fakeStore{}, driver.NewFactory(), func(string, any) {}, nil)
-	svc := measurement.NewService(sessSvc, func(string, any) {})
+	svc := measurement.NewService(sessSvc, func(string, any) {}, workflow.NewWorkflowCoordinator())
 	if err := svc.Start(context.Background(), []int{1}); err == nil {
 		t.Fatal("expected error when no device bound")
 	}
@@ -773,8 +774,8 @@ func TestManualPressurizeSCPIStability(t *testing.T) {
 			"p1": embedPD{stableDrv},
 		},
 	})
-	_ = sessSvc.BindDevices("m1", "p1", "test")
-	svc := measurement.NewService(sessSvc, func(string, any) {})
+	_, _ = sessSvc.BindDevices("m1", "p1", "test")
+	svc := measurement.NewService(sessSvc, func(string, any) {}, workflow.NewWorkflowCoordinator())
 
 	svc.SetConfig(domain.WorkflowConfig{
 		MinPressure:        0,

@@ -56,18 +56,6 @@ const steps = [
 </script>
 
 <style scoped lang="scss">
-/* ── 设计系统令牌 ── */
-$font-sans: 'Inter', 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
-$mint: #10b981;
-$mint-light: #34d399;
-$mint-dark: #059669;
-$slate-100: #f3f4f6;
-$slate-200: #e5e7eb;
-$slate-300: #d1d5db;
-$slate-400: #9ca3af;
-$slate-500: #6b7280;
-$green: #22c55e;
-
 .progress-indicator {
   padding: 0;
   font-family: $font-sans;

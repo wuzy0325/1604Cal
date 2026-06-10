@@ -6,6 +6,7 @@ import {
   type MeasurementParamsPayload
 } from '../measurement'
 import * as clientApi from '../client'
+import { ControlMode, PressureMode } from '@/types/calibration'
 
 const { mockRequestJSON } = vi.hoisted(() => ({
   mockRequestJSON: vi.fn()
@@ -36,8 +37,8 @@ describe('measurement api config endpoints', () => {
       averageCount: 1,
       stableDurationMs: 5000,
       precisionLevel: 0.05,
-      pressureMode: 'single',
-      controlMode: 'auto'
+      pressureMode: PressureMode.Single,
+      controlMode: ControlMode.Auto
     }
 
     vi.mocked(clientApi.requestJSON).mockResolvedValue({ data: payload })
@@ -57,8 +58,8 @@ describe('measurement api config endpoints', () => {
       averageCount: 2,
       stableDurationMs: 7000,
       precisionLevel: 0.1,
-      pressureMode: 'roundTrip',
-      controlMode: 'manual'
+      pressureMode: PressureMode.RoundTrip,
+      controlMode: ControlMode.Manual
     }
 
     vi.mocked(clientApi.requestJSON).mockResolvedValue({ data: { status: 'ok' } })

@@ -21,8 +21,8 @@ type setConfigRequest struct {
 	MinPressure    float64 `json:"minPressure"`
 	MaxPressure    float64 `json:"maxPressure"`
 	StableWaitMs   int     `json:"stableWaitMs"`
-	ControlMode    string  `json:"controlMode,omitempty"`
-	PressureMode   string  `json:"pressureMode,omitempty"`
+	ControlMode    domain.ControlMode  `json:"controlMode,omitempty"`
+	PressureMode   domain.PressureMode `json:"pressureMode,omitempty"`
 	Precision      int     `json:"precision,omitempty"`
 	PrecisionLevel float64 `json:"precisionLevel,omitempty"`
 }

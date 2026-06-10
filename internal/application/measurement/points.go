@@ -69,7 +69,7 @@ func generatePointsFromConfig(config domain.WorkflowConfig) ([]domain.PressurePo
 		precision = 0
 	}
 
-	roundTrip := config.PressureMode == "roundTrip"
+	roundTrip := config.PressureMode == domain.PressureModeRoundTrip
 	points := domain.EquidistantPoints(config.MinPressure, config.MaxPressure, config.PointCount, precision, roundTrip)
 
 	for i := range points {
@@ -102,7 +102,7 @@ func generatePointsFromCustom(config domain.WorkflowConfig) ([]domain.PressurePo
 		})
 	}
 
-	if config.PressureMode != "roundTrip" || len(config.CustomPoints) != config.PointCount {
+	if config.PressureMode != domain.PressureModeRoundTrip || len(config.CustomPoints) != config.PointCount {
 		return points, nil
 	}
 
@@ -121,7 +121,7 @@ func generatePointsFromCustom(config domain.WorkflowConfig) ([]domain.PressurePo
 }
 
 func pointDirection(config domain.WorkflowConfig, index int) string {
-	if config.PressureMode != "roundTrip" || config.PointCount <= 0 || index < config.PointCount {
+	if config.PressureMode != domain.PressureModeRoundTrip || config.PointCount <= 0 || index < config.PointCount {
 		return "forward"
 	}
 	return "backward"

@@ -71,7 +71,7 @@ func defaultStartPrerequisiteConfig() StartPrerequisiteConfig {
 // Service 校准流程编排服务。
 type Service struct {
 	mu             sync.Mutex
-	sessionMachine *workflow.SessionMachine
+	coordinator    *workflow.WorkflowCoordinator
 	factory        *driver.Factory
 	deviceManager  device.DeviceStore
 	driverProvider device.ActiveDriverProvider
@@ -109,7 +109,7 @@ type Service struct {
 
 // NewService 创建校准服务。
 func NewService(
-	sessionMachine *workflow.SessionMachine,
+	coordinator *workflow.WorkflowCoordinator,
 	factory *driver.Factory,
 	deviceManager device.DeviceStore,
 	publisher StatusPublisher,
@@ -120,7 +120,7 @@ func NewService(
 		publisher = func(string, any) {}
 	}
 	return &Service{
-		sessionMachine:          sessionMachine,
+		coordinator:             coordinator,
 		factory:                 factory,
 		deviceManager:           deviceManager,
 		publish:                 publisher,
@@ -165,6 +165,12 @@ func (s *Service) StartCalibration(ctx context.Context) error {
 		return ErrMeasureDeviceNotSet
 	}
 
+	// 单活工作流冲突校验
+	if err := s.coordinator.Begin(workflow.OwnerCalibration); err != nil {
+		s.mu.Unlock()
+		return err
+	}
+
 	// 在锁内提取所需配置
 	enforceValveGate := s.startPrerequisiteConfig.EnforceValveCalibration
 	measureDriver := s.getMeasureDriver()
@@ -175,30 +181,23 @@ func (s *Service) StartCalibration(ctx context.Context) error {
 		avgCount = 1
 	}
 
-	// 状态迁移: (idle|stopped|completed) -> ready
-	state := s.sessionMachine.State()
-	switch state {
-	case domain.SessionStateIdle, domain.SessionStateStopped, domain.SessionStateCompleted:
-		if err := s.sessionMachine.Transition(domain.SessionStateReady); err != nil {
-			s.mu.Unlock()
-			return fmt.Errorf("transition to ready: %w", err)
-		}
-		s.publishSessionState()
-	case domain.SessionStateReady:
-		// 已就绪，保持当前状态
-	default:
+	// 状态应为 ready（coordinator.Begin 已确保）
+	if s.coordinator.State() != domain.SessionStateReady {
+		s.coordinator.End()
 		s.mu.Unlock()
-		return fmt.Errorf("%w: %s", ErrInvalidStartState, state)
+		return fmt.Errorf("%w: %s", ErrInvalidStartState, s.coordinator.State())
 	}
 
 	// 阀门门禁（持有锁时执行，ReadValveStatus 可能 I/O 阻塞，但门禁仅用于开发联调阶段可接受）
 	if enforceValveGate {
 		valveStatus, err := measureDriver.ReadValveStatus(ctx)
 		if err != nil {
+			s.coordinator.End()
 			s.mu.Unlock()
 			return fmt.Errorf("read valve status: %w", err)
 		}
 		if valveStatus != "calibration" {
+			s.coordinator.End()
 			s.mu.Unlock()
 			return fmt.Errorf("valve must be in calibration state, current: %s", valveStatus)
 		}
@@ -210,6 +209,7 @@ func (s *Service) StartCalibration(ctx context.Context) error {
 	// WTN1604 开始多点校准（不持有锁，避免 I/O 阻塞影响其他操作）
 	if calDevOK {
 		if err := calDev.StartCalibration(ctx, channels, pointCount, avgCount); err != nil {
+			s.coordinator.End()
 			return fmt.Errorf("start WTN1604 calibration: %w", err)
 		}
 	}
@@ -228,8 +228,9 @@ func (s *Service) StartCalibration(ctx context.Context) error {
 	controlMode := s.config.ControlMode
 	s.mu.Unlock()
 
-	if controlMode == "auto" {
+	if controlMode == domain.ControlModeAuto {
 		if err := s.RunAutoCollection(ctx); err != nil {
+			s.coordinator.End()
 			return fmt.Errorf("start auto collection: %w", err)
 		}
 	}
@@ -263,7 +264,7 @@ func (s *Service) ValidateStartPrerequisites(ctx context.Context) error {
 	}
 
 	// 按模式化门禁校验打压设备
-	if config.ControlMode == "auto" && pressureDriver == nil {
+	if config.ControlMode == domain.ControlModeAuto && pressureDriver == nil {
 		return fmt.Errorf("auto mode requires pressure device to be bound")
 	}
 
@@ -320,6 +321,8 @@ func (s *Service) EndCalibration(ctx context.Context) error {
 	}
 	s.mu.Unlock()
 
+	s.coordinator.End()
+
 	return nil
 }
 
@@ -337,86 +340,103 @@ func (s *Service) RunAutoCollection(ctx context.Context) error {
 	s.autoCollectionMu.Unlock()
 
 	s.autoCollectWg.Add(1)
+	go s.runCollectionLoop()
+	return nil
+}
 
-	go func() {
-		defer s.autoCollectWg.Done()
-		defer func() {
-			s.autoCollectionMu.Lock()
-			s.autoCollectionCancel = nil
-			s.autoCollectionCtx = nil
-			s.autoCollectionMu.Unlock()
-		}()
+// runCollectionLoop 在后台 goroutine 中执行自动采集循环。
+func (s *Service) runCollectionLoop() {
+	defer s.autoCollectWg.Done()
+	defer s.cleanupAutoCollection()
 
-		s.mu.Lock()
-		startIndex := s.resumePointIndexLocked()
-		totalPoints := len(s.pressurePoints)
-		mode := s.config.ControlMode
-		s.currentPoint = startIndex
-		s.mu.Unlock()
+	s.mu.Lock()
+	startIndex := s.resumePointIndexLocked()
+	totalPoints := len(s.pressurePoints)
+	mode := s.config.ControlMode
+	s.currentPoint = startIndex
+	s.mu.Unlock()
 
-		s.publish(events.EventAutoCollectionStarted, map[string]any{
-			"pointCount": totalPoints,
-			"mode":       mode,
-			"startIndex": startIndex + 1,
-		})
+	s.publish(events.EventAutoCollectionStarted, map[string]any{
+		"pointCount": totalPoints,
+		"mode":       mode,
+		"startIndex": startIndex + 1,
+	})
 
-		for i := startIndex; i < totalPoints; i++ {
-			s.autoCollectionMu.Lock()
-			ctx := s.autoCollectionCtx
-			s.autoCollectionMu.Unlock()
-			if ctx == nil || ctx.Err() != nil {
-				break
-			}
+	s.executePointLoop(startIndex, totalPoints)
+	s.autoVentAfterCollection(totalPoints)
+}
 
-			s.mu.Lock()
-			s.currentPoint = i
-			s.mu.Unlock()
+// cleanupAutoCollection 清理自动采集的状态标记。
+func (s *Service) cleanupAutoCollection() {
+	s.autoCollectionMu.Lock()
+	s.autoCollectionCancel = nil
+	s.autoCollectionCtx = nil
+	s.autoCollectionMu.Unlock()
+}
 
-			if err := s.collectPoint(ctx, i+1); err != nil {
-				if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
-					return
-				}
+// autoVentAfterCollection 采集完成后自动排空打压设备。
+func (s *Service) autoVentAfterCollection(totalPoints int) {
+	s.autoCollectionMu.Lock()
+	ctx := s.autoCollectionCtx
+	s.autoCollectionMu.Unlock()
+	if ctx == nil || ctx.Err() != nil {
+		return
+	}
+	if pressureDriver := s.getPressureDriver(); pressureDriver != nil {
+		_ = pressureDriver.Stop(ctx)
+	}
+	s.publish(events.EventAutoCollectionCompleted, map[string]any{
+		"totalPoints": totalPoints,
+	})
+}
 
-				if errors.Is(err, errAutoCollectionStopped) {
-					s.publish(events.EventAutoCollectionStopped, map[string]any{
-						"pointIndex": i + 1,
-					})
-					return
-				}
-
-				s.publish(events.EventAutoCollectionError, map[string]any{
-					"pointIndex": i + 1,
-					"error":      err.Error(),
-				})
-				_ = s.sessionMachine.Transition(domain.SessionStateError)
-				s.publishSessionState()
-				// 标记会话错误
-				if s.calibrationSession != nil {
-					s.calibrationSession.Status = "error"
-				}
-				return
-			}
-
-			s.mu.Lock()
-			s.currentPoint = i + 1
-			s.mu.Unlock()
-		}
-
+// executePointLoop 遍历压力点列表执行采集。
+func (s *Service) executePointLoop(startIndex, totalPoints int) {
+	for i := startIndex; i < totalPoints; i++ {
 		s.autoCollectionMu.Lock()
 		ctx := s.autoCollectionCtx
 		s.autoCollectionMu.Unlock()
-		if ctx != nil && ctx.Err() == nil {
-			// 采集完成自动排空
-			if pressureDriver := s.getPressureDriver(); pressureDriver != nil {
-				_ = pressureDriver.Stop(ctx)
-			}
-			s.publish(events.EventAutoCollectionCompleted, map[string]any{
-				"totalPoints": totalPoints,
-			})
+		if ctx == nil || ctx.Err() != nil {
+			break
 		}
-	}()
 
-	return nil
+		s.mu.Lock()
+		s.currentPoint = i
+		s.mu.Unlock()
+
+		if err := s.collectPoint(ctx, i+1); err != nil {
+			s.handlePointError(i, err)
+			return
+		}
+
+		s.mu.Lock()
+		s.currentPoint = i + 1
+		s.mu.Unlock()
+	}
+}
+
+// handlePointError 处理采集过程中的错误，决定是否继续或终止。
+func (s *Service) handlePointError(i int, err error) {
+	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+		return
+	}
+
+	if errors.Is(err, errAutoCollectionStopped) {
+		s.publish(events.EventAutoCollectionStopped, map[string]any{
+			"pointIndex": i + 1,
+		})
+		return
+	}
+
+	s.publish(events.EventAutoCollectionError, map[string]any{
+		"pointIndex": i + 1,
+		"error":      err.Error(),
+	})
+	_ = s.coordinator.Machine().Transition(domain.SessionStateError)
+	s.publishSessionState()
+	if s.calibrationSession != nil {
+		s.calibrationSession.Status = "error"
+	}
 }
 
 // collectPoint 采集单个压力点：打压 -> 稳定监控 -> 采集 -> 报警检查。
@@ -516,7 +536,7 @@ func (s *Service) checkAlarm(ctx context.Context, pointIndex int, data []float64
 	}
 
 	// 触发报警，进入等待报警确认状态
-	if err := s.sessionMachine.Transition(domain.SessionStateAwaitAlarmResolution); err != nil {
+	if err := s.coordinator.Machine().Transition(domain.SessionStateAwaitAlarmResolution); err != nil {
 		// 若状态机不支持该迁移，记录日志后继续（不阻塞采集流程）
 		log.Printf("[calibration] checkAlarm: transition to await_alarm_resolution failed: %v", err)
 		return workflow.AlarmDecisionContinue, nil
@@ -556,19 +576,19 @@ func (s *Service) checkAlarm(ctx context.Context, pointIndex int, data []float64
 
 		switch decision {
 		case workflow.AlarmDecisionStop:
-			_ = s.sessionMachine.Transition(domain.SessionStateStopped)
+			_ = s.coordinator.Machine().Transition(domain.SessionStateStopped)
 			s.publishSessionState()
 			return workflow.AlarmDecisionStop, nil
 		case workflow.AlarmDecisionRecollect:
-			_ = s.sessionMachine.Transition(domain.SessionStatePointDone)
+			_ = s.coordinator.Machine().Transition(domain.SessionStatePointDone)
 			s.publishSessionState()
 			return workflow.AlarmDecisionRecollect, nil
 		case workflow.AlarmDecisionSkip:
-			_ = s.sessionMachine.Transition(domain.SessionStatePointDone)
+			_ = s.coordinator.Machine().Transition(domain.SessionStatePointDone)
 			s.publishSessionState()
 			return workflow.AlarmDecisionSkip, nil
 		default:
-			_ = s.sessionMachine.Transition(domain.SessionStatePointDone)
+			_ = s.coordinator.Machine().Transition(domain.SessionStatePointDone)
 			s.publishSessionState()
 			return workflow.AlarmDecisionContinue, nil
 		}
@@ -622,7 +642,7 @@ func (s *Service) RetryPoint(ctx context.Context, pointIndex int) error {
 
 	// 手动模式且未连接打压设备时，仅重置为待确认，
 	// 由操作者再次确认后执行采集，不自动触发打压链路。
-	if controlMode == "manual" && !hasPressureDriver {
+	if controlMode == domain.ControlModeManual && !hasPressureDriver {
 		return nil
 	}
 
@@ -633,7 +653,7 @@ func (s *Service) RetryPoint(ctx context.Context, pointIndex int) error {
 func (s *Service) PauseAutoCollection() error {
 	s.StopAutoCollection()
 
-	if err := s.sessionMachine.Transition(domain.SessionStatePaused); err != nil {
+	if err := s.coordinator.Machine().Transition(domain.SessionStatePaused); err != nil {
 		return fmt.Errorf("transition to paused: %w", err)
 	}
 	s.publishSessionState()
@@ -646,7 +666,7 @@ func (s *Service) ResumeAutoCollection(ctx context.Context) error {
 	s.currentPoint = s.resumePointIndexLocked()
 	s.mu.Unlock()
 
-	if err := s.sessionMachine.Transition(domain.SessionStatePressurizing); err != nil {
+	if err := s.coordinator.Machine().Transition(domain.SessionStatePressurizing); err != nil {
 		return fmt.Errorf("transition to pressurizing: %w", err)
 	}
 	s.publishSessionState()
@@ -694,14 +714,13 @@ func (s *Service) IsAutoCollectionRunning() bool {
 	return s.autoCollectionCancel != nil
 }
 
-func (s *Service) markPointError(pointIndex int, reason string) {
-	_ = reason
+func (s *Service) markPointError(pointIndex int) {
 	s.updatePointStatus(pointIndex, domain.PointStatusError)
 }
 
 func (s *Service) publishSessionState() {
 	s.publish(events.EventSessionStateChanged, map[string]any{
-		"state": string(s.sessionMachine.State()),
+		"state": string(s.coordinator.State()),
 	})
 }
 

@@ -36,7 +36,7 @@ func (s *Service) Collect(ctx context.Context, pointIndex int) ([]float64, error
 	s.updatePointStatus(pointIndex, domain.PointStatusCollecting)
 
 	// 状态迁移: -> collecting
-	if err := s.sessionMachine.Transition(domain.SessionStateCollecting); err != nil {
+	if err := s.coordinator.Machine().Transition(domain.SessionStateCollecting); err != nil {
 		// 可能已经在 collecting
 	}
 	s.publishSessionState()
@@ -52,7 +52,7 @@ func (s *Service) Collect(ctx context.Context, pointIndex int) ([]float64, error
 		for i := 0; i < avgCount; i++ {
 			data, err := pointCollector.CollectCalibrationPoint(ctx, pointIndex, targetPressure)
 			if err != nil {
-				s.markPointError(pointIndex, err.Error())
+				s.markPointError(pointIndex)
 				return nil, fmt.Errorf("collect calibration point %d sample %d: %w", pointIndex, i+1, err)
 			}
 			allSamples = append(allSamples, data)
@@ -65,7 +65,7 @@ func (s *Service) Collect(ctx context.Context, pointIndex int) ([]float64, error
 		for i := 0; i < avgCount; i++ {
 			data, err := measureDriver.CollectData(ctx, channels)
 			if err != nil {
-				s.markPointError(pointIndex, err.Error())
+				s.markPointError(pointIndex)
 				return nil, fmt.Errorf("collect sample %d: %w", i+1, err)
 			}
 			allSamples = append(allSamples, data)
@@ -91,7 +91,7 @@ func (s *Service) Collect(ctx context.Context, pointIndex int) ([]float64, error
 	s.updatePointStatus(pointIndex, domain.PointStatusCompleted)
 
 	// 状态迁移: collecting -> point_done
-	if err := s.sessionMachine.Transition(domain.SessionStatePointDone); err != nil {
+	if err := s.coordinator.Machine().Transition(domain.SessionStatePointDone); err != nil {
 		// 忽略
 	}
 	s.publishSessionState()
@@ -116,7 +116,7 @@ func (s *Service) Fit(ctx context.Context) (*FittingResult, error) {
 	s.mu.Unlock()
 
 	// 状态迁移: -> fitting
-	if err := s.sessionMachine.Transition(domain.SessionStateFitting); err != nil {
+	if err := s.coordinator.Machine().Transition(domain.SessionStateFitting); err != nil {
 		return nil, fmt.Errorf("transition to fitting: %w", err)
 	}
 	s.publishSessionState()
@@ -137,7 +137,7 @@ func (s *Service) Fit(ctx context.Context) (*FittingResult, error) {
 	}
 
 	// 状态迁移: fitting -> completed
-	if err := s.sessionMachine.Transition(domain.SessionStateCompleted); err != nil {
+	if err := s.coordinator.Machine().Transition(domain.SessionStateCompleted); err != nil {
 		return nil, fmt.Errorf("transition to completed: %w", err)
 	}
 	s.publishSessionState()
@@ -211,7 +211,7 @@ func (s *Service) softwareFit(ctx context.Context) (*FittingResult, error) {
 	})
 
 	// 状态迁移: fitting -> completed
-	if err := s.sessionMachine.Transition(domain.SessionStateCompleted); err != nil {
+	if err := s.coordinator.Machine().Transition(domain.SessionStateCompleted); err != nil {
 		return nil, fmt.Errorf("transition to completed: %w", err)
 	}
 	s.publishSessionState()

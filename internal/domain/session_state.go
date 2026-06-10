@@ -17,5 +17,6 @@ const (
 	SessionStateAwaitManualCollect   SessionState = "await_manual_collect"
 	SessionStateAwaitAlarmResolution SessionState = "await_alarm_resolution"
 	SessionStateRecovering           SessionState = "recovering"
-	SessionStateError                SessionState = "error"
+	SessionStateError                         SessionState = "error"
+	SessionStateRequiresManualIntervention    SessionState = "requires_manual_intervention"
 )

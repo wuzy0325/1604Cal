@@ -23,6 +23,13 @@ export interface ReportTemplateDTO {
   filename: string
 }
 
+// --- 控制模式与压力模式枚举 ---
+export const ControlMode = { Auto: 'auto', Manual: 'manual' } as const
+export type ControlMode = (typeof ControlMode)[keyof typeof ControlMode]
+
+export const PressureMode = { Single: 'single', RoundTrip: 'roundTrip' } as const
+export type PressureMode = (typeof PressureMode)[keyof typeof PressureMode]
+
 // 校准相关 DTO
 export interface CalibrationConfigDTO {
   channels: number[]
@@ -31,8 +38,8 @@ export interface CalibrationConfigDTO {
   minPressure: number
   maxPressure: number
   stableWaitMs: number
-  controlMode?: 'auto' | 'manual'
-  pressureMode?: 'single' | 'roundTrip'
+  controlMode?: ControlMode
+  pressureMode?: PressureMode
   precision?: number
   precisionLevel?: number
 }

@@ -459,16 +459,22 @@ func (s *Service) pollAllDevices(ctx context.Context) {
 		return
 	}
 
-	type pollResult struct {
-		deviceID string
-		pressure float64
-		stable   bool
-		err      error
-	}
+	results := s.pollDevicesConcurrently(ctx, targets)
+	s.processPollResults(results)
+}
 
-	var wg sync.WaitGroup
+// pollResult 单台设备的轮询结果。
+type pollResult struct {
+	deviceID string
+	pressure float64
+	stable   bool
+	err      error
+}
+
+// pollDevicesConcurrently 并发读取所有目标设备的状态。
+func (s *Service) pollDevicesConcurrently(ctx context.Context, targets []*deviceEntry) []pollResult {
 	results := make([]pollResult, len(targets))
-
+	var wg sync.WaitGroup
 	for i, entry := range targets {
 		wg.Add(1)
 		go func(idx int, e *deviceEntry) {
@@ -479,23 +485,25 @@ func (s *Service) pollAllDevices(ctx context.Context) {
 			pressure, pErr := e.driver.ReadCurrentPressure(pollCtx)
 			stable, sErr := e.driver.ReadStability(pollCtx)
 
-			result := pollResult{deviceID: e.state.DeviceID}
+			r := pollResult{deviceID: e.state.DeviceID}
 			if pErr != nil {
-				result.err = pErr
+				r.err = pErr
 				log.Printf("[multipress.poll] %s ReadCurrentPressure error: %v", e.state.DeviceID, pErr)
 			} else {
-				result.pressure = pressure
-				// log.Printf("[multipress.poll] %s ReadCurrentPressure ok pressure=%f", e.state.DeviceID, pressure)
+				r.pressure = pressure
 			}
 			if sErr == nil {
-				result.stable = stable
+				r.stable = stable
 			}
-			results[idx] = result
+			results[idx] = r
 		}(i, entry)
 	}
 	wg.Wait()
+	return results
+}
 
-	// 更新状态并发布 SSE
+// processPollResults 处理轮询结果，更新设备状态并发布 SSE 事件。
+func (s *Service) processPollResults(results []pollResult) {
 	for _, r := range results {
 		s.mu.Lock()
 		entry, ok := s.entries[r.deviceID]
@@ -508,7 +516,6 @@ func (s *Service) pollAllDevices(ctx context.Context) {
 		if r.err != nil {
 			entry.state.ErrorMessage = r.err.Error()
 			entry.consecutiveErrors++
-			// 连续 3 次轮询失败 → 自动标记断连
 			if entry.consecutiveErrors >= 3 {
 				entry.state.Status = "error"
 				entry.mu.Unlock()
@@ -526,7 +533,6 @@ func (s *Service) pollAllDevices(ctx context.Context) {
 			entry.state.CurrentPressure = r.pressure
 			entry.state.Stable = r.stable
 
-			// 排空中且压力已稳定 → 排空完成，切回空闲
 			if entry.state.Status == "exhausting" && r.stable {
 				entry.state.Status = "idle"
 			}

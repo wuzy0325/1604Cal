@@ -34,7 +34,7 @@ type deviceManager interface {
 
 type apiServer struct {
 	deviceManager      deviceManager
-	sessionMachine     *workflow.SessionMachine
+	coordinator        *workflow.WorkflowCoordinator
 	deviceConnector    deviceConnector
 	connectConfig      deviceconnect.Config
 	calibrationService *calibration.Service
@@ -44,6 +44,10 @@ type apiServer struct {
 	reportService      *report.Service
 	configPath         string
 	appConfig          *config.AppConfig
+}
+
+func (s *apiServer) currentToken() session.BindingToken {
+	return s.sessionService.Token()
 }
 
 type deviceConnector interface {

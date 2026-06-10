@@ -17,6 +17,8 @@ export interface PressurePoint {
   actualPressure?: number
 }
 
+import type { PressureMode } from '@/types/calibration'
+
 export interface CalibrationParams {
   minValue: number
   maxValue: number
@@ -25,5 +27,5 @@ export interface CalibrationParams {
   averageCount: number
   stableTime: number
   precisionLevel: string
-  pressureMode: 'single' | 'roundTrip'
+  pressureMode: PressureMode
 }

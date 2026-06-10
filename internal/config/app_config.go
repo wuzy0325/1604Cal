@@ -48,21 +48,21 @@ type CalibrationParamsConfig struct {
 	AverageCount     int     `json:"averageCount"`
 	StableDurationMs int     `json:"stableDurationMs"`
 	PrecisionLevel   float64 `json:"precisionLevel"`
-	PressureMode     string  `json:"pressureMode"`
-	ControlMode      string  `json:"controlMode"`
+	PressureMode     domain.PressureMode `json:"pressureMode"`
+	ControlMode      domain.ControlMode  `json:"controlMode"`
 }
 
 // MeasurementParamsConfig 计量模块参数持久化配置。
 type MeasurementParamsConfig struct {
-	MinPressure      float64   `json:"minPressure"`
-	MaxPressure      float64   `json:"maxPressure"`
-	PointCount       int       `json:"pointCount"`
-	Precision        int       `json:"precision"`
-	AverageCount     int       `json:"averageCount"`
-	StableDurationMs int       `json:"stableDurationMs"`
-	PrecisionLevel   float64   `json:"precisionLevel"`
-	PressureMode     string    `json:"pressureMode"`
-	ControlMode      string    `json:"controlMode"`
+	MinPressure      float64             `json:"minPressure"`
+	MaxPressure      float64             `json:"maxPressure"`
+	PointCount       int                 `json:"pointCount"`
+	Precision        int                 `json:"precision"`
+	AverageCount     int                 `json:"averageCount"`
+	StableDurationMs int                 `json:"stableDurationMs"`
+	PrecisionLevel   float64             `json:"precisionLevel"`
+	PressureMode     domain.PressureMode `json:"pressureMode"`
+	ControlMode      domain.ControlMode  `json:"controlMode"`
 	CustomPoints     []float64 `json:"customPoints,omitempty"`
 }
 
@@ -97,8 +97,8 @@ func Default() AppConfig {
 			AverageCount:     1,
 			StableDurationMs: 5000,
 			PrecisionLevel:   0.0005,
-			PressureMode:     "single",
-			ControlMode:      "auto",
+			PressureMode:     domain.PressureModeSingle,
+			ControlMode:      domain.ControlModeAuto,
 		},
 		MeasurementParams: MeasurementParamsConfig{
 			MinPressure:      0,
@@ -108,8 +108,8 @@ func Default() AppConfig {
 			AverageCount:     1,
 			StableDurationMs: 5000,
 			PrecisionLevel:   0.05,
-			PressureMode:     "single",
-			ControlMode:      "auto",
+			PressureMode:     domain.PressureModeSingle,
+			ControlMode:      domain.ControlModeAuto,
 		},
 		Alarm: domain.AlarmConfig{
 			Enabled:            true,

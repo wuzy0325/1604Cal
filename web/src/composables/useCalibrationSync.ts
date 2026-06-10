@@ -1,6 +1,6 @@
 import { onMounted, onUnmounted, ref, type Ref, type InjectionKey } from 'vue'
 import { ElMessage } from 'element-plus'
-import { createEventStream } from '@/api/client'
+import { useEventHub } from '@/composables/useEventHub'
 import { connectDevice } from '@/api/device'
 import { bindMeasureDevice } from '@/api/session'
 import type { SessionState } from '@/types/calibration'
@@ -51,10 +51,6 @@ export function useCalibrationSync() {
   const calibrationStore = useCalibrationStore()
   const deviceStore = useDeviceInventoryStore()
 
-  let eventSource: EventSource | null = null
-  let pollTimer: ReturnType<typeof setInterval> | null = null
-  let deviceRefreshTimer: ReturnType<typeof setInterval> | null = null
-  let pressureRefreshTimer: ReturnType<typeof setInterval> | null = null
   let bindingInProgress = false
   let boundMeasureId = ''
   let lastRepairAttemptAt = 0
@@ -63,6 +59,10 @@ export function useCalibrationSync() {
   const stabilityStatus = ref<StabilityEventData | null>(null)
   // 报警事件状态
   const alarmEvent = ref<AlarmEventData | null>(null)
+
+  const { subscribe, subscribeGlobal, registerPoll } = useEventHub()
+  const unsubs: (() => void)[] = []
+  const unregPolls: (() => void)[] = []
 
   // 绑定计量设备并刷新阀门/单位信息。
   // 兼容“设备状态显示已连接但会话驱动未就绪”的场景，必要时静默触发一次重连修复。
@@ -105,7 +105,7 @@ export function useCalibrationSync() {
           }
 
           await Promise.all([
-            deviceStore.loadDevices(true).then(() => bindMeasureDevice(connectedMeasure.id).catch(() => {})),
+            deviceStore.loadDevices().then(() => bindMeasureDevice(connectedMeasure.id).catch(() => {})),
             calibrationStore.refreshDeviceInfo({ retries: 3, retryDelayMs: 500 }).then(r => { loaded = r })
           ])
         }
@@ -119,108 +119,6 @@ export function useCalibrationSync() {
     }
   }
 
-  function setupSSE() {
-    eventSource = createEventStream({
-      onEvent: (payload: StreamEventPayload) => {
-        if (payload.type === EVENT_SESSION_STATE_CHANGED) {
-          const data = payload.data as { state: SessionState }
-          if (data?.state) {
-            calibrationStore.syncSessionState(data.state)
-          }
-        }
-        if (payload.type === EVENT_DEVICE_STATUS_CHANGED) {
-          void deviceStore.loadDevices(true).then(bindConnectedMeasureDevice)
-        }
-        // 压力点状态更新（采集数据、打压进度等）
-        if (payload.type === EVENT_CALIBRATION_POINT_STATUS) {
-          const data = payload.data as { index?: number; status?: string; collectedData?: number[]; actualPressure?: number }
-          if (typeof data?.index === 'number') {
-            const point = calibrationStore.pressurePoints.find(p => p.index === data.index)
-            if (point) {
-              if (data.status) point.status = data.status as typeof point.status
-              if (data.collectedData) point.collectedData = data.collectedData
-              if (data.actualPressure !== undefined) point.actualPressure = data.actualPressure
-            }
-          }
-        }
-        // 稳定性 SSE 事件
-        if (payload.type?.startsWith(EVENT_CALIBRATION_STABILITY_PREFIX)) {
-          stabilityStatus.value = payload.data as StabilityEventData
-      }
-      // 报警事件
-      if (payload.type === EVENT_ALARM_TRIGGERED) {
-        alarmEvent.value = payload.data as AlarmEventData
-      }
-      if (payload.type === EVENT_CALIBRATION_ALARM_RESOLVED) {
-        alarmEvent.value = null
-      }
-      // 自动采集完成
-      if (payload.type === EVENT_AUTO_COLLECTION_COMPLETED) {
-        ElMessage.success('所有压力点采集完成，系统已自动排空')
-      }
-      // 打压设备压力实时更新
-      if (payload.type === EVENT_MULTIPRESS_PRESSURE_UPDATE) {
-        const data = payload.data as { deviceId?: string; currentPressure?: number }
-        if (data?.deviceId && typeof data.currentPressure === 'number') {
-          deviceStore.updateDevicePressure(data.deviceId, data.currentPressure)
-        }
-      }
-    },
-    onError: (error) => {
-      console.warn('[useCalibrationSync] SSE 连接断开:', error)
-    }
-    })
-  }
-
-  function startPolling() {
-    if (pollTimer) return
-    pollTimer = setInterval(async () => {
-      if (calibrationStore.isRunning) {
-        await Promise.all([
-          calibrationStore.refreshPressure(),
-          calibrationStore.refreshStability(),
-          calibrationStore.refreshMeasureData()
-        ])
-      }
-    }, 2000)
-  }
-
-  function startDeviceRefresh() {
-    if (deviceRefreshTimer) return
-    deviceRefreshTimer = setInterval(() => {
-      void deviceStore.loadDevices(true).then(bindConnectedMeasureDevice)
-    }, 5000)
-  }
-
-  function startPressureRefresh() {
-    if (pressureRefreshTimer) return
-    pressureRefreshTimer = setInterval(async () => {
-      try {
-        const states = await multipressListDevices()
-        for (const s of states) {
-          deviceStore.updateDevicePressure(s.deviceId, s.currentPressure)
-        }
-      } catch {
-        // 静默失败
-      }
-    }, 1000)
-  }
-
-  function stopPolling() {
-    if (pollTimer) {
-      clearInterval(pollTimer)
-      pollTimer = null
-    }
-    if (deviceRefreshTimer) {
-      clearInterval(deviceRefreshTimer)
-      deviceRefreshTimer = null
-    }
-    if (pressureRefreshTimer) {
-      clearInterval(pressureRefreshTimer)
-      pressureRefreshTimer = null
-    }
-  }
-
   onMounted(async () => {
     await Promise.all([
       deviceStore.loadDevices(),
@@ -229,18 +127,85 @@ export function useCalibrationSync() {
 
     await bindConnectedMeasureDevice()
 
-    setupSSE()
-    startPolling()
-    startDeviceRefresh()
-    startPressureRefresh()
+    unsubs.push(subscribe(EVENT_SESSION_STATE_CHANGED, (payload) => {
+      const data = payload.data as { state: SessionState }
+      if (data?.state) {
+        calibrationStore.syncSessionState(data.state)
+      }
+    }))
+
+    unsubs.push(subscribe(EVENT_DEVICE_STATUS_CHANGED, () => {
+      void deviceStore.loadDevices().then(bindConnectedMeasureDevice)
+    }))
+
+    unsubs.push(subscribe(EVENT_CALIBRATION_POINT_STATUS, (payload) => {
+      const data = payload.data as { index?: number; status?: string; collectedData?: number[]; actualPressure?: number }
+      if (typeof data?.index === 'number') {
+        const point = calibrationStore.pressurePoints.find(p => p.index === data.index)
+        if (point) {
+          if (data.status) point.status = data.status as typeof point.status
+          if (data.collectedData) point.collectedData = data.collectedData
+          if (data.actualPressure !== undefined) point.actualPressure = data.actualPressure
+        }
+      }
+    }))
+
+    // 稳定性事件使用前缀匹配（calibration.stability.*）
+    unsubs.push(subscribeGlobal((payload) => {
+      if (payload.type?.startsWith(EVENT_CALIBRATION_STABILITY_PREFIX)) {
+        stabilityStatus.value = payload.data as StabilityEventData
+      }
+    }))
+
+    unsubs.push(subscribe(EVENT_ALARM_TRIGGERED, (payload) => {
+      alarmEvent.value = payload.data as AlarmEventData
+    }))
+
+    unsubs.push(subscribe(EVENT_CALIBRATION_ALARM_RESOLVED, () => {
+      alarmEvent.value = null
+    }))
+
+    unsubs.push(subscribe(EVENT_AUTO_COLLECTION_COMPLETED, () => {
+      ElMessage.success('所有压力点采集完成，系统已自动排空')
+    }))
+
+    unsubs.push(subscribe(EVENT_MULTIPRESS_PRESSURE_UPDATE, (payload) => {
+      const data = payload.data as { deviceId?: string; currentPressure?: number }
+      if (data?.deviceId && typeof data.currentPressure === 'number') {
+        deviceStore.updateDevicePressure(data.deviceId, data.currentPressure)
+      }
+    }))
+
+    unregPolls.push(registerPoll('calibration-running', async () => {
+      if (calibrationStore.isRunning) {
+        await Promise.all([
+          calibrationStore.refreshPressure(),
+          calibrationStore.refreshStability(),
+          calibrationStore.refreshMeasureData()
+        ])
+      }
+    }, 2000))
+
+    unregPolls.push(registerPoll('calibration-device', async () => {
+      await deviceStore.loadDevices()
+      await bindConnectedMeasureDevice()
+    }, 5000))
+
+    unregPolls.push(registerPoll('calibration-pressure', async () => {
+      try {
+        const states = await multipressListDevices()
+        for (const s of states) {
+          deviceStore.updateDevicePressure(s.deviceId, s.currentPressure)
+        }
+      } catch {
+        // 静默失败
+      }
+    }, 1000))
   })
 
   onUnmounted(() => {
-    if (eventSource) {
-      eventSource.close()
-      eventSource = null
-    }
-    stopPolling()
+    for (const unsub of unsubs) unsub()
+    for (const unreg of unregPolls) unreg()
   })
 
   return { stabilityStatus, alarmEvent }

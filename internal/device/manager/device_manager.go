@@ -76,12 +76,8 @@ func (m *DeviceManager) Get(id string) (domain.Device, bool) {
 	return dev, ok
 }
 
-// List 返回设备快照，按设备 ID 升序排列以保证顺序稳定。
-// Go map 遍历顺序随机化，必须显式排序否则前端每次轮询顺序可能不同。
-func (m *DeviceManager) List() []domain.Device {
-	m.mu.RLock()
-	defer m.mu.RUnlock()
-
+// listSorted 返回按 ID 升序排列的设备列表快照（调用方必须持有 mu 读锁）。
+func (m *DeviceManager) listSorted() []domain.Device {
 	result := make([]domain.Device, 0, len(m.devices))
 	for _, dev := range m.devices {
 		result = append(result, dev)
@@ -89,8 +85,15 @@ func (m *DeviceManager) List() []domain.Device {
 	sort.Slice(result, func(i, j int) bool {
 		return result[i].ID < result[j].ID
 	})
-
 	return result
+}
+
+// List 返回设备快照，按设备 ID 升序排列以保证顺序稳定。
+// Go map 遍历顺序随机化，必须显式排序否则前端每次轮询顺序可能不同。
+func (m *DeviceManager) List() []domain.Device {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return m.listSorted()
 }
 
 // CheckUnitConsistency 检查全部**已连接**设备单位是否一致。

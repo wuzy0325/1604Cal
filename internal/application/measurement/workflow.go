@@ -9,13 +9,14 @@ import (
 	apperrors "cal1604/internal/errors"
 	"cal1604/internal/domain"
 	"cal1604/internal/events"
+	"cal1604/internal/workflow"
 )
 
 // Session 是 domain.WorkflowSession 的类型别名。
 type Session = domain.WorkflowSession
 
 // StartWorkflow 启动 measurement 自己的业务流程会话。
-// 当前阶段仅完成“参数 + 点位计划 -> ready 会话”的收口，
+// 当前阶段仅完成"参数 + 点位计划 -> ready 会话"的收口，
 // 自动/手动采集编排在后续任务继续补齐。
 func (s *Service) StartWorkflow(_ context.Context, channels []int) error {
 	s.mu.Lock()
@@ -31,16 +32,21 @@ func (s *Service) StartWorkflow(_ context.Context, channels []int) error {
 
 	s.config.Channels = append([]int(nil), channels...)
 
-	currentState := s.sessionMachine.State()
+	// 单活工作流注册
+	if err := s.coordinator.Begin(workflow.OwnerMeasurement); err != nil {
+		return err
+	}
+
+	currentState := s.coordinator.State()
 	if currentState != domain.SessionStateReady {
 		s.rows = nil
 		// error → idle → ready（error 不允许直接到 ready）
 		if currentState == domain.SessionStateError {
-			if err := s.sessionMachine.Transition(domain.SessionStateIdle); err != nil {
+			if err := s.coordinator.Machine().Transition(domain.SessionStateIdle); err != nil {
 				return fmt.Errorf("start measurement workflow: %w", err)
 			}
 		}
-		if err := s.sessionMachine.Transition(domain.SessionStateReady); err != nil {
+		if err := s.coordinator.Machine().Transition(domain.SessionStateReady); err != nil {
 			return fmt.Errorf("start measurement workflow: %w", err)
 		}
 	}
@@ -52,7 +58,7 @@ func (s *Service) StartWorkflow(_ context.Context, channels []int) error {
 		Points:           append([]domain.PressurePoint(nil), s.points...),
 		MeasureDeviceID:  s.sess.MeasureDeviceID(),
 		PressureDeviceID: s.sess.PressureDeviceID(),
-		Status:           s.sessionMachine.State(),
+		Status:           s.coordinator.State(),
 	}
 
 	s.publish(events.EventMeasurementStateChanged, map[string]any{"state": string(domain.SessionStateReady)})

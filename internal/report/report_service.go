@@ -64,7 +64,7 @@ func (s *Service) ExportReport(ctx context.Context, session *calibration.Calibra
 	// 尝试加载模板
 	templatePath, _ := s.ResolveTemplatePath(
 		session.Config.PointCount,
-		session.Config.PressureMode,
+		string(session.Config.PressureMode),
 	)
 
 	if templatePath != "" {
@@ -109,7 +109,7 @@ func (s *Service) exportWithTemplate(templatePath, outputPath string, standardVa
 		}
 
 		// 回程模式：D 列填回程数据
-		if session.Config.PressureMode == "roundTrip" {
+		if session.Config.PressureMode == domain.PressureModeRoundTrip {
 			backwardData := collectBackwardData(session, i)
 			if len(backwardData) > 0 {
 				if err := FillRoundTripData(f, block, "D", channels[i], backwardData); err != nil {
@@ -214,9 +214,9 @@ func parseTemplateFileName(filename string) (ReportTemplate, bool) {
 	mode := ""
 	switch suffix {
 	case "s":
-		mode = "single"
+		mode = string(domain.PressureModeSingle)
 	case "m":
-		mode = "roundTrip"
+		mode = string(domain.PressureModeRoundTrip)
 	default:
 		return ReportTemplate{}, false
 	}
@@ -246,7 +246,7 @@ func (s *Service) ExportMeasurementReport(ctx context.Context, points []domain.P
 	// 尝试加载模板
 	templatePath, _ := s.ResolveTemplatePath(
 		config.PointCount,
-		config.PressureMode,
+		string(config.PressureMode),
 	)
 
 	if templatePath != "" {

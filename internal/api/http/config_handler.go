@@ -193,10 +193,10 @@ func validateMeasurementParams(params config.MeasurementParamsConfig) error {
 	if params.StableDurationMs < 0 {
 		return fmt.Errorf("%w: stableDurationMs must be non-negative", apperrors.ErrInvalidArgument)
 	}
-	if params.PressureMode != "single" && params.PressureMode != "roundTrip" {
+	if params.PressureMode != domain.PressureModeSingle && params.PressureMode != domain.PressureModeRoundTrip {
 		return fmt.Errorf("%w: pressureMode must be single or roundTrip", apperrors.ErrInvalidArgument)
 	}
-	if params.ControlMode != "auto" && params.ControlMode != "manual" {
+	if params.ControlMode != domain.ControlModeAuto && params.ControlMode != domain.ControlModeManual {
 		return fmt.Errorf("%w: controlMode must be auto or manual", apperrors.ErrInvalidArgument)
 	}
 	return nil

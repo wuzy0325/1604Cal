@@ -53,6 +53,7 @@
 import { ref, computed } from 'vue'
 import { FolderOpened, Download } from '@element-plus/icons-vue'
 import { showSaveDialog } from '@/composables/useFileSaveDialog'
+import { PressureMode } from '@/types/calibration'
 
 const props = defineProps<{
   visible: boolean
@@ -70,7 +71,7 @@ const emit = defineEmits<{
 
 const exportPath = ref('')
 
-const modeLabel = computed(() => props.pressureMode === 'single' ? '单程' : '回程')
+const modeLabel = computed(() => props.pressureMode === PressureMode.Single ? '单程' : '回程')
 
 async function selectPath() {
   const path = await showSaveDialog('measurement-report.xlsx', 'Excel 文件', '*.xlsx')

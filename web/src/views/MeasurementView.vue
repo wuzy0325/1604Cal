@@ -102,8 +102,10 @@ import { ArrowLeft } from '@element-plus/icons-vue'
 import { useMeasurementStore } from '@/stores/measurement'
 import type { MeasurementState } from '@/stores/measurement/types'
 import { useMeasurementDeviceStore } from '@/stores/measurement/deviceStore'
+import { useMeasurementUI } from '@/composables/useMeasurementUI'
 import { useMeasurementSync } from '@/composables/useMeasurementSync'
 import { saveMeasurementAlarmConfig, exportMeasurementReport, resolveStabilityTimeout } from '@/api/measurement'
+import { PressureMode } from '@/types/calibration'
 import PageLayout from '@/components/common/PageLayout.vue'
 import MeasurementSidebar from '@/components/measurement/MeasurementSidebar.vue'
 import MeasurementControl from '@/components/measurement/MeasurementControl.vue'
@@ -115,6 +117,7 @@ import AlarmConfirmDialog from '@/components/measurement/AlarmConfirmDialog.vue'
 const router = useRouter()
 const measurementStore = useMeasurementStore()
 const deviceStore = useMeasurementDeviceStore()
+const measurementUI = useMeasurementUI()
 
 const sidebarCollapsed = ref(false)
 const sidebarRef = ref()
@@ -134,7 +137,7 @@ const hasPressureDevice = computed(() =>
 
 const reportTemplateName = computed(() => {
   const count = measurementStore.points.length
-  const mode = measurementStore.measurementParams.pressureMode === 'single' ? 's' : 'm'
+  const mode = measurementStore.measurementParams.pressureMode === PressureMode.Single ? 's' : 'm'
   return `${count}点${mode === 's' ? '单程' : '回程'}模板`
 })
 
@@ -189,12 +192,12 @@ function goBack() { router.push('/') }
 /* ── 采集控制 ── */
 async function handleStart() {
   if (!canStart.value) { ElMessage.warning('请先连接设备并生成压力表'); return }
-  await measurementStore.start(measurementStore.channels)
+  await measurementUI.start(measurementStore.channels)
 }
 
-async function handlePause() { await measurementStore.pause() }
-async function handleResume() { await measurementStore.start(measurementStore.channels) }
-async function handleStop() { await measurementStore.stop() }
+async function handlePause() { await measurementUI.pause() }
+async function handleResume() { await measurementUI.start(measurementStore.channels) }
+async function handleStop() { await measurementUI.stop() }
 
 function handleReset() {
   measurementStore.resetCollection()
@@ -205,16 +208,16 @@ async function handleManualStart() {
   const hasMeasure = deviceStore.measureDevices.some(d => d.status === 'connected')
   if (!hasMeasure) { ElMessage.warning('请先连接计量设备'); return }
   if (measurementStore.points.length === 0) { ElMessage.warning('请先生成压力表'); return }
-  await measurementStore.manualStart(measurementStore.channels)
+  await measurementUI.manualStart(measurementStore.channels)
 }
 
 async function handleManualPressurize() {
   const idx = measurementStore.currentPointIndex + 1
-  await measurementStore.manualPressurize(idx)
+  await measurementUI.manualPressurize(idx)
 }
 
 async function handleCollectPoint(pointIndex: number) {
-  await measurementStore.manualCollect(pointIndex)
+  await measurementUI.manualCollect(pointIndex)
 }
 
 /* ── 报警配置自动保存 ── */
@@ -258,11 +261,12 @@ const alarmPoint = computed(() => {
   return measurementStore.points.find(p => p.id === d.pointId)
 })
 
-// 非确认模式：报警直接走 ElMessage 通知
-watch(() => measurementStore.alarmPending, (pending) => {
+// 非确认模式：通知后自动继续采集，避免后端阻塞等待
+watch(() => measurementStore.alarmPending, async (pending) => {
   if (pending && !measurementStore.alarmConfig.confirmOnAlarm && measurementStore.alarmData) {
     const a = measurementStore.alarmData
     ElMessage.warning(`报警：${a.overLimitChannels.length} 个通道精度超限，最大偏差 ${(a.maxDeviation * 100).toFixed(2)}%`)
+    await measurementStore.resolveAlarm('continue')
   }
 })
 

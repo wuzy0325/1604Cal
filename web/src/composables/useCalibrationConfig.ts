@@ -1,6 +1,7 @@
 import { ref, watch } from 'vue'
 import { setCalibrationChannels } from "@/api/calibration"
 import type { CalibrationParams } from '@/stores/calibration/types'
+import { PressureMode } from '@/types/calibration'
 
 export type { CalibrationParams }
 
@@ -14,7 +15,7 @@ const defaultParams: CalibrationParams = {
   averageCount: 5,
   stableTime: 3,
   precisionLevel: '0.05',
-  pressureMode: 'single'
+  pressureMode: PressureMode.Single
 }
 
 function loadSavedParams(): CalibrationParams {

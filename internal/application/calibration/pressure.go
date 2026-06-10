@@ -16,7 +16,7 @@ import (
 // 委托给 session.Service 处理，同时保持本地驱动引用以供标定流程使用。
 func (s *Service) SetDevices(measureDevID, pressureDevID string) error {
 	if s.sessionService != nil {
-		if err := s.sessionService.BindDevices(measureDevID, pressureDevID, "calibration"); err != nil {
+		if _, err := s.sessionService.BindDevices(measureDevID, pressureDevID, "calibration"); err != nil {
 			return err
 		}
 		s.mu.Lock()
@@ -117,7 +117,7 @@ func (s *Service) GeneratePressurePoints() ([]domain.PressurePoint, error) {
 		prec = 0
 	}
 
-	roundTrip := s.config.PressureMode == "roundTrip"
+	roundTrip := s.config.PressureMode == domain.PressureModeRoundTrip
 	s.pressurePoints = domain.EquidistantPoints(minP, maxP, points, prec, roundTrip)
 	s.currentPoint = 0
 
@@ -151,21 +151,21 @@ func (s *Service) Pressurize(ctx context.Context, pointIndex int) error {
 	s.updatePointStatus(pointIndex, domain.PointStatusPressurizing)
 
 	// 状态迁移: -> pressurizing
-	if err := s.sessionMachine.Transition(domain.SessionStatePressurizing); err != nil {
+	if err := s.coordinator.Machine().Transition(domain.SessionStatePressurizing); err != nil {
 		return fmt.Errorf("transition to pressurizing: %w", err)
 	}
 	s.publishSessionState()
 
 	// 设置目标压力
 	if err := pressureDriver.SetTargetPressure(ctx, targetPressure); err != nil {
-		s.markPointError(pointIndex, err.Error())
+		s.markPointError(pointIndex)
 		return fmt.Errorf("set target pressure: %w", err)
 	}
 
 	// 启动压力控制
 	if ctrl, ok := pressureDriver.(device.PressureControlCapable); ok {
 		if err := ctrl.StartControl(ctx); err != nil {
-			s.markPointError(pointIndex, err.Error())
+			s.markPointError(pointIndex)
 			return fmt.Errorf("start pressure control: %w", err)
 		}
 	}
@@ -173,7 +173,7 @@ func (s *Service) Pressurize(ctx context.Context, pointIndex int) error {
 	s.updatePointStatus(pointIndex, domain.PointStatusStabilizing)
 
 	// 状态迁移: pressurizing -> stabilizing
-	if err := s.sessionMachine.Transition(domain.SessionStateStabilizing); err != nil {
+	if err := s.coordinator.Machine().Transition(domain.SessionStateStabilizing); err != nil {
 		// 可能已经在 stabilizing，忽略
 	}
 	s.publishSessionState()

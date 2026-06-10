@@ -50,7 +50,7 @@
               </td>
               <td class="cell-status">
                 <button
-                  v-if="controlMode === 'manual'"
+                  v-if="controlMode === ControlMode.Manual"
                   type="button"
                   class="row-collect-btn"
                   @click="$emit('collect-point', pt.index)"
@@ -140,6 +140,7 @@ import { DataLine, Download, Aim } from '@element-plus/icons-vue'
 import { useMeasurementStore } from '@/stores/measurement'
 import type { CollectedRow } from '@/stores/measurement'
 import type { MeasurementPoint } from '@/api/measurement'
+import { ControlMode, PressureMode } from '@/types/calibration'
 
 const props = defineProps<{
   rows?: CollectedRow[]
@@ -157,7 +158,7 @@ const rows = computed(() => props.rows ?? measurementStore.rows)
 const channels = computed(() => props.channels ?? measurementStore.channels)
 const points = computed<MeasurementPoint[]>(() => measurementStore.points)
 
-const isRoundTrip = computed(() => measurementStore.measurementParams.pressureMode === 'roundTrip')
+const isRoundTrip = computed(() => measurementStore.measurementParams.pressureMode === PressureMode.RoundTrip)
 const precisionForDisplay = computed(() => measurementStore.measurementParams.precision)
 const channelCount = 16
 const currentPointIndex = computed(() => measurementStore.currentPointIndex)
@@ -293,26 +294,6 @@ const tableRows = computed<DisplayRow[]>(() => {
 </script>
 
 <style scoped lang="scss">
-/* ── 设计系统令牌 ── */
-$font-sans: 'Inter', 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
-$font-mono: 'JetBrains Mono', 'Fira Code', 'SF Mono', Consolas, monospace;
-$mint: #10b981;
-$mint-light: #34d399;
-$mint-dark: #059669;
-$slate-50: #f9fafb;
-$slate-100: #f3f4f6;
-$slate-200: #e5e7eb;
-$slate-300: #d1d5db;
-$slate-400: #9ca3af;
-$slate-500: #6b7280;
-$slate-600: #4b5563;
-$slate-700: #374151;
-$slate-800: #1f2937;
-$green: #22c55e;
-$red: #ef4444;
-$blue: #3b82f6;
-$amber: #f59e0b;
-
 .data-table-wrapper {
   display: flex;
   flex-direction: column;

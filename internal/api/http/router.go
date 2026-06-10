@@ -5,18 +5,10 @@ import (
 	"net/http"
 	"time"
 
-	"cal1604/internal/application/calibration"
 	"cal1604/internal/application/deviceconnect"
-	"cal1604/internal/application/measurement"
-	"cal1604/internal/application/multipress"
-	"cal1604/internal/application/session"
 	"cal1604/internal/config"
-	"cal1604/internal/device"
 	"cal1604/internal/device/manager"
 	"cal1604/internal/domain"
-	"cal1604/internal/infrastructure/driver"
-	"cal1604/internal/report"
-	"cal1604/internal/workflow"
 )
 
 // CalibrationRuntimeConfig 定义标定启动门禁的运行时配置。
@@ -28,31 +20,9 @@ func defaultCalibrationRuntimeConfig() CalibrationRuntimeConfig {
 	return CalibrationRuntimeConfig{EnforceValveCalibrationGate: false}
 }
 
-// chainActiveDriverProvider 顺序查询多个驱动提供者，返回第一个命中的活跃驱动。
-type chainActiveDriverProvider struct {
-	providers []device.ActiveDriverProvider
-}
-
-func (p chainActiveDriverProvider) GetActiveDriver(id string) device.ConnectionDriver {
-	for _, provider := range p.providers {
-		if provider == nil {
-			continue
-		}
-		if drv := provider.GetActiveDriver(id); drv != nil {
-			return drv
-		}
-	}
-	return nil
-}
-
 // NewRouterWithDeviceManager 基于指定设备管理器创建路由。
 func NewRouterWithDeviceManager(deviceManager deviceManager) http.Handler {
 	return newRouter(deviceManager, nil, deviceconnect.DefaultConfig(), defaultCalibrationRuntimeConfig(), nil, "", "templates/reports")
-}
-
-// NewRouterWithDependencies 基于指定依赖创建路由。
-func (s *apiServer) publishEventAdapter(eventType string, data any) {
-	publishEvent(eventType, data)
 }
 
 // NewRouterWithDependencies 基于指定依赖创建路由。
@@ -123,89 +93,21 @@ func newRouterWithServer(
 	configPath string,
 	templateDir string,
 ) (http.Handler, *apiServer) {
-	if deviceManager == nil {
-		deviceManager = manager.NewDeviceManager()
-	}
-
-	sessionMachine := workflow.NewSessionMachine()
-	factory := driver.NewFactory()
+	deps := newDependencies(deviceManager, connector, connectConfig, calibrationConfig, appCfg, configPath, templateDir)
 
 	server := &apiServer{
-		deviceManager:      deviceManager,
-		sessionMachine:     sessionMachine,
-		connectConfig:      connectConfig,
-		calibrationService: calibration.NewService(sessionMachine, factory, deviceManager, nil, nil, nil),
-		appConfig:          appCfg,
-		configPath:         configPath,
+		deviceManager:      deps.DeviceManager,
+		coordinator:        deps.WorkflowCoordinator,
+		deviceConnector:    deps.DeviceConnector,
+		connectConfig:      deps.ConnectConfig,
+		calibrationService: deps.CalibrationService,
+		multipressService:  deps.MultipressService,
+		sessionService:     deps.SessionService,
+		measurementService: deps.MeasurementService,
+		reportService:      deps.ReportService,
+		configPath:         deps.ConfigPath,
+		appConfig:          deps.AppConfig,
 	}
-
-	// 报告服务（模板目录为空则使用无模板模式）
-	server.reportService = report.NewService(templateDir)
-
-	if connector == nil {
-		server.deviceConnector = deviceconnect.NewService(
-			deviceManager,
-			factory,
-			connectConfig,
-			server.publishDeviceStatusChanged,
-		)
-	} else {
-		server.deviceConnector = connector
-	}
-
-	// 多设备打压控制服务
-	server.multipressService = multipress.NewService(
-		factory,
-		deviceManager,
-		server.publishEventAdapter,
-	)
-	server.multipressService.StartPolling()
-
-	// 聚合驱动提供者：优先复用设备连接服务中的驱动，其次复用 multipress 已注册驱动。
-	providers := make([]device.ActiveDriverProvider, 0, 2)
-	if dp, ok := server.deviceConnector.(device.ActiveDriverProvider); ok {
-		providers = append(providers, dp)
-	}
-	providers = append(providers, server.multipressService)
-
-	var driverProvider device.ActiveDriverProvider
-	if len(providers) > 0 {
-		driverProvider = chainActiveDriverProvider{providers: providers}
-	}
-
-	// 创建共享设备会话服务
-	server.sessionService = session.NewService(
-		deviceManager,
-		factory,
-		server.publishEventAdapter,
-		driverProvider,
-	)
-
-	// 创建计量服务
-	server.measurementService = measurement.NewService(
-		server.sessionService,
-		server.publishEventAdapter,
-	)
-	if appCfg != nil {
-		server.measurementService.SetConfig(measurementConfigFromParams(appCfg.MeasurementParams))
-		server.measurementService.SetAlarmConfig(appCfg.Alarm)
-	} else {
-		server.measurementService.SetConfig(measurementConfigFromParams(config.Default().MeasurementParams))
-		server.measurementService.SetAlarmConfig(config.Default().Alarm)
-	}
-
-	// 注入事件发布、驱动提供者和 session 服务到校准服务
-	server.calibrationService = calibration.NewService(
-		sessionMachine,
-		factory,
-		deviceManager,
-		server.publishEventAdapter,
-		driverProvider,
-		server.sessionService,
-	)
-	server.calibrationService.SetStartPrerequisiteConfig(calibration.StartPrerequisiteConfig{
-		EnforceValveCalibration: calibrationConfig.EnforceValveCalibrationGate,
-	})
 
 	mux := http.NewServeMux()
 

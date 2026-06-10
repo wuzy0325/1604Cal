@@ -1,6 +1,10 @@
 package report
 
-import "fmt"
+import (
+	"fmt"
+
+	"cal1604/internal/domain"
+)
 
 // SelectTemplate 根据测点数量与模式返回模板文件名。
 // 模板命名规则: {点数}{模式}.xlsx，如 5s.xlsx（5点单程）、5m.xlsx（5点回程）。
@@ -36,9 +40,9 @@ func GetTemplateInfo(filename string) (points int, mode string, err error) {
 	}
 	switch suffix {
 	case 's':
-		mode = "single"
+		mode = string(domain.PressureModeSingle)
 	case 'm':
-		mode = "roundTrip"
+		mode = string(domain.PressureModeRoundTrip)
 	default:
 		return 0, "", fmt.Errorf("invalid template mode suffix: %c", suffix)
 	}

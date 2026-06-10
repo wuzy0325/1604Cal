@@ -42,8 +42,8 @@ func (d *constBaseDriver) constConnect(ctx context.Context, stableCmd string) er
 	return nil
 }
 
-// constDisconnect 公共断开逻辑。
-func (d *constBaseDriver) constDisconnect(ctx context.Context) error {
+// Disconnect 断开 TCP 连接（实现 ConnectionDriver 接口）。
+func (d *constBaseDriver) Disconnect(ctx context.Context) error {
 	return d.base.Disconnect(ctx)
 }
 
@@ -56,8 +56,8 @@ func (d *constBaseDriver) constReadStability(ctx context.Context, stableCmd stri
 	return strings.TrimSpace(resp) == "1", nil
 }
 
-// constReadTargetRange 公共读取目标范围逻辑。
-func (d *constBaseDriver) constReadTargetRange(ctx context.Context) (min, max float64, err error) {
+// ReadTargetRange 读取目标压力可设范围。
+func (d *constBaseDriver) ReadTargetRange(ctx context.Context) (min, max float64, err error) {
 	resp, err := d.base.sendSCPICommand(ctx, "PRESsure:TARGet:RANGe?", 3*time.Second)
 	if err != nil {
 		return 0, 0, fmt.Errorf("read target range: %w", err)

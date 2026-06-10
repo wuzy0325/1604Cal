@@ -188,7 +188,7 @@ func CreateMeasurementFallbackWorkbook(standardValues []float64, channels [][]fl
 	if dataRowCount < 6 {
 		dataRowCount = 6
 	}
-	isRoundTrip := config.PressureMode == "roundTrip"
+	isRoundTrip := config.PressureMode == domain.PressureModeRoundTrip
 
 	// 列宽
 	widths := []float64{21.125, 13, 13, 13, 4, 14.375, 13.625, 13.125, 13.25, 14.25, 13.5, 7.625}

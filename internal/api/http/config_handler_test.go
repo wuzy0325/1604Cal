@@ -13,6 +13,7 @@ import (
 	"cal1604/internal/api/dto"
 	"cal1604/internal/application/deviceconnect"
 	"cal1604/internal/config"
+	"cal1604/internal/domain"
 )
 
 type deviceConnectConfigResponse struct {
@@ -126,7 +127,7 @@ func TestMeasurementConfigIsIndependentFromCalibrationConfig(t *testing.T) {
 		t.Fatalf("decode updated measurement config response: %v", err)
 	}
 
-	if measurementAfterResp.Data.PointCount != 9 || measurementAfterResp.Data.ControlMode != "manual" {
+	if measurementAfterResp.Data.PointCount != 9 || measurementAfterResp.Data.ControlMode != domain.ControlModeManual {
 		t.Fatalf("unexpected updated measurement config payload: %+v", measurementAfterResp.Data)
 	}
 
@@ -195,7 +196,7 @@ func TestMeasurementConfigPersistsWhenConfigPathProvided(t *testing.T) {
 		t.Fatalf("decode persisted config: %v", err)
 	}
 
-	if persisted.MeasurementParams.PointCount != 9 || persisted.MeasurementParams.ControlMode != "manual" {
+	if persisted.MeasurementParams.PointCount != 9 || persisted.MeasurementParams.ControlMode != domain.ControlModeManual {
 		t.Fatalf("unexpected persisted measurement params: %+v", persisted.MeasurementParams)
 	}
 }

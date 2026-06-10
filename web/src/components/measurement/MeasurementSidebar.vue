@@ -240,23 +240,6 @@ defineExpose({ checkUnitConsistency })
 </script>
 
 <style scoped lang="scss">
-/* ── 设计系统令牌 ── */
-$font-sans: 'Inter', 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
-$font-mono: 'JetBrains Mono', 'Fira Code', 'SF Mono', Consolas, monospace;
-$mint: #10b981;
-$mint-dark: #059669;
-$slate-50: #f9fafb;
-$slate-100: #f3f4f6;
-$slate-200: #e5e7eb;
-$slate-300: #d1d5db;
-$slate-400: #9ca3af;
-$slate-500: #6b7280;
-$slate-600: #4b5563;
-$slate-700: #374151;
-$green: #22c55e;
-$red: #ef4444;
-$amber: #f59e0b;
-
 .sidebar {
   width: 280px;
   background: #f6f7f6;

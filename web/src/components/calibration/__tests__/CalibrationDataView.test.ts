@@ -7,6 +7,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import CalibrationDataView from '../CalibrationDataView.vue'
 import { useCalibrationStore } from '@/stores/calibration'
 import { usePressurePointStore } from '@/stores/calibration/pressurePoints'
+import { ControlMode } from '@/types/calibration'
 
 type RowData = Record<string, unknown>
 
@@ -130,7 +131,7 @@ it('before start, manual mode keeps confirm disabled and hides pressurize action
       }
     ]
 
-    ;(calibrationStore as any).controlMode = 'manual'
+    ;(calibrationStore as any).controlMode = ControlMode.Manual
 
     const wrapper = mount(CalibrationDataView, {
       global: {
@@ -163,7 +164,7 @@ it('before start, manual mode keeps confirm disabled and hides pressurize action
       }
     ]
 
-    ;(calibrationStore as any).controlMode = 'manual'
+    ;(calibrationStore as any).controlMode = ControlMode.Manual
     calibrationStore.sessionState = 'ready'
 
     const wrapper = mount(CalibrationDataView, {
@@ -184,7 +185,7 @@ it('before start, manual mode keeps confirm disabled and hides pressurize action
 
   it('keeps collect enabled for completed point without retry action', () => {
     const calibrationStore = useCalibrationStore()
-    ;(calibrationStore as any).controlMode = 'manual'
+    ;(calibrationStore as any).controlMode = ControlMode.Manual
     calibrationStore.sessionState = 'ready'
 
     const wrapper = mount(CalibrationDataView, {

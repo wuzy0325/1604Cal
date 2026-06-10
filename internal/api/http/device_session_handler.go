@@ -68,7 +68,8 @@ func (s *apiServer) sessionSetDevicesHandler(w http.ResponseWriter, r *http.Requ
 		moduleName = "measurement"
 	}
 
-	if err := s.sessionService.BindDevices(req.MeasureDeviceID, req.PressureDeviceID, moduleName); err != nil {
+	_, err = s.sessionService.BindDevices(req.MeasureDeviceID, req.PressureDeviceID, moduleName)
+	if err != nil {
 		writeError(w, err)
 		return
 	}
@@ -93,7 +94,8 @@ func (s *apiServer) sessionSetMeasureDeviceHandler(w http.ResponseWriter, r *htt
 		moduleName = "measurement"
 	}
 
-	if err := s.sessionService.BindMeasureDevice(req.MeasureDeviceID, moduleName); err != nil {
+	_, err = s.sessionService.BindMeasureDevice(req.MeasureDeviceID, moduleName)
+	if err != nil {
 		writeError(w, err)
 		return
 	}
@@ -102,7 +104,7 @@ func (s *apiServer) sessionSetMeasureDeviceHandler(w http.ResponseWriter, r *htt
 }
 
 func (s *apiServer) sessionReadPressureHandler(w http.ResponseWriter, r *http.Request) {
-	pressure, err := s.sessionService.ReadPressure(r.Context())
+	pressure, err := s.sessionService.ReadPressure(r.Context(), s.currentToken())
 	if err != nil {
 		writeError(w, err)
 		return
@@ -112,7 +114,7 @@ func (s *apiServer) sessionReadPressureHandler(w http.ResponseWriter, r *http.Re
 }
 
 func (s *apiServer) sessionReadStabilityHandler(w http.ResponseWriter, r *http.Request) {
-	stable, err := s.sessionService.ReadStability(r.Context())
+	stable, err := s.sessionService.ReadStability(r.Context(), s.currentToken())
 	if err != nil {
 		writeError(w, err)
 		return
@@ -122,7 +124,7 @@ func (s *apiServer) sessionReadStabilityHandler(w http.ResponseWriter, r *http.R
 }
 
 func (s *apiServer) sessionReadMeasureDataHandler(w http.ResponseWriter, r *http.Request) {
-	data, err := s.sessionService.ReadMeasureData(r.Context())
+	data, err := s.sessionService.ReadMeasureData(r.Context(), s.currentToken())
 	if err != nil {
 		writeError(w, err)
 		return
@@ -132,7 +134,7 @@ func (s *apiServer) sessionReadMeasureDataHandler(w http.ResponseWriter, r *http
 }
 
 func (s *apiServer) sessionGetValveHandler(w http.ResponseWriter, r *http.Request) {
-	status, err := s.sessionService.ReadValveStatus(r.Context())
+	status, err := s.sessionService.ReadValveStatus(r.Context(), s.currentToken())
 	if err != nil {
 		writeError(w, err)
 		return
@@ -153,7 +155,7 @@ func (s *apiServer) sessionSetValveHandler(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	if err := s.sessionService.SetValveStatus(r.Context(), normalizedStatus); err != nil {
+	if err := s.sessionService.SetValveStatus(r.Context(), s.currentToken(), normalizedStatus); err != nil {
 		writeError(w, err)
 		return
 	}
@@ -171,7 +173,7 @@ func (s *apiServer) sessionCalibrateZeroHandler(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	values, err := s.sessionService.CalibrateZero(r.Context(), req.Channels)
+	values, err := s.sessionService.CalibrateZero(r.Context(), s.currentToken(), req.Channels)
 	if err != nil {
 		writeError(w, err)
 		return
@@ -191,7 +193,7 @@ func (s *apiServer) sessionCalibrateFullScaleHandler(w http.ResponseWriter, r *h
 		return
 	}
 
-	values, err := s.sessionService.CalibrateFullScale(r.Context(), req.Channels, req.FullScaleValue)
+	values, err := s.sessionService.CalibrateFullScale(r.Context(), s.currentToken(), req.Channels, req.FullScaleValue)
 	if err != nil {
 		writeError(w, err)
 		return
@@ -212,7 +214,7 @@ func normalizeValveStatus(status string) (string, bool) {
 }
 
 func (s *apiServer) sessionGetMeasureUnitHandler(w http.ResponseWriter, r *http.Request) {
-	unit, err := s.sessionService.ReadMeasureUnit(r.Context())
+	unit, err := s.sessionService.ReadMeasureUnit(r.Context(), s.currentToken())
 	if err != nil {
 		writeError(w, err)
 		return
@@ -231,7 +233,7 @@ func (s *apiServer) sessionSetMeasureUnitHandler(w http.ResponseWriter, r *http.
 		return
 	}
 
-	if err := s.sessionService.SetMeasureUnit(r.Context(), req.Unit); err != nil {
+	if err := s.sessionService.SetMeasureUnit(r.Context(), s.currentToken(), req.Unit); err != nil {
 		writeError(w, err)
 		return
 	}
@@ -239,7 +241,7 @@ func (s *apiServer) sessionSetMeasureUnitHandler(w http.ResponseWriter, r *http.
 }
 
 func (s *apiServer) sessionReadDeviceInfoHandler(w http.ResponseWriter, r *http.Request) {
-	info, err := s.sessionService.ReadDeviceInfo(r.Context())
+	info, err := s.sessionService.ReadDeviceInfo(r.Context(), s.currentToken())
 	if err != nil {
 		writeError(w, err)
 		return
@@ -249,7 +251,7 @@ func (s *apiServer) sessionReadDeviceInfoHandler(w http.ResponseWriter, r *http.
 }
 
 func (s *apiServer) sessionResetDeviceHandler(w http.ResponseWriter, r *http.Request) {
-	if err := s.sessionService.ResetDevice(r.Context()); err != nil {
+	if err := s.sessionService.ResetDevice(r.Context(), s.currentToken()); err != nil {
 		writeError(w, err)
 		return
 	}

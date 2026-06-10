@@ -31,10 +31,6 @@ func (d *ConST820Driver) Connect(ctx context.Context) error {
 	return d.constConnect(ctx, "OUTPut:PRESsure:STABle?")
 }
 
-func (d *ConST820Driver) Disconnect(ctx context.Context) error {
-	return d.constDisconnect(ctx)
-}
-
 func (d *ConST820Driver) SetTargetPressure(ctx context.Context, target float64) error {
 	cmd := fmt.Sprintf("SOURce:PRESsure %.4f", target)
 	_, err := d.base.sendSCPICommand(ctx, cmd, 3*time.Second)
@@ -109,6 +105,4 @@ func (d *ConST820Driver) StartControl(ctx context.Context) error {
 	return nil
 }
 
-func (d *ConST820Driver) ReadTargetRange(ctx context.Context) (min, max float64, err error) {
-	return d.constReadTargetRange(ctx)
-}
+

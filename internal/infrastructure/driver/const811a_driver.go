@@ -31,10 +31,6 @@ func (d *ConST811ADriver) Connect(ctx context.Context) error {
 	return d.constConnect(ctx, "PRESsure:MODule1:STABle?")
 }
 
-func (d *ConST811ADriver) Disconnect(ctx context.Context) error {
-	return d.constDisconnect(ctx)
-}
-
 func (d *ConST811ADriver) SetTargetPressure(ctx context.Context, target float64) error {
 	sendTarget := target
 	if target == 0 {
@@ -114,6 +110,4 @@ func (d *ConST811ADriver) StartControl(ctx context.Context) error {
 	return nil
 }
 
-func (d *ConST811ADriver) ReadTargetRange(ctx context.Context) (min, max float64, err error) {
-	return d.constReadTargetRange(ctx)
-}
+

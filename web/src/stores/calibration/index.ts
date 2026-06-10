@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import { ElMessage } from 'element-plus'
+import type { ActionResult } from '@/types/api'
 import {
   triggerSessionAction,
   fetchSessionState,
@@ -9,7 +9,7 @@ import {
   resolveAlarm as apiResolveAlarm,
   type AlarmConfigPayload
 } from "@/api/calibration"
-import type { SessionState } from "@/types/calibration"
+import { type SessionState, ControlMode } from "@/types/calibration"
 import { useDeviceInventoryStore } from '@/stores/device/inventoryStore'
 import { usePressurePointStore } from './pressurePoints'
 import { useDeviceControlStore } from './deviceControl'
@@ -32,7 +32,7 @@ export const useCalibrationStore = defineStore('calibration', () => {
   const isCollecting = ref(false)
   const currentCollectingPoint = ref(0)
   const sessionState = ref<SessionState>('idle')
-  const controlMode = ref<'auto' | 'manual'>('auto')
+  const controlMode = ref<ControlMode>(ControlMode.Auto)
   const alarmConfig = ref<AlarmConfigPayload>({
     enabled: true,
     precisionThreshold: 5.0,
@@ -75,39 +75,43 @@ export const useCalibrationStore = defineStore('calibration', () => {
     } catch (error) { console.error('获取会话状态失败:', error) }
   }
 
-  const connectDevice1604 = async (deviceId: string) => {
+  const connectDevice1604 = async (deviceId: string): Promise<ActionResult> => {
     const result = await deviceControlStore.connectDevice1604(deviceId)
-    if (result && deviceControlStore.device1604Connected) {
+    if (result.ok && deviceControlStore.device1604Connected) {
       setStep(CalibrationStep.CHANNEL_SELECT)
     }
+    return result
   }
 
-  const disconnectDevice1604 = async (deviceId: string) => {
-    await deviceControlStore.disconnectDevice1604(deviceId)
+  const disconnectDevice1604 = async (deviceId: string): Promise<ActionResult> => {
+    const result = await deviceControlStore.disconnectDevice1604(deviceId)
     if (!deviceControlStore.device1604Connected) {
       setStep(CalibrationStep.DEVICE_CONNECT)
     }
+    return result
   }
 
-  const connectPressDevice = async (deviceId: string) => {
-    await deviceControlStore.connectPressDevice(deviceId)
+  const connectPressDevice = async (deviceId: string): Promise<ActionResult> => {
+    const result = await deviceControlStore.connectPressDevice(deviceId)
     if (deviceControlStore.device1604Connected && deviceControlStore.pressDeviceConnected) {
       setStep(CalibrationStep.CHANNEL_SELECT)
     }
+    return result
   }
 
-  const disconnectPressDevice = async (deviceId: string) => {
-    await deviceControlStore.disconnectPressDevice(deviceId)
+  const disconnectPressDevice = async (deviceId: string): Promise<ActionResult> => {
+    const result = await deviceControlStore.disconnectPressDevice(deviceId)
     if (!deviceControlStore.pressDeviceConnected) {
       setStep(CalibrationStep.DEVICE_CONNECT)
     }
+    return result
   }
 
   const setSelectedChannels = calibrationConfig.setSelectedChannels
 
-  const generatePressurePoints = async (opts?: { controlMode?: string; pressureMode?: string; silent?: boolean }) => {
-    const activeControlMode: 'auto' | 'manual' = opts?.controlMode === 'manual' ? 'manual' : controlMode.value
-    await pressurePointStore.generatePressurePoints({
+  const generatePressurePoints = async (opts?: { controlMode?: string; pressureMode?: string; silent?: boolean }): Promise<ActionResult> => {
+    const activeControlMode: ControlMode = opts?.controlMode === ControlMode.Manual ? ControlMode.Manual : controlMode.value
+    return pressurePointStore.generatePressurePoints({
       ...opts,
       controlMode: activeControlMode,
       channels: selectedChannels.value,
@@ -124,8 +128,8 @@ export const useCalibrationStore = defineStore('calibration', () => {
     })
   }
 
-  const startCalibration = async (opts?: { controlMode?: string }) => {
-    const activeControlMode: 'auto' | 'manual' = opts?.controlMode === 'manual' ? 'manual' : controlMode.value
+  const startCalibration = async (opts?: { controlMode?: string }): Promise<ActionResult> => {
+    const activeControlMode: ControlMode = opts?.controlMode === ControlMode.Manual ? ControlMode.Manual : controlMode.value
     controlMode.value = activeControlMode
 
     if (!canStartCalibration.value) {
@@ -133,32 +137,28 @@ export const useCalibrationStore = defineStore('calibration', () => {
       if (!device1604Connected.value) missing.push('连接计量设备')
       if (!channelsSelected.value) missing.push('选择通道')
       if (enforceValveCalibrationGate && !valveReady.value) missing.push('将阀门切换到校准状态')
-      ElMessage.warning(`请先${missing.join('并')}`)
-      return
+      return { ok: false, error: 'MISSING_REQUIREMENTS', detail: `请先${missing.join('并')}` }
     }
     // 自动模式额外校验打压设备
-    if (activeControlMode === 'auto' && !pressDeviceConnected.value) {
-      ElMessage.warning('自动模式需要连接打压设备')
-      return
+    if (activeControlMode === ControlMode.Auto && !pressDeviceConnected.value) {
+      return { ok: false, error: 'MISSING_PRESS_DEVICE', detail: '自动模式需要连接打压设备' }
     }
 
     // 自动模式校验采集设备和打压设备单位一致
-    if (activeControlMode === 'auto') {
+    if (activeControlMode === ControlMode.Auto) {
       try {
         const unitCheck = await fetchUnitConsistency()
         if (!unitCheck.consistent) {
-          ElMessage.warning('采集设备与打压设备压力单位不一致，请统一单位后再开始标定')
-          return
+          return { ok: false, error: 'UNIT_MISMATCH', detail: '采集设备与打压设备压力单位不一致，请统一单位后再开始标定' }
         }
       } catch {
-        ElMessage.warning('无法检查设备单位一致性，请确认设备连接正常')
-        return
+        return { ok: false, error: 'UNIT_CHECK_FAILED', detail: '无法检查设备单位一致性，请确认设备连接正常' }
       }
     }
 
     // 对齐旧模块流程：每次开始标定前都重新生成后端压力点，
     // 避免前端本地缓存点位与后端内存点位不一致导致采集失败。
-    const pointsReady = await pressurePointStore.generatePressurePoints({
+    const pointsResult = await pressurePointStore.generatePressurePoints({
       controlMode: activeControlMode,
       channels: selectedChannels.value,
       params: {
@@ -171,11 +171,14 @@ export const useCalibrationStore = defineStore('calibration', () => {
         precisionLevel: calibrationParams.value.precisionLevel
       }
     })
-    if (!pointsReady || pressurePointStore.pressurePoints.length === 0) {
-      ElMessage.error('开始标定失败：压力点未就绪')
-      return
+    if (!pointsResult.ok || pressurePointStore.pressurePoints.length === 0) {
+      return { ok: false, error: 'POINTS_NOT_READY', detail: '开始标定失败：压力点未就绪' }
     }
 
+    return pushCalibrationConfigAndStart(activeControlMode)
+  }
+
+  const pushCalibrationConfigAndStart = async (controlMode: ControlMode): Promise<ActionResult> => {
     try {
       const measureDev = deviceStore.measureDevices.find(d => d.status === 'connected')
       const pressureDev = deviceStore.pressureDevices.find(d => d.status === 'connected')
@@ -191,7 +194,7 @@ export const useCalibrationStore = defineStore('calibration', () => {
         minPressure: calibrationParams.value.minValue,
         maxPressure: calibrationParams.value.maxValue,
         stableWaitMs: calibrationParams.value.stableTime * 1000,
-        controlMode: activeControlMode,
+        controlMode,
         precision: calibrationParams.value.precision,
         precisionLevel: Number(calibrationParams.value.precisionLevel) || 0.05,
         pressureMode: calibrationParams.value.pressureMode
@@ -200,57 +203,39 @@ export const useCalibrationStore = defineStore('calibration', () => {
       syncSessionState(data.state)
       isCollecting.value = true
       setStep(CalibrationStep.DATA_COLLECTION)
-      ElMessage.success('标定已开始')
+      return { ok: true }
     } catch (error) {
       console.error('开始标定失败:', error)
       const detail = error instanceof Error ? error.message : String(error)
-      ElMessage.error(`开始标定失败: ${detail}`)
+      return { ok: false, error: 'START_FAILED', detail: `开始标定失败: ${detail}` }
     }
   }
 
-  const pauseCalibration = async () => {
+  const withSessionAction = async (action: 'start' | 'pause' | 'resume' | 'stop', onSuccess?: () => void): Promise<ActionResult> => {
     try {
-      const data = await triggerSessionAction('pause')
+      const data = await triggerSessionAction(action)
       syncSessionState(data.state)
-      isCollecting.value = false
-      ElMessage.info('校准已暂停')
-    } catch (error) { console.error('暂停校准失败:', error) }
+      onSuccess?.()
+      return { ok: true }
+    } catch (error) {
+      console.error(`${action} 失败:`, error)
+      return { ok: false, error: `${action.toUpperCase()}_FAILED`, detail: String(error) }
+    }
   }
 
-  const resumeCalibration = async () => {
-    try {
-      const data = await triggerSessionAction('resume')
-      syncSessionState(data.state)
-      isCollecting.value = true
-      ElMessage.success('校准已恢复')
-    } catch (error) { console.error('恢复校准失败:', error) }
-  }
+  const pauseCalibration = () => withSessionAction('pause', () => { isCollecting.value = false })
 
-  const stopCalibration = async () => {
-    try {
-      const data = await triggerSessionAction('stop')
-      syncSessionState(data.state)
-      isCollecting.value = false
-      setStep(CalibrationStep.START_CALIBRATION)
-      ElMessage.info('校准已停止')
-    } catch (error) { console.error('停止校准失败:', error) }
-  }
+  const resumeCalibration = () => withSessionAction('resume', () => { isCollecting.value = true })
 
-  const resolveAlarm = async (decision: 'continue' | 'skip' | 'recollect' | 'stop') => {
+  const stopCalibration = () => withSessionAction('stop', () => { isCollecting.value = false; setStep(CalibrationStep.START_CALIBRATION) })
+
+  const resolveAlarm = async (decision: 'continue' | 'skip' | 'recollect' | 'stop'): Promise<ActionResult> => {
     try {
       await apiResolveAlarm(decision)
-
-      const decisionTextMap: Record<typeof decision, string> = {
-        continue: '报警已确认，继续流程',
-        skip: '已跳过当前测点',
-        recollect: '将重新采集当前点',
-        stop: '已停止自动采集流程'
-      }
-
-      ElMessage.success(decisionTextMap[decision])
+      return { ok: true }
     } catch (error) {
       console.error('报警处理失败:', error)
-      ElMessage.error('报警处理失败')
+      return { ok: false, error: 'ALARM_RESOLVE_FAILED', detail: '报警处理失败' }
     }
   }
 
@@ -258,23 +243,20 @@ export const useCalibrationStore = defineStore('calibration', () => {
     return sessionState.value !== 'idle' && sessionState.value !== 'stopped' && sessionState.value !== 'completed'
   }
 
-  const pressurize = async (pointId: string) => {
+  const pressurize = async (pointId: string): Promise<ActionResult> => {
     if (!canOperateCurrentPoint()) {
-      ElMessage.warning('请先开始标定流程')
-      return
+      return { ok: false, error: 'NOT_RUNNING', detail: '请先开始标定流程' }
     }
 
-    if (controlMode.value === 'manual' && !pressDeviceConnected.value) {
-      ElMessage.warning('手动模式且未连接打压设备，请先确认压力到位')
-      return
+    if (controlMode.value === ControlMode.Manual && !pressDeviceConnected.value) {
+      return { ok: false, error: 'NOT_CONNECTED', detail: '手动模式且未连接打压设备，请先确认压力到位' }
     }
-    await pressurePointStore.pressurize(pointId)
+    return pressurePointStore.pressurize(pointId)
   }
 
-  const fitData = async () => {
+  const fitData = async (): Promise<ActionResult> => {
     if (!hasCollectedData.value) {
-      ElMessage.warning('没有可拟合的数据')
-      return
+      return { ok: false, error: 'NO_DATA', detail: '没有可拟合的数据' }
     }
     try {
       setStep(CalibrationStep.DATA_FITTING)
@@ -282,14 +264,14 @@ export const useCalibrationStore = defineStore('calibration', () => {
       pressurePointStore.fittingResult = result
       setStep(CalibrationStep.COMPLETED)
       sessionState.value = 'completed'
-      ElMessage.success('数据拟合完成')
+      return { ok: true }
     } catch (error) {
       console.error('拟合失败:', error)
-      ElMessage.error('数据拟合失败')
+      return { ok: false, error: 'FIT_FAILED', detail: '数据拟合失败' }
     }
   }
 
-  const endCalibration = async () => {
+  const endCalibration = async (): Promise<ActionResult> => {
     if (isSessionRunning(sessionState.value)) {
       try { await triggerSessionAction('stop') }
       catch (error) { console.error('停止后端会话失败:', error) }
@@ -302,16 +284,16 @@ export const useCalibrationStore = defineStore('calibration', () => {
     setStep(CalibrationStep.DEVICE_CONNECT)
     sessionState.value = 'idle'
     pressurePointStore.resetCollection()
-    ElMessage.success('校准流程已重置')
+    return { ok: true }
   }
 
-  const resetCollection = () => {
+  const resetCollection = (): ActionResult => {
     pressurePointStore.resetCollection()
     isCollecting.value = false
     currentCollectingPoint.value = 0
     sessionState.value = 'idle'
     setStep(CalibrationStep.CHANNEL_SELECT)
-    ElMessage.info('采集数据已重置')
+    return { ok: true }
   }
 
   return {

@@ -9,16 +9,16 @@
             <button
               type="button"
               class="segment-btn"
-              :class="{ active: measurementStore.measurementParams.controlMode === 'auto' }"
-              @click="setControlMode('auto')"
+              :class="{ active: measurementStore.measurementParams.controlMode === ControlMode.Auto }"
+              @click="setControlMode(ControlMode.Auto)"
             >
               自动
             </button>
             <button
               type="button"
               class="segment-btn"
-              :class="{ active: measurementStore.measurementParams.controlMode === 'manual' }"
-              @click="setControlMode('manual')"
+              :class="{ active: measurementStore.measurementParams.controlMode === ControlMode.Manual }"
+              @click="setControlMode(ControlMode.Manual)"
             >
               手动
             </button>
@@ -31,16 +31,16 @@
             <button
               type="button"
               class="segment-btn"
-              :class="{ active: measurementStore.measurementParams.pressureMode === 'single' }"
-              @click="measurementStore.measurementParams.pressureMode = 'single'"
+              :class="{ active: measurementStore.measurementParams.pressureMode === PressureMode.Single }"
+              @click="measurementStore.measurementParams.pressureMode = PressureMode.Single"
             >
               单程
             </button>
             <button
               type="button"
               class="segment-btn pressure-active"
-              :class="{ active: measurementStore.measurementParams.pressureMode === 'roundTrip' }"
-              @click="measurementStore.measurementParams.pressureMode = 'roundTrip'"
+              :class="{ active: measurementStore.measurementParams.pressureMode === PressureMode.RoundTrip }"
+              @click="measurementStore.measurementParams.pressureMode = PressureMode.RoundTrip"
             >
               回程
             </button>
@@ -61,7 +61,7 @@
 
       <!-- 操作按钮组 -->
       <div class="control-buttons">
-        <template v-if="measurementStore.measurementParams.controlMode === 'auto'">
+        <template v-if="measurementStore.measurementParams.controlMode === ControlMode.Auto">
           <button
             type="button"
             class="ctrl-btn btn-start"
@@ -180,6 +180,7 @@ import { computed, ref, type PropType } from 'vue'
 import { VideoPlay, VideoPause, CloseBold, Download, Grid } from '@element-plus/icons-vue'
 import { useMeasurementStore } from '@/stores/measurement'
 import ChannelSelectDialog from '@/components/common/ChannelSelectDialog.vue'
+import { ControlMode, PressureMode } from '@/types/calibration'
 
 const props = defineProps({
   channels: {
@@ -238,7 +239,7 @@ const progressPercent = computed(() => {
   return Math.round((completedCount.value / totalCount.value) * 100)
 })
 
-function setControlMode(mode: 'auto' | 'manual') {
+function setControlMode(mode: ControlMode) {
   measurementStore.measurementParams.controlMode = mode
 }
 
@@ -253,7 +254,7 @@ const canManualPressurize = computed(() =>
 )
 
 const canManualStart = computed(() =>
-  measurementStore.measurementParams.controlMode === 'manual' &&
+  measurementStore.measurementParams.controlMode === ControlMode.Manual &&
   measurementStore.points.length > 0 &&
   ['idle', 'stopped', 'completed'].includes(measurementStore.state)
 )
@@ -269,26 +270,6 @@ const canStart = computed(() => {
 </script>
 
 <style scoped lang="scss">
-/* ── 设计系统令牌 ── */
-$font-sans: 'Inter', 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
-$font-mono: 'JetBrains Mono', 'Fira Code', 'SF Mono', Consolas, monospace;
-$mint: #10b981;
-$mint-light: #34d399;
-$mint-dark: #059669;
-$slate-50: #f9fafb;
-$slate-100: #f3f4f6;
-$slate-200: #e5e7eb;
-$slate-300: #d1d5db;
-$slate-400: #9ca3af;
-$slate-500: #6b7280;
-$slate-600: #4b5563;
-$slate-700: #374151;
-$slate-800: #1f2937;
-$green: #22c55e;
-$red: #ef4444;
-$blue: #3b82f6;
-$amber: #f59e0b;
-
 .control-card {
   background: #ffffff;
   border-radius: 12px;

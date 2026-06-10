@@ -9,6 +9,7 @@ import {
 } from '@/api/calibration'
 import { useCalibrationStore } from '@/stores/calibration'
 import { useCalibrationConfig } from './useCalibrationConfig'
+import { ControlMode, PressureMode } from '@/types/calibration'
 
 /** 配置持久化：页面挂载时从后端加载配置，变更时 250ms 防抖保存到后端。 */
 export function useConfigPersistence() {
@@ -29,7 +30,7 @@ export function useConfigPersistence() {
       stableDurationMs: Math.round(p.stableTime * 1000),
       precisionLevel: parseFloat(p.precisionLevel) || 0.05,
       pressureMode: p.pressureMode,
-      controlMode: 'auto'
+      controlMode: ControlMode.Auto
     }
   }
 
@@ -43,7 +44,7 @@ export function useConfigPersistence() {
       averageCount: payload.averageCount,
       stableTime: payload.stableDurationMs / 1000,
       precisionLevel: String(payload.precisionLevel),
-      pressureMode: payload.pressureMode === 'roundTrip' ? 'roundTrip' : 'single'
+      pressureMode: payload.pressureMode === PressureMode.RoundTrip ? PressureMode.RoundTrip : PressureMode.Single
     }
   }
 

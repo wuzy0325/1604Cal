@@ -16,7 +16,7 @@
           <button
             type="button"
             class="ctrl-btn btn-warning"
-            @click="calibrationStore.resolveAlarm('continue')"
+            @click="calibrationUI.resolveAlarm('continue')"
           >
             <el-icon><CircleCheck /></el-icon>
             确认继续
@@ -24,7 +24,7 @@
           <button
             type="button"
             class="ctrl-btn btn-fit"
-            @click="calibrationStore.resolveAlarm('skip')"
+            @click="calibrationUI.resolveAlarm('skip')"
           >
             <el-icon><Right /></el-icon>
             跳过此点
@@ -32,7 +32,7 @@
           <button
             type="button"
             class="ctrl-btn btn-resume"
-            @click="calibrationStore.resolveAlarm('recollect')"
+            @click="calibrationUI.resolveAlarm('recollect')"
           >
             <el-icon><RefreshRight /></el-icon>
             重新采集
@@ -40,7 +40,7 @@
           <button
             type="button"
             class="ctrl-btn btn-stop"
-            @click="calibrationStore.resolveAlarm('stop')"
+            @click="calibrationUI.resolveAlarm('stop')"
           >
             <el-icon><CloseBold /></el-icon>
             停止标定
@@ -51,7 +51,7 @@
             type="button"
             class="ctrl-btn btn-start"
             :disabled="calibrationStore.isRunning"
-            @click="calibrationStore.startCalibration()"
+            @click="calibrationUI.startCalibration()"
           >
             <el-icon><VideoPlay /></el-icon>
             开始
@@ -60,7 +60,7 @@
             type="button"
             class="ctrl-btn btn-pause"
             :disabled="!canPause"
-            @click="calibrationStore.pauseCalibration()"
+            @click="calibrationUI.pauseCalibration()"
           >
             <el-icon><VideoPause /></el-icon>
             暂停
@@ -69,7 +69,7 @@
             type="button"
             class="ctrl-btn btn-resume"
             :disabled="sessionState !== 'paused'"
-            @click="calibrationStore.resumeCalibration()"
+            @click="calibrationUI.resumeCalibration()"
           >
             <el-icon><RefreshRight /></el-icon>
             继续
@@ -78,7 +78,7 @@
             type="button"
             class="ctrl-btn btn-stop"
             :disabled="sessionState === 'idle' || sessionState === 'stopped'"
-            @click="calibrationStore.stopCalibration()"
+            @click="calibrationUI.stopCalibration()"
           >
             <el-icon><CloseBold /></el-icon>
             停止
@@ -88,7 +88,7 @@
             type="button"
             class="ctrl-btn btn-fit"
             :disabled="!canFit"
-            @click="calibrationStore.fitData()"
+            @click="calibrationUI.fitData()"
           >
             <el-icon><DataAnalysis /></el-icon>
             拟合
@@ -97,7 +97,7 @@
             type="button"
             class="ctrl-btn btn-end"
             :disabled="!canEnd"
-            @click="calibrationStore.endCalibration()"
+            @click="calibrationUI.endCalibration()"
           >
             <el-icon><CircleClose /></el-icon>
             结束
@@ -121,8 +121,10 @@ import {
   Right
 } from '@element-plus/icons-vue'
 import { useCalibrationStore } from '@/stores/calibration'
+import { useCalibrationUI } from '@/composables/useCalibrationUI'
 
 const calibrationStore = useCalibrationStore()
+const calibrationUI = useCalibrationUI()
 
 const sessionState = computed(() => calibrationStore.sessionState)
 const isRunning = computed(() => calibrationStore.isRunning)

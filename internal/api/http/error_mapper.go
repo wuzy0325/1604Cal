@@ -61,6 +61,22 @@ func writeError(w http.ResponseWriter, err error) {
 		status = http.StatusUnprocessableEntity
 		code = "REPORT_EXPORT_FAILED"
 		message = "report export failed"
+	} else if errors.Is(err, apperrors.ErrWorkflowConflict) {
+		status = http.StatusConflict
+		code = "WORKFLOW_CONFLICT"
+		message = "active workflow conflict"
+	} else if errors.Is(err, apperrors.ErrManualInterventionRequired) {
+		status = http.StatusLocked
+		code = "MANUAL_INTERVENTION_REQUIRED"
+		message = "device requires manual intervention before new workflow"
+	} else if errors.Is(err, apperrors.ErrStaleWorkflowContext) {
+		status = http.StatusConflict
+		code = "STALE_WORKFLOW_CONTEXT"
+		message = "workflow context is stale"
+	} else if errors.Is(err, apperrors.ErrWorkflowOwnerMismatch) {
+		status = http.StatusConflict
+		code = "WORKFLOW_OWNER_MISMATCH"
+		message = "operation not allowed for current workflow owner"
 	}
 
 	// 将原始错误信息附加到 message，便于前端诊断具体原因
