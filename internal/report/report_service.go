@@ -3,6 +3,7 @@ package report
 import (
 	"context"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"sort"
@@ -19,7 +20,8 @@ import (
 
 // Service 封装报告模板路径拼装逻辑与报告导出。
 type Service struct {
-	templateDir string
+	templateDir         string
+	embedTemplateProvider *EmbedTemplateProvider
 }
 
 // ReportTemplate 描述一个可用报告模板。
@@ -31,8 +33,27 @@ type ReportTemplate struct {
 }
 
 // NewService 创建报告服务。
-func NewService(templateDir string) *Service {
-	return &Service{templateDir: templateDir}
+// templateDir 为外部模板目录（可选），embedFS 为嵌入模板文件系统（可选）。
+// 优先使用外部目录，不存在时回退到 embed.FS。
+func NewService(templateDir string, embedFS ...fs.FS) *Service {
+	s := &Service{templateDir: templateDir}
+	if len(embedFS) > 0 && embedFS[0] != nil {
+		s.embedTemplateProvider = NewEmbedTemplateProvider(embedFS[0], "templates/reports")
+	}
+	return s
+}
+
+// SetEmbedTemplateProvider 设置嵌入模板提供者（用于运行时动态注入）。
+func (s *Service) SetEmbedTemplateProvider(provider *EmbedTemplateProvider) {
+	s.embedTemplateProvider = provider
+}
+
+// CleanupEmbedTemplates 清理嵌入模板解压的临时目录。
+func (s *Service) CleanupEmbedTemplates() error {
+	if s.embedTemplateProvider != nil {
+		return s.embedTemplateProvider.Cleanup()
+	}
+	return nil
 }
 
 // ResolveTemplatePath 解析模板绝对路径。
@@ -139,12 +160,44 @@ func (s *Service) exportFallback(outputPath string, standardValues []float64, ch
 }
 
 // GetTemplates 返回模板目录中可用的模板列表与元信息。
+// 优先扫描外部目录，不存在时从 embed.FS 获取。
 func (s *Service) GetTemplates() ([]ReportTemplate, error) {
-	entries, err := os.ReadDir(s.templateDir)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return nil, nil
+	var entries []os.DirEntry
+	var dirPath string
+	var err error
+
+	if s.templateDir != "" {
+		entries, err = os.ReadDir(s.templateDir)
+		dirPath = s.templateDir
+	}
+	if s.templateDir == "" || (err != nil && os.IsNotExist(err)) {
+		if s.embedTemplateProvider != nil {
+			files, listErr := s.embedTemplateProvider.ListTemplates()
+			if listErr != nil {
+				return nil, fmt.Errorf("%w: list embed templates: %v", apperrors.ErrReportExport, listErr)
+			}
+			templates := make([]ReportTemplate, 0, len(files))
+			for _, name := range files {
+				template, ok := parseTemplateFileName(name)
+				if !ok {
+					continue
+				}
+				templates = append(templates, template)
+			}
+			sort.Slice(templates, func(i, j int) bool {
+				if templates[i].PointCount != templates[j].PointCount {
+					return templates[i].PointCount < templates[j].PointCount
+				}
+				if templates[i].Mode != templates[j].Mode {
+					return templates[i].Mode < templates[j].Mode
+				}
+				return templates[i].Name < templates[j].Name
+			})
+			return templates, nil
 		}
+		return nil, nil
+	}
+	if err != nil {
 		return nil, fmt.Errorf("%w: read template dir: %v", apperrors.ErrReportExport, err)
 	}
 
@@ -158,7 +211,7 @@ func (s *Service) GetTemplates() ([]ReportTemplate, error) {
 		if !ok {
 			continue
 		}
-		template.Path = filepath.Join(s.templateDir, entry.Name())
+		template.Path = filepath.Join(dirPath, entry.Name())
 		templates = append(templates, template)
 	}
 
@@ -176,21 +229,27 @@ func (s *Service) GetTemplates() ([]ReportTemplate, error) {
 }
 
 // MatchTemplate 根据点数与模式匹配模板绝对路径。
+// 优先检查外部目录，其次从 embed.FS 解压到临时目录后返回路径。
 func (s *Service) MatchTemplate(pointCount int, mode string) (string, error) {
 	filename, err := SelectTemplate(pointCount, mode)
 	if err != nil {
 		return "", err
 	}
 
-	fullPath := filepath.Join(s.templateDir, filename)
-	if _, err := os.Stat(fullPath); err != nil {
-		if os.IsNotExist(err) {
-			return "", fmt.Errorf("%w: template not found: %s", apperrors.ErrReportExport, filename)
+	// 优先使用外部模板目录
+	if s.templateDir != "" {
+		fullPath := filepath.Join(s.templateDir, filename)
+		if _, err := os.Stat(fullPath); err == nil {
+			return fullPath, nil
 		}
-		return "", fmt.Errorf("%w: check template: %v", apperrors.ErrReportExport, err)
 	}
 
-	return fullPath, nil
+	// 回退到 embed.FS
+	if s.embedTemplateProvider != nil {
+		return s.embedTemplateProvider.ResolvePath(filename)
+	}
+
+	return "", fmt.Errorf("%w: template not found: %s", apperrors.ErrReportExport, filename)
 }
 
 func parseTemplateFileName(filename string) (ReportTemplate, bool) {

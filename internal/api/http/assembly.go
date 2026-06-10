@@ -1,6 +1,8 @@
 package http
 
 import (
+	"io/fs"
+
 	"cal1604/internal/application/calibration"
 	"cal1604/internal/application/deviceconnect"
 	"cal1604/internal/application/measurement"
@@ -57,6 +59,7 @@ func newDependencies(
 	appCfg *config.AppConfig,
 	configPath string,
 	templateDir string,
+	templateEmbedFS ...fs.FS,
 ) *Dependencies {
 	if deviceManager == nil {
 		deviceManager = manager.NewDeviceManager()
@@ -154,8 +157,12 @@ func newDependencies(
 		EnforceValveCalibration: calibrationConfig.EnforceValveCalibrationGate,
 	})
 
-	// 报告服务（模板目录为空则使用无模板模式）
-	reportSvc := report.NewService(templateDir)
+	// 报告服务（优先外部目录，其次 embed.FS，最后无模板模式）
+	var embedFS fs.FS
+	if len(templateEmbedFS) > 0 {
+		embedFS = templateEmbedFS[0]
+	}
+	reportSvc := report.NewService(templateDir, embedFS)
 
 	return &Dependencies{
 		DeviceManager:      deviceManager,

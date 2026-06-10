@@ -72,7 +72,7 @@ func (a *App) startup(ctx context.Context) {
 	}
 	log.Printf("[app] reset %d device statuses to disconnected", len(deviceManager.List()))
 
-	router, shutdownSrv := apihttp.NewRouterWithShutdown(deviceManager, connectCfg, calibrationCfg, configPath, runtimeCfg)
+	router, shutdownSrv := apihttp.NewRouterWithShutdownAndEmbedFS(deviceManager, connectCfg, calibrationCfg, configPath, templateAssets, runtimeCfg)
 	if shutdownSrv != nil {
 		a.shutdownFuncs = append(a.shutdownFuncs, shutdownSrv)
 	}

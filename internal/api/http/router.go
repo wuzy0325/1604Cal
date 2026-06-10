@@ -2,6 +2,7 @@ package http
 
 import (
 	"context"
+	"io/fs"
 	"net/http"
 	"time"
 
@@ -49,11 +50,16 @@ func NewRouterWithRuntimeConfig(deviceManager deviceManager, connectConfig devic
 
 // NewRouterWithShutdown 创建路由并返回清理函数，应用退出时调用以释放所有后台资源。
 func NewRouterWithShutdown(deviceManager deviceManager, connectConfig deviceconnect.Config, calibrationConfig CalibrationRuntimeConfig, configPath string, appCfg ...config.AppConfig) (http.Handler, func(context.Context)) {
+	return NewRouterWithShutdownAndEmbedFS(deviceManager, connectConfig, calibrationConfig, configPath, nil, appCfg...)
+}
+
+// NewRouterWithShutdownAndEmbedFS 创建路由并支持嵌入模板文件系统。
+func NewRouterWithShutdownAndEmbedFS(deviceManager deviceManager, connectConfig deviceconnect.Config, calibrationConfig CalibrationRuntimeConfig, configPath string, templateEmbedFS fs.FS, appCfg ...config.AppConfig) (http.Handler, func(context.Context)) {
 	var cfg *config.AppConfig
 	if len(appCfg) > 0 {
 		cfg = &appCfg[0]
 	}
-	handler, srv := newRouterWithServer(deviceManager, nil, connectConfig, calibrationConfig, cfg, configPath, "templates/reports")
+	handler, srv := newRouterWithServer(deviceManager, nil, connectConfig, calibrationConfig, cfg, configPath, "templates/reports", templateEmbedFS)
 
 	cleanup := func(ctx context.Context) {
 		// 用 Wails shutdown context 并加超时兜底
@@ -79,6 +85,11 @@ func NewRouterWithShutdown(deviceManager deviceManager, connectConfig deviceconn
 				_, _ = srv.deviceConnector.Disconnect(cleanupCtx, dev.ID)
 			}
 		}
+
+		// 清理嵌入模板临时目录
+		if srv.reportService != nil {
+			_ = srv.reportService.CleanupEmbedTemplates()
+		}
 	}
 
 	return handler, cleanup
@@ -92,8 +103,9 @@ func newRouterWithServer(
 	appCfg *config.AppConfig,
 	configPath string,
 	templateDir string,
+	templateEmbedFS ...fs.FS,
 ) (http.Handler, *apiServer) {
-	deps := newDependencies(deviceManager, connector, connectConfig, calibrationConfig, appCfg, configPath, templateDir)
+	deps := newDependencies(deviceManager, connector, connectConfig, calibrationConfig, appCfg, configPath, templateDir, templateEmbedFS...)
 
 	server := &apiServer{
 		deviceManager:      deps.DeviceManager,

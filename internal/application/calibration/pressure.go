@@ -95,15 +95,15 @@ func (s *Service) GetChannels() []int {
 }
 
 // GeneratePressurePoints 根据配置生成压力点。
-// 测点数范围统一为 2~6，超出范围返回错误，禁止隐式裁剪。
+// 测点数范围统一为 2~5，超出范围返回错误，禁止隐式裁剪。
 // 当 PressureMode 为 roundTrip 时，在正程递增点后追加回程递降点（不含重复的极值点）。
 func (s *Service) GeneratePressurePoints() ([]domain.PressurePoint, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	points := s.config.PointCount
-	if points < 2 || points > 6 {
-		return nil, fmt.Errorf("pressure points must be between 2 and 6, got %d", points)
+	if points < 2 || points > 5 {
+		return nil, fmt.Errorf("pressure points must be between 2 and 5, got %d", points)
 	}
 
 	minP := s.config.MinPressure

@@ -28,7 +28,7 @@
         <span class="group-label">采集配置</span>
         <div class="group-body">
           <label class="input-label">点数</label>
-          <input v-model.number="calibrationStore.calibrationParams.points" type="number" min="2" max="6" class="compact-input narrow" :disabled="isRunning" />
+          <input v-model.number="calibrationStore.calibrationParams.points" type="number" min="2" max="5" class="compact-input narrow" :disabled="isRunning" />
           <label class="input-label">精度</label>
           <input v-model.number="calibrationStore.calibrationParams.precision" type="number" min="0" max="4" class="compact-input narrow" :disabled="isRunning" />
           <label class="input-label">平均</label>

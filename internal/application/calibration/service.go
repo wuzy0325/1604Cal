@@ -259,8 +259,8 @@ func (s *Service) ValidateStartPrerequisites(ctx context.Context) error {
 		return fmt.Errorf("no channels selected")
 	}
 
-	if config.PointCount < 2 || config.PointCount > 6 {
-		return fmt.Errorf("pressure points must be between 2 and 6, got %d", config.PointCount)
+	if config.PointCount < 2 || config.PointCount > 5 {
+		return fmt.Errorf("pressure points must be between 2 and 5, got %d", config.PointCount)
 	}
 
 	// 按模式化门禁校验打压设备

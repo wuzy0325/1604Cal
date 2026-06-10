@@ -7,7 +7,7 @@
   >
     <el-form label-width="70px">
       <el-form-item label="测点数">
-        <el-input-number v-model="templatePoints" :min="2" :max="6" />
+        <el-input-number v-model="templatePoints" :min="2" :max="5" />
       </el-form-item>
       <el-form-item label="模式">
         <el-select v-model="templateMode">

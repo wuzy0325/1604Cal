@@ -42,6 +42,7 @@
         <PressDevicePanel
           @connect="calibrationUI.connectPressDevice"
           @disconnect="calibrationUI.disconnectPressDevice"
+          @unit-change="handleUnitChange"
         />
       </div>
 
@@ -108,18 +109,40 @@ watch(
   }),
   async ({ measureConnected, pressConnected }) => {
     if (measureConnected && pressConnected) {
-      try {
-        const result = await fetchUnitConsistency()
-        unitConsistent.value = result.consistent
-      } catch {
-        // 静默失败
-      }
+      await checkUnitConsistency()
     } else {
       unitConsistent.value = true
     }
   },
   { immediate: true }
 )
+
+// 计量设备单位切换时重新检查一致性
+watch(
+  () => calibrationStore.measureUnit,
+  async (newUnit, oldUnit) => {
+    if (newUnit && oldUnit && newUnit !== oldUnit) {
+      if (calibrationStore.device1604Connected && calibrationStore.pressDeviceConnected) {
+        await checkUnitConsistency()
+      }
+    }
+  }
+)
+
+const checkUnitConsistency = async () => {
+  try {
+    const result = await fetchUnitConsistency()
+    unitConsistent.value = result.consistent
+  } catch {
+    // 静默失败
+  }
+}
+
+const handleUnitChange = async () => {
+  if (calibrationStore.device1604Connected && calibrationStore.pressDeviceConnected) {
+    await checkUnitConsistency()
+  }
+}
 
 const prerequisites = computed(() => {
   const items = [

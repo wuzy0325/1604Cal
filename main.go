@@ -13,6 +13,9 @@ import (
 //go:embed all:web/dist
 var assets embed.FS
 
+//go:embed all:templates/reports
+var templateAssets embed.FS
+
 func main() {
 	app := NewApp()
 
