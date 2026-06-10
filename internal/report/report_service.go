@@ -34,11 +34,21 @@ type ReportTemplate struct {
 
 // NewService 创建报告服务。
 // templateDir 为外部模板目录（可选），embedFS 为嵌入模板文件系统（可选）。
+// embedPrefix 为 embedFS 内的模板目录前缀，默认 "templates/reports"。
 // 优先使用外部目录，不存在时回退到 embed.FS。
 func NewService(templateDir string, embedFS ...fs.FS) *Service {
 	s := &Service{templateDir: templateDir}
 	if len(embedFS) > 0 && embedFS[0] != nil {
 		s.embedTemplateProvider = NewEmbedTemplateProvider(embedFS[0], "templates/reports")
+	}
+	return s
+}
+
+// NewServiceWithPrefix 创建报告服务并指定 embed 前缀。
+func NewServiceWithPrefix(templateDir string, embedFS fs.FS, embedPrefix string) *Service {
+	s := &Service{templateDir: templateDir}
+	if embedFS != nil {
+		s.embedTemplateProvider = NewEmbedTemplateProvider(embedFS, embedPrefix)
 	}
 	return s
 }
@@ -83,15 +93,12 @@ func (s *Service) ExportReport(ctx context.Context, session *calibration.Calibra
 	unit := "kPa"
 
 	// 尝试加载模板
-	templatePath, _ := s.ResolveTemplatePath(
+	templatePath, err := s.ResolveTemplatePath(
 		session.Config.PointCount,
 		string(session.Config.PressureMode),
 	)
-
-	if templatePath != "" {
-		if _, err := os.Stat(templatePath); err == nil {
-			return s.exportWithTemplate(templatePath, outputPath, standardValues, channels, unit, session)
-		}
+	if err == nil && templatePath != "" {
+		return s.exportWithTemplate(templatePath, outputPath, standardValues, channels, unit, session)
 	}
 
 	// 无模板，创建默认工作簿
@@ -184,15 +191,7 @@ func (s *Service) GetTemplates() ([]ReportTemplate, error) {
 				}
 				templates = append(templates, template)
 			}
-			sort.Slice(templates, func(i, j int) bool {
-				if templates[i].PointCount != templates[j].PointCount {
-					return templates[i].PointCount < templates[j].PointCount
-				}
-				if templates[i].Mode != templates[j].Mode {
-					return templates[i].Mode < templates[j].Mode
-				}
-				return templates[i].Name < templates[j].Name
-			})
+			sortTemplates(templates)
 			return templates, nil
 		}
 		return nil, nil
@@ -215,6 +214,12 @@ func (s *Service) GetTemplates() ([]ReportTemplate, error) {
 		templates = append(templates, template)
 	}
 
+	sortTemplates(templates)
+	return templates, nil
+}
+
+// sortTemplates 按点数、模式、名称排序模板列表。
+func sortTemplates(templates []ReportTemplate) {
 	sort.Slice(templates, func(i, j int) bool {
 		if templates[i].PointCount != templates[j].PointCount {
 			return templates[i].PointCount < templates[j].PointCount
@@ -224,8 +229,6 @@ func (s *Service) GetTemplates() ([]ReportTemplate, error) {
 		}
 		return templates[i].Name < templates[j].Name
 	})
-
-	return templates, nil
 }
 
 // MatchTemplate 根据点数与模式匹配模板绝对路径。
@@ -303,15 +306,12 @@ func (s *Service) ExportMeasurementReport(ctx context.Context, points []domain.P
 	unit := "kPa"
 
 	// 尝试加载模板
-	templatePath, _ := s.ResolveTemplatePath(
+	templatePath, err := s.ResolveTemplatePath(
 		config.PointCount,
 		string(config.PressureMode),
 	)
-
-	if templatePath != "" {
-		if _, err := os.Stat(templatePath); err == nil {
-			return s.exportMeasurementWithTemplate(ctx, templatePath, outputPath, standardValues, channels, unit, points, config)
-		}
+	if err == nil && templatePath != "" {
+		return s.exportMeasurementWithTemplate(ctx, templatePath, outputPath, standardValues, channels, unit, points, config)
 	}
 
 	// 无模板，创建默认工作簿

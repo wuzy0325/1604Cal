@@ -1,7 +1,6 @@
 package report
 
 import (
-	"bytes"
 	"fmt"
 	"io"
 	"io/fs"
@@ -9,8 +8,6 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
-
-	"github.com/xuri/excelize/v2"
 )
 
 // EmbedTemplateProvider 从 embed.FS 提供模板文件访问。
@@ -77,24 +74,6 @@ func (p *EmbedTemplateProvider) ListTemplates() ([]string, error) {
 	return files, nil
 }
 
-// LoadTemplateFromEmbed 直接从 embed.FS 加载模板为 excelize.File。
-// 适用于不需要文件路径的场景。
-func (p *EmbedTemplateProvider) LoadTemplateFromEmbed(filename string) (*excelize.File, error) {
-	path := filepath.Join(p.prefix, filename)
-	f, err := p.embedFS.Open(path)
-	if err != nil {
-		return nil, fmt.Errorf("open embed template %s: %w", filename, err)
-	}
-	defer f.Close()
-
-	// excelize.OpenReader 需要 io.ReaderAt，先将内容读入内存
-	data, err := io.ReadAll(f)
-	if err != nil {
-		return nil, fmt.Errorf("read embed template %s: %w", filename, err)
-	}
-	return excelize.OpenReader(bytes.NewReader(data))
-}
-
 // extractAll 将 embed.FS 中的模板文件全部解压到临时目录。
 func (p *EmbedTemplateProvider) extractAll() error {
 	tempDir, err := os.MkdirTemp("", "cal1604-templates-*")
@@ -123,24 +102,30 @@ func (p *EmbedTemplateProvider) extractAll() error {
 			return err
 		}
 
-		// 复制文件
-		src, err := p.embedFS.Open(path)
-		if err != nil {
-			return err
-		}
-		defer src.Close()
-
-		dest, err := os.Create(destPath)
-		if err != nil {
-			return err
-		}
-		defer dest.Close()
-
-		if _, err := io.Copy(dest, src); err != nil {
+		// 复制文件，立即关闭源文件句柄
+		if err := copyEmbedFile(p.embedFS, path, destPath); err != nil {
 			return err
 		}
 		return nil
 	})
+}
+
+// copyEmbedFile 从 embed.FS 复制单个文件到目标路径，完成后立即关闭文件句柄。
+func copyEmbedFile(embedFS fs.FS, srcPath, destPath string) error {
+	src, err := embedFS.Open(srcPath)
+	if err != nil {
+		return err
+	}
+	defer src.Close()
+
+	dest, err := os.Create(destPath)
+	if err != nil {
+		return err
+	}
+	defer dest.Close()
+
+	_, err = io.Copy(dest, src)
+	return err
 }
 
 // Cleanup 删除临时目录（应用退出时调用）。
