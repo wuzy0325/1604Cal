@@ -1,5 +1,5 @@
 <template>
-  <div class="floating-log-panel" :class="{ expanded }">
+  <div ref="panelRef" class="floating-log-panel" :class="{ expanded }">
     <div class="log-bar" @click="toggleExpand">
       <div class="bar-left">
         <el-icon :size="16"><Monitor /></el-icon>
@@ -18,7 +18,7 @@
     <div v-show="expanded" class="resize-handle" @pointerdown.prevent="startResize" :class="{ active: isResizing }" />
 
     <div v-show="expanded" class="log-body" ref="logBodyRef">
-      <CommLogPanel />
+      <CommLogPanel embedded />
     </div>
   </div>
 </template>
@@ -32,40 +32,50 @@ import CommLogPanel from '@/components/common/CommLogPanel.vue'
 const store = useHardwareLogStore()
 
 const expanded = ref(false)
-const panelHeight = ref(200)
+const bodyHeight = ref(200)
 const isResizing = ref(false)
 const logBodyRef = ref<HTMLElement | null>(null)
+const panelRef = ref<HTMLElement | null>(null)
+
+const BAR_H = 32
+const HANDLE_H = 4
+const MIN_BODY_H = 120
 
 function toggleExpand() {
   expanded.value = !expanded.value
-  if (expanded.value && logBodyRef.value && !logBodyRef.value.style.height) {
-    logBodyRef.value.style.height = panelHeight.value + 'px'
+  if (panelRef.value) {
+    if (expanded.value) {
+      panelRef.value.style.height = (bodyHeight.value + BAR_H + HANDLE_H) + 'px'
+    } else {
+      panelRef.value.style.height = ''
+    }
   }
 }
 
 function startResize(e: PointerEvent) {
-  if (isResizing.value) return
+  if (isResizing.value || !panelRef.value) return
   isResizing.value = true
-  const startY = e.clientY
-  const startHeight = logBodyRef.value?.offsetHeight ?? panelHeight.value
+  document.body.style.cursor = 'ns-resize'
+  document.body.style.userSelect = 'none'
 
-  function onMove(e: MouseEvent) {
-    const delta = startY - e.clientY
-    const newHeight = Math.max(120, Math.min(startHeight + delta, window.innerHeight * 0.6))
-    panelHeight.value = newHeight
-    if (logBodyRef.value) {
-      logBodyRef.value.style.height = newHeight + 'px'
-    }
+  function onMove(e: PointerEvent) {
+    const newH = window.innerHeight - e.clientY
+    const clamped = Math.max(MIN_BODY_H + BAR_H + HANDLE_H, Math.min(newH, window.innerHeight * 0.6 + BAR_H + HANDLE_H))
+    bodyHeight.value = clamped - BAR_H - HANDLE_H
+    panelRef.value!.style.height = clamped + 'px'
   }
 
   function onUp() {
     isResizing.value = false
+    document.body.style.cursor = ''
+    document.body.style.userSelect = ''
     document.removeEventListener('pointermove', onMove)
     document.removeEventListener('pointerup', onUp)
   }
 
   document.addEventListener('pointermove', onMove)
   document.addEventListener('pointerup', onUp)
+  onMove(e)
 }
 
 const hasNewEntries = ref(false)

@@ -1,7 +1,7 @@
 <template>
   <div class="comm-log-panel">
     <div class="log-toolbar">
-      <div class="toolbar-left">
+      <div v-if="!embedded" class="toolbar-left">
         <span class="toolbar-title">系统日志</span>
         <el-tag size="small" type="info" class="count-tag">{{ filtered.length }}</el-tag>
       </div>
@@ -40,6 +40,8 @@
 <script setup lang="ts">
 import { ref, computed, watch, nextTick } from 'vue'
 import { useHardwareLogStore, type HwLogKind } from '@/stores/hardwareLog'
+
+defineProps<{ embedded?: boolean }>()
 
 const store = useHardwareLogStore()
 const filterKind = ref<HwLogKind | ''>('')
