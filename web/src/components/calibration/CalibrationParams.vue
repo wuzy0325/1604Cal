@@ -109,7 +109,6 @@ let debounceTimer: ReturnType<typeof setTimeout> | null = null
 watch(
   () => calibrationStore.calibrationParams,
   (newVal, oldVal) => {
-    if (oldVal === undefined && calibrationStore.pressurePoints.length > 0) return
     if (debounceTimer) clearTimeout(debounceTimer)
     debounceTimer = setTimeout(() => {
       const pointsChanged = !oldVal || newVal.points !== oldVal.points

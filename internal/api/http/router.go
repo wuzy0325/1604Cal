@@ -194,6 +194,7 @@ func newRouterWithServer(
 	mux.HandleFunc("GET /api/v1/calibration/channels/list", server.calibrationGetChannelsHandler)
 	mux.HandleFunc("POST /api/v1/calibration/points/generate", server.calibrationGeneratePointsHandler)
 	mux.HandleFunc("GET /api/v1/calibration/points", server.calibrationGetPointsHandler)
+	mux.HandleFunc("PUT /api/v1/calibration/points/{index}/target-pressure", server.calibrationUpdateTargetPressureHandler)
 	mux.HandleFunc("POST /api/v1/calibration/pressurize", server.calibrationPressurizeHandler)
 	mux.HandleFunc("POST /api/v1/calibration/collect", server.calibrationCollectHandler)
 	mux.HandleFunc("POST /api/v1/calibration/fit", server.calibrationFitHandler)

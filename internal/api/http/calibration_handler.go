@@ -231,6 +231,37 @@ func (s *apiServer) calibrationGetSessionHandler(w http.ResponseWriter, _ *http.
 	writeSuccess(w, http.StatusOK, session)
 }
 
+// calibrationUpdateTargetPressureHandler 更新指定压力点的目标压力值。
+func (s *apiServer) calibrationUpdateTargetPressureHandler(w http.ResponseWriter, r *http.Request) {
+	pointIndexStr := r.PathValue("index")
+	if pointIndexStr == "" {
+		writeError(w, apperrors.ErrInvalidArgument)
+		return
+	}
+	pointIndex, err := strconv.Atoi(pointIndexStr)
+	if err != nil || pointIndex < 1 {
+		writeError(w, apperrors.ErrInvalidArgument)
+		return
+	}
+
+	req, decodeErr := decodeJSON[updateTargetPressureRequest](r)
+	if decodeErr != nil {
+		writeError(w, decodeErr)
+		return
+	}
+
+	if err := s.calibrationService.UpdatePointTargetPressure(pointIndex, req.TargetPressure); err != nil {
+		writeError(w, err)
+		return
+	}
+
+	writeSuccess(w, http.StatusOK, map[string]string{"status": "ok"})
+}
+
+type updateTargetPressureRequest struct {
+	TargetPressure float64 `json:"targetPressure"`
+}
+
 type manualPressurizeRequest struct {
 	TargetPressure float64 `json:"targetPressure"`
 }

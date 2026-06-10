@@ -333,6 +333,7 @@ export const useCalibrationStore = defineStore('calibration', () => {
     setSelectedChannels,
     generatePressurePoints,
     addPressurePoint: pressurePointStore.addPressurePoint,
+    updateTargetPressure: pressurePointStore.updateTargetPressure,
     removePressurePoint: pressurePointStore.removePressurePoint,
     updatePointStatus: pressurePointStore.updatePointStatus,
     startCalibration,

@@ -5,6 +5,7 @@ import {
   setCalibrationConfig,
   generatePressurePoints as apiGeneratePoints,
   getPressurePoints as apiGetPoints,
+  updatePointTargetPressure as apiUpdateTargetPressure,
   pressurize as apiPressurize,
   collectData as apiCollectData
 } from "@/api/calibration"
@@ -100,6 +101,23 @@ export const usePressurePointStore = defineStore('pressurePoint', () => {
     })
   }
 
+  // 更新压力点目标压力（仅 pending 状态的点允许修改）
+  const updateTargetPressure = async (pointId: string, targetPressure: number): Promise<ActionResult> => {
+    const point = pressurePoints.value.find(p => p.id === pointId)
+    if (!point) return { ok: false, error: 'MISSING_POINT', detail: '压力点未找到' }
+    if (point.status !== 'pending') return { ok: false, error: 'NOT_PENDING', detail: '仅待执行状态的压力点可修改目标压力' }
+
+    try {
+      await apiUpdateTargetPressure(point.index, targetPressure)
+      point.targetPressure = targetPressure
+      savePoints(pressurePoints.value)
+      return { ok: true }
+    } catch (error) {
+      console.error('更新目标压力失败:', error)
+      return { ok: false, error: 'UPDATE_FAILED', detail: String(error) }
+    }
+  }
+
   // 删除压力点
   const removePressurePoint = (index: number) => {
     pressurePoints.value.splice(index, 1)
@@ -191,6 +209,7 @@ export const usePressurePointStore = defineStore('pressurePoint', () => {
     // Actions
     generatePressurePoints,
     addPressurePoint,
+    updateTargetPressure,
     removePressurePoint,
     updatePointStatus,
     pressurize,

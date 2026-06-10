@@ -124,6 +124,29 @@ func (s *Service) GeneratePressurePoints() ([]domain.PressurePoint, error) {
 	return s.pressurePoints, nil
 }
 
+// UpdatePointTargetPressure 更新指定压力点的目标压力值。
+// 仅允许更新状态为 pending 的压力点，已执行的点不允许修改。
+func (s *Service) UpdatePointTargetPressure(pointIndex int, targetPressure float64) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if pointIndex < 1 || pointIndex > len(s.pressurePoints) {
+		return fmt.Errorf("invalid point index: %d", pointIndex)
+	}
+
+	point := &s.pressurePoints[pointIndex-1]
+	if point.Status != domain.PointStatusPending {
+		return fmt.Errorf("cannot update target pressure for point %d with status %s, only pending points can be modified", pointIndex, point.Status)
+	}
+
+	if targetPressure < 0 {
+		return fmt.Errorf("target pressure must be non-negative, got %v", targetPressure)
+	}
+
+	point.TargetPressure = domain.RoundToPrecision(targetPressure, s.config.Precision)
+	return nil
+}
+
 // GetPressurePoints 获取当前压力点列表。
 func (s *Service) GetPressurePoints() []domain.PressurePoint {
 	s.mu.Lock()

@@ -1,5 +1,5 @@
 import type { SessionStateDTO, ReportTemplateDTO, CalibrationConfigDTO, PressurePointDTO, FittingResultDTO } from '@/types/calibration'
-import { apiGet, apiPost } from './client'
+import { apiGet, apiPost, apiPut } from './client'
 
 export async function fetchSessionState(): Promise<SessionStateDTO> {
   return apiGet<SessionStateDTO>('/sessions/state')
@@ -40,6 +40,11 @@ export async function generatePressurePoints(): Promise<PressurePointDTO[]> {
 /** 获取压力点列表 */
 export async function getPressurePoints(): Promise<PressurePointDTO[]> {
   return apiGet<PressurePointDTO[]>('/calibration/points')
+}
+
+/** 更新指定压力点的目标压力 */
+export async function updatePointTargetPressure(pointIndex: number, targetPressure: number): Promise<void> {
+  await apiPut(`/calibration/points/${pointIndex}/target-pressure`, { targetPressure })
 }
 
 /** 执行打压 */

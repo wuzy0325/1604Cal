@@ -44,10 +44,18 @@
           </el-table-column>
           <el-table-column
             label="目标压力"
-            width="110"
+            width="130"
           >
             <template #default="{ row }">
-              {{ row.targetValue.toFixed(2) }}
+              <input
+                v-if="row.status === 'pending'"
+                :value="row.targetValue"
+                type="number"
+                :step="0.1"
+                class="target-pressure-input"
+                @change="(e: Event) => handleTargetPressureChange(row, (e.target as HTMLInputElement).value)"
+              />
+              <span v-else class="target-pressure-text">{{ row.targetValue.toFixed(2) }}</span>
             </template>
           </el-table-column>
           <el-table-column
@@ -182,6 +190,7 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
+import { ElMessage } from 'element-plus'
 import {
   Operation,
   SetUp
@@ -294,6 +303,21 @@ const getChannelClass = (row: TableRow, index: number) => {
   if (diff < 0.1) return 'channel-good'
   if (diff < 0.5) return 'channel-warning'
   return 'channel-error'
+}
+
+// 修改目标压力
+const handleTargetPressureChange = async (row: TableRow, val: string) => {
+  const numVal = parseFloat(val)
+  if (isNaN(numVal) || numVal < 0) {
+    ElMessage.warning('目标压力必须为非负数')
+    return
+  }
+  const result = await calibrationStore.updateTargetPressure(row.id, numVal)
+  if (!result.ok) {
+    ElMessage.error(result.detail || '更新目标压力失败')
+  } else {
+    ElMessage.success('目标压力已更新')
+  }
 }
 </script>
 
@@ -423,6 +447,44 @@ const getChannelClass = (row: TableRow, index: number) => {
 }
 
 .row-actions { display: flex; gap: 6px; }
+
+/* 目标压力输入框 */
+.target-pressure-input {
+  width: 80px;
+  height: 28px;
+  font-size: 13px;
+  border: 1px solid $slate-300;
+  border-radius: 6px;
+  padding: 0 6px;
+  text-align: center;
+  color: $slate-800;
+  background: #fff;
+  outline: none;
+  font-variant-numeric: tabular-nums;
+  font-family: $font-mono;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+
+  &:focus {
+    border-color: $mint;
+    box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.15);
+  }
+}
+
+.target-pressure-input::-webkit-inner-spin-button,
+.target-pressure-input::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.target-pressure-input {
+  -moz-appearance: textfield;
+}
+
+.target-pressure-text {
+  font-family: $font-mono;
+  font-size: 13px;
+  color: $slate-700;
+}
 
 .channel-legend {
   display: flex;

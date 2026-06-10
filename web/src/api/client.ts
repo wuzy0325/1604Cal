@@ -72,6 +72,17 @@ export async function apiDelete<T>(path: string): Promise<T> {
   return resp.data
 }
 
+/** PUT 请求，自动序列化 JSON body 并解包 ApiResponse.data */
+export async function apiPut<T>(path: string, body?: unknown): Promise<T> {
+  const init: RequestInit = { method: 'PUT' }
+  if (body !== undefined) {
+    init.headers = { 'Content-Type': 'application/json' }
+    init.body = JSON.stringify(body)
+  }
+  const resp = await requestJSON<ApiResponse<T>>(path, init)
+  return resp.data
+}
+
 export async function requestJSON<T>(path: string, init?: RequestInit): Promise<T> {
   const resp = await fetch(`${API_BASE}${path}`, init)
   if (!resp.ok) {
