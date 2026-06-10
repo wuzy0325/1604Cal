@@ -47,7 +47,9 @@ export function useMeasurementSync() {
 
     unsubs.push(subscribe(EVENT_MEASUREMENT_DATA_UPDATED, (payload) => {
       const data = payload.data as { timestamp: string; channels: Record<string, number> }
+      const MAX_ROWS = 2000
       store.rows.push({ timestamp: data.timestamp, channels: data.channels })
+      if (store.rows.length > MAX_ROWS) store.rows.splice(0, store.rows.length - MAX_ROWS)
     }))
 
     unsubs.push(subscribe(EVENT_MEASUREMENT_STABILITY_UPDATE, (payload) => {

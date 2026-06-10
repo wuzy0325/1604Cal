@@ -20,8 +20,8 @@ function ensureConnection() {
       }
       for (const h of globalHandlers) h(payload)
     },
-    onError: () => {
-      // Exponential backoff reconnect is handled by createEventStream internally.
+    onError: (error) => {
+      console.warn('[SSE] connection error, will auto-reconnect:', error)
     }
   })
 }

@@ -1,6 +1,9 @@
 package events
 
-import "sync"
+import (
+	"log"
+	"sync"
+)
 
 // Event 表示系统内部广播事件。
 type Event struct {
@@ -27,11 +30,11 @@ func (b *Bus) Publish(evt Event) {
 	b.mu.RLock()
 	defer b.mu.RUnlock()
 
-	for _, ch := range b.subscribers {
+	for id, ch := range b.subscribers {
 		select {
 		case ch <- evt:
 		default:
-			// 为避免慢订阅者阻塞主流程，满缓冲时丢弃该条事件。
+			log.Printf("[bus] subscriber %d buffer full, dropping event: %s", id, evt.Type)
 		}
 	}
 }

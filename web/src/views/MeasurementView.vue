@@ -64,7 +64,7 @@
           <div class="card-block">
             <MeasurementParamsPanel />
           </div>
-          <div class="card-block">
+          <div class="card-block card-block--data">
             <MeasurementDataView
               :control-mode="measurementStore.measurementParams.controlMode"
               @collect-point="handleCollectPoint"
@@ -535,6 +535,13 @@ $amber: #f59e0b;
   position: relative;
   overflow: hidden;
   animation: card-enter 0.35s ease both;
+}
+
+.card-block--data {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
 }
 
 @keyframes card-enter {

@@ -48,6 +48,19 @@ async function bootstrap() {
     }
   })
 
+  // Vue 全局错误处理：捕获渲染/观察者异常，防止静默崩溃
+  app.config.errorHandler = (err, instance, info) => {
+    console.error(`[Vue error] ${info}:`, err)
+  }
+
+  window.onerror = (message, source, lineno, colno, error) => {
+    console.error('[window.onerror]', message, source, lineno, colno, error)
+  }
+
+  window.onunhandledrejection = (event) => {
+    console.error('[unhandled rejection]', event.reason)
+  }
+
   app.mount('#app')
 }
 

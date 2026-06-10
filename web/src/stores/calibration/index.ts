@@ -156,8 +156,12 @@ export const useCalibrationStore = defineStore('calibration', () => {
       }
     }
 
-    // 对齐旧模块流程：每次开始标定前都重新生成后端压力点，
-    // 避免前端本地缓存点位与后端内存点位不一致导致采集失败。
+    // 保存用户手动编辑的目标压力值，避免重新生成时被覆盖
+    const savedTargets = new Map(
+      pressurePointStore.pressurePoints.map(p => [p.index, p.targetPressure])
+    )
+
+    // 重新生成压力点以初始化后端内存中的点位
     const pointsResult = await pressurePointStore.generatePressurePoints({
       controlMode: activeControlMode,
       channels: selectedChannels.value,
@@ -173,6 +177,19 @@ export const useCalibrationStore = defineStore('calibration', () => {
     })
     if (!pointsResult.ok || pressurePointStore.pressurePoints.length === 0) {
       return { ok: false, error: 'POINTS_NOT_READY', detail: '开始标定失败：压力点未就绪' }
+    }
+
+    // 恢复用户手动编辑的目标压力值
+    const restoreResults = await Promise.all(
+      pressurePointStore.pressurePoints.map(async (point) => {
+        const edited = savedTargets.get(point.index)
+        if (edited === undefined || Math.abs(edited - point.targetPressure) <= 0.001) return null
+        return pressurePointStore.updateTargetPressure(point.id, edited)
+      })
+    )
+    const failures = restoreResults.filter(r => r !== null && !r.ok)
+    if (failures.length > 0) {
+      console.warn(`${failures.length} 个压力点的编辑值恢复失败`, failures)
     }
 
     return pushCalibrationConfigAndStart(activeControlMode)

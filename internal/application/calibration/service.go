@@ -347,6 +347,14 @@ func (s *Service) RunAutoCollection(ctx context.Context) error {
 // runCollectionLoop 在后台 goroutine 中执行自动采集循环。
 func (s *Service) runCollectionLoop() {
 	defer s.autoCollectWg.Done()
+	defer func() {
+		if r := recover(); r != nil {
+			log.Printf("[calibration] auto collection PANIC: %v", r)
+			s.publish(events.EventAutoCollectionError, map[string]any{
+				"error": fmt.Sprintf("panic: %v", r),
+			})
+		}
+	}()
 	defer s.cleanupAutoCollection()
 
 	s.mu.Lock()

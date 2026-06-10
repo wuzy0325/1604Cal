@@ -466,7 +466,12 @@ func (s *Service) StartAutoCollect() {
 	go func() {
 		defer s.autoCollectWg.Done()
 		defer func() {
-			// goroutine 退出时清理 cancel 标记，确保下次 StartAutoCollect 可重新启动
+			if r := recover(); r != nil {
+				log.Printf("[measurement] auto collection PANIC: %v", r)
+				s.SetState(domain.SessionStateError)
+			}
+		}()
+		defer func() {
 			s.autoCollectMu.Lock()
 			s.autoCollectCancel = nil
 			s.autoCollectCtx = nil
