@@ -20,9 +20,10 @@ func main() {
 	app := NewApp()
 
 	err := wails.Run(&options.App{
-		Title:  "Cal1604 校准系统",
-		Width:  1660,
-		Height: 1040,
+		Title:             "Cal1604 校准系统",
+		Width:             1660,
+		Height:            1040,
+		WindowStartState:  options.Maximised,
 		AssetServer: &assetserver.Options{
 			Assets: assets,
 		},
