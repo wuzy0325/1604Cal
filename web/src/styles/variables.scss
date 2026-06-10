@@ -102,6 +102,33 @@ $neutral-100: #f3f4f6;
 $neutral-50: #f9fafb;
 
 // ============================================
+// 旧版 slate 变量兼容映射
+// ============================================
+
+// 向下兼容：部分组件仍引用 $slate-* 变量
+$slate-50: $neutral-50;
+$slate-100: $neutral-100;
+$slate-200: $neutral-200;
+$slate-300: $neutral-300;
+$slate-400: $neutral-400;
+$slate-500: $neutral-500;
+$slate-600: $neutral-600;
+$slate-700: $neutral-700;
+$slate-800: $neutral-800;
+$slate-900: $neutral-900;
+
+// 向下兼容：部分组件仍引用 $mint-* 变量（mint = primary）
+$mint: $primary-500;
+$mint-light: $primary-400;
+$mint-dark: $primary-600;
+
+// 向下兼容：简单颜色名
+$red: $danger-500;
+$amber: $warning-500;
+$green: $success-500;
+$blue: $info-500;
+
+// ============================================
 // 主题变量映射
 // ============================================
 
@@ -266,6 +293,10 @@ $card-padding: $spacing-6;
 // 字体族
 $font-family-base: 'Inter', 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
 $font-family-mono: 'JetBrains Mono', 'Fira Code', 'SF Mono', Consolas, monospace;
+
+// 向下兼容：部分组件仍引用 $font-sans 和 $font-mono
+$font-sans: $font-family-base;
+$font-mono: $font-family-mono;
 
 // 字体大小
 $font-size-xs: 12px;
