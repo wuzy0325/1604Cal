@@ -123,7 +123,9 @@
               <td class="cell-index">{{ row.index }}</td>
               <td class="cell-pressure">{{ row.actualPressure }}</td>
               <td v-for="ch in visibleChannels" :key="`${row.index}-${ch}`" class="cell-channel">
-                {{ row.channelValues[ch] ?? '--' }}
+                <div :class="['channel-value', { 'channel-over-limit': isSampleOverLimit(row, ch) }]">
+                  {{ row.channelValues[ch] ?? '--' }}
+                </div>
               </td>
               <td class="cell-time">{{ row.collectTime }}</td>
             </tr>
@@ -199,6 +201,32 @@ function isChannelOverLimit(pt: MeasurementPoint, ch: number): boolean {
   const overLimit = getPointOverLimitChannels(pt)
   return overLimit.includes(ch)
 }
+
+function isSampleOverLimit(row: DisplayRow, ch: number): boolean {
+  if (!alarmEnabled.value) return false
+  const cv = row.channelValues[ch]
+  if (!cv || cv === '--') return false
+  const raw = parseFloat(cv)
+  if (isNaN(raw)) return false
+  const target = currentTargetPressure.value
+  if (target === undefined) return false
+
+  const span = Math.abs(maxPressure.value - minPressure.value)
+  let allowance: number
+  if (span > 1e-10) {
+    allowance = span * precisionLevel.value
+  } else {
+    allowance = Math.abs(target) * precisionLevel.value
+  }
+
+  return Math.abs(raw - target) > allowance
+}
+
+const currentTargetPressure = computed(() => {
+  const idx = measurementStore.currentPointIndex
+  if (idx <= 0 || idx > measurementStore.points.length) return undefined
+  return measurementStore.points[idx - 1]?.targetPressure
+})
 
 function getRowClass(pt: MeasurementPoint): string {
   const classes: string[] = []
@@ -688,6 +716,9 @@ const tableRows = computed<DisplayRow[]>(() => {
   font-variant-numeric: tabular-nums;
   font-family: $font-mono;
   font-size: 11px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  border: 1px solid transparent;
 
   &.empty {
     color: $slate-300;
@@ -695,7 +726,9 @@ const tableRows = computed<DisplayRow[]>(() => {
 }
 
 .channel-over-limit {
-  color: $red !important;
+  background: rgba(239, 68, 68, 0.12) !important;
+  border-color: rgba(239, 68, 68, 0.25) !important;
+  color: $red;
   font-weight: 700;
 }
 

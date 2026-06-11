@@ -64,7 +64,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import {
   ArrowLeft, ArrowRight, CircleCheckFilled, CircleCloseFilled,
   Monitor, FirstAidKit
@@ -235,6 +235,57 @@ const prerequisites = computed(() => [
 onMounted(() => {
   emitUnitCheck()
 })
+
+// 从标定画面切入时，自动绑定设备存储中已连接的计量设备
+watch(
+  () => deviceStore.measureDevices,
+  async (devices) => {
+    if (measurementStore.measureDeviceId) return
+    const connectedDevice = devices.find(d => d.status === 'connected')
+    if (!connectedDevice) return
+
+    try {
+      const deviceId = connectedDevice.id
+      moduleDeviceStore.setModuleSelection('measurement', { measureDeviceId: deviceId })
+
+      const connectedPressure = deviceStore.pressureDevices.find(d => d.status === 'connected')
+      if (connectedPressure) {
+        await measurementStore.bindDevices(deviceId, connectedPressure.id)
+      } else {
+        await measurementStore.bindMeasureDevice(deviceId)
+        unitConsistent.value = true
+        unitConflicts.value = []
+        emitUnitCheck()
+      }
+
+      await Promise.all([
+        measurementStore.refreshDeviceInfo(),
+        measurementStore.refreshValveStatus(),
+        measurementStore.refreshMeasureUnit()
+      ])
+
+      // 同步计量设备单位到后端配置
+      if (measurementStore.measureUnit) {
+        try {
+          const devices = await fetchDevices()
+          const dto = devices.find(d => d.id === deviceId)
+          if (dto) {
+            await upsertDevice({ ...dto, unit: measurementStore.measureUnit })
+          }
+        } catch (syncErr) {
+          console.warn('同步计量设备单位到配置失败:', syncErr)
+        }
+      }
+
+      if (connectedPressure) {
+        await checkUnitConsistency()
+      }
+    } catch (err) {
+      console.warn('自动绑定计量设备失败:', err)
+    }
+  },
+  { immediate: true }
+)
 
 defineExpose({ checkUnitConsistency })
 </script>
