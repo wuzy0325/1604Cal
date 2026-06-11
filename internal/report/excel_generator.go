@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math"
 	"os"
+	"strconv"
 	"strings"
 
 	"cal1604/internal/domain"
@@ -29,6 +30,8 @@ func LoadTemplate(path string) (*excelize.File, error) {
 
 // FindChannelBlocks 扫描模板所有工作表的 A 列，查找包含"通道"或"Channel"关键字的单元格，
 // 将连续的数据行合并为一个 ChannelBlock。
+// DataStart 定位到第一个数值数据行（A 列可解析为 float64），
+// DataEnd 定位到最后一个数值数据行之后的下一个空行。
 func FindChannelBlocks(f *excelize.File) ([]ChannelBlock, error) {
 	var blocks []ChannelBlock
 
@@ -52,22 +55,49 @@ func FindChannelBlocks(f *excelize.File) ([]ChannelBlock, error) {
 				currentBlock = &ChannelBlock{
 					Sheet:     sheet,
 					HeaderRow: rowNum,
-					DataStart: rowNum + 1,
+				}
+			} else if currentBlock != nil && currentBlock.DataStart == 0 {
+				// 还未定位到数据起始行：跳过表头描述行，找到第一个数值行
+				if isNumericRow(text) {
+					currentBlock.DataStart = rowNum
 				}
 			} else if currentBlock != nil && text == "" {
-				currentBlock.DataEnd = rowNum - 1
+				// 空行：如果已定位到数据起始行，正常终止 block
+				if currentBlock.DataStart > 0 {
+					currentBlock.DataEnd = rowNum - 1
+				} else {
+					// 模板异常：header 后未找到数值行，回退 DataStart
+					currentBlock.DataStart = currentBlock.HeaderRow + 1
+					currentBlock.DataEnd = currentBlock.DataStart
+				}
 				blocks = append(blocks, *currentBlock)
 				currentBlock = nil
 			}
 		}
 
 		if currentBlock != nil {
-			currentBlock.DataEnd = len(colA)
+			if currentBlock.DataStart == 0 {
+				// 未找到数值行时回退到 HeaderRow+1，至少保留一处可写位置
+				currentBlock.DataStart = currentBlock.HeaderRow + 1
+			}
+			if currentBlock.DataEnd == 0 {
+				currentBlock.DataEnd = len(colA)
+			}
 			blocks = append(blocks, *currentBlock)
 		}
 	}
 
 	return blocks, nil
+}
+
+// isNumericRow 判断 A 列文本是否为数值（含正负号、小数点、科学计数法）。
+func isNumericRow(text string) bool {
+	if text == "" {
+		return false
+	}
+	// 用 strconv 判断是否可解析为浮点数
+	_, err := strconv.ParseFloat(text, 64)
+	return err == nil
 }
 
 // FillStandardValues 将标准压力值填入指定通道块的指定列。
@@ -105,6 +135,7 @@ func FillMeasureData(f *excelize.File, block ChannelBlock, col string, header st
 }
 
 // FillRoundTripData 将回程测量数据填入指定列（正程+回程）。
+// 不限制 DataEnd——回程模板中 D 列有 2x 行空间容纳正程+回程数据。
 func FillRoundTripData(f *excelize.File, block ChannelBlock, col string, forwardData, backwardData []float64) error {
 	axis := fmt.Sprintf("%s%d", col, block.HeaderRow)
 	if err := f.SetCellValue(block.Sheet, axis, "回程测量值"); err != nil {
@@ -113,11 +144,7 @@ func FillRoundTripData(f *excelize.File, block ChannelBlock, col string, forward
 
 	allData := append(forwardData, backwardData...)
 	for i, val := range allData {
-		row := block.DataStart + i
-		if row > block.DataEnd {
-			break
-		}
-		cell := fmt.Sprintf("%s%d", col, row)
+		cell := fmt.Sprintf("%s%d", col, block.DataStart+i)
 		rounded := math.Round(val*1e6) / 1e6
 		if err := f.SetCellValue(block.Sheet, cell, rounded); err != nil {
 			return err
