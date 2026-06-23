@@ -201,12 +201,14 @@ func ResolveUnit(deviceUnit, cachedUnit, dataUnit, defaultUnit string) string {
 
 // CreateMeasurementFallbackWorkbook 创建计量报告默认工作簿（无模板时使用）。
 // 版式参考 1604V2 模板：多通道块、中英文标题、边框、公式。
-func CreateMeasurementFallbackWorkbook(standardValues []float64, channels [][]float64, unit string, points []domain.PressurePoint, config domain.WorkflowConfig) *excelize.File {
+// forwardChannels 为每通道的正程显示值；backwardByTarget 仅在回程模式下使用，
+// 按 (通道, 标准压力) 索引匹配，可正确处理回程点缺失场景；为 nil 表示单程模式。
+func CreateMeasurementFallbackWorkbook(standardValues []float64, forwardChannels [][]float64, backwardByTarget []map[float64]float64, unit string, points []domain.PressurePoint, config domain.WorkflowConfig) *excelize.File {
 	f := excelize.NewFile()
 	sheet := "校准结果"
 	f.SetSheetName("Sheet1", sheet)
 
-	numChannels := len(channels)
+	numChannels := len(forwardChannels)
 	if numChannels == 0 {
 		numChannels = 1
 	}
@@ -367,8 +369,14 @@ func CreateMeasurementFallbackWorkbook(standardValues []float64, channels [][]fl
 			if rowOffset < basePointCount {
 				stdVal := standardValues[rowOffset]
 				f.SetCellValue(sheet, cellName(1, row), math.Round(stdVal*100)/100)
-				if chIdx < len(channels) && rowOffset < len(channels[chIdx]) {
-					f.SetCellValue(sheet, cellName(2, row), math.Round(channels[chIdx][rowOffset]*1e6)/1e6)
+				if chIdx < len(forwardChannels) && rowOffset < len(forwardChannels[chIdx]) {
+					f.SetCellValue(sheet, cellName(2, row), math.Round(forwardChannels[chIdx][rowOffset]*1e6)/1e6)
+				}
+				// 回程模式：第 3 列按标准压力精确匹配回程显示值。
+				if isRoundTrip && chIdx < len(backwardByTarget) {
+					if val, ok := backwardByTarget[chIdx][stdVal]; ok {
+						f.SetCellValue(sheet, cellName(3, row), math.Round(val*1e6)/1e6)
+					}
 				}
 			}
 		}

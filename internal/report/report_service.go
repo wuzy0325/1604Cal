@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io/fs"
+	"log"
 	"math"
 	"os"
 	"path/filepath"
@@ -301,9 +302,15 @@ func (s *Service) ExportMeasurementReport(ctx context.Context, points []domain.P
 	numChannels := 16
 
 	// 提取正程标准压力值
-	standardValues := collectMeasurementStandardValues(points)
-	// 按通道聚合采集数据（从平铺数据计算每通道平均值）
-	channels := collectMeasurementChannelData(points, numChannels, config.AverageCount)
+	standardValues := collectMeasurementStandardValues(points, "forward")
+	// 按通道聚合正程采集数据（从平铺数据计算每通道平均值）
+	forwardChannels := collectMeasurementChannelData(points, numChannels, config.AverageCount, "forward")
+	// 回程模式下额外按 targetPressure 索引聚合回程数据，避免回程点缺失时与正程错位；
+	// 单程模式 backwardByTarget 为空。
+	var backwardByTarget []map[float64]float64
+	if config.PressureMode == domain.PressureModeRoundTrip {
+		backwardByTarget = collectMeasurementChannelByTarget(points, numChannels, config.AverageCount, "backward")
+	}
 	unit := "kPa"
 
 	// 尝试加载模板
@@ -312,15 +319,20 @@ func (s *Service) ExportMeasurementReport(ctx context.Context, points []domain.P
 		string(config.PressureMode),
 	)
 	if err == nil && templatePath != "" {
-		return s.exportMeasurementWithTemplate(ctx, templatePath, outputPath, standardValues, channels, unit, points, config)
+		return s.exportMeasurementWithTemplate(ctx, templatePath, outputPath, standardValues, forwardChannels, backwardByTarget, unit, points, config)
 	}
 
 	// 无模板，创建默认工作簿
-	return s.exportMeasurementFallback(outputPath, standardValues, channels, unit, points, config)
+	return s.exportMeasurementFallback(outputPath, standardValues, forwardChannels, backwardByTarget, unit, points, config)
 }
 
 // exportMeasurementWithTemplate 使用模板文件导出计量报告。
-func (s *Service) exportMeasurementWithTemplate(ctx context.Context, templatePath, outputPath string, standardValues []float64, channels [][]float64, unit string, points []domain.PressurePoint, config domain.WorkflowConfig) error {
+// 计量模板列映射：
+//   单程模板 *s.xlsx：A=标准压力，B=设备显示值，C=示值误差(公式)，D=不确定度
+//   回程模板 *m.xlsx：A=标准压力，B=正程显示值(Forward stroke)，C=回程显示值(Return stroke)，D=示值误差(公式)，E=回差(公式)
+// backwardByTarget 按 (通道, 标准压力) 索引，确保 C 列严格按 A 列标准值对齐，
+// 即便部分回程点未完成也不会发生静默错位。
+func (s *Service) exportMeasurementWithTemplate(ctx context.Context, templatePath, outputPath string, standardValues []float64, forwardChannels [][]float64, backwardByTarget []map[float64]float64, unit string, points []domain.PressurePoint, config domain.WorkflowConfig) error {
 	f, err := LoadTemplate(templatePath)
 	if err != nil {
 		return fmt.Errorf("%w: load template: %v", apperrors.ErrReportExport, err)
@@ -332,13 +344,14 @@ func (s *Service) exportMeasurementWithTemplate(ctx context.Context, templatePat
 		return fmt.Errorf("%w: find channel blocks: %v", apperrors.ErrReportExport, err)
 	}
 
+	isRoundTrip := config.PressureMode == domain.PressureModeRoundTrip
+
 	for i, block := range blocks {
-		if i >= len(channels) {
+		if i >= len(forwardChannels) {
 			break
 		}
 
-		// 计量模板列映射：A=标准压力, B=设备显示值, C=示值误差(公式), D=不确定度
-		// 模板行8已有列标题（Standard pressure, Device display value 等），只需填充数据行
+		// A 列填标准压力
 		for j, val := range standardValues {
 			cell := fmt.Sprintf("A%d", block.DataStart+j)
 			rounded := math.Round(val*100) / 100
@@ -347,11 +360,29 @@ func (s *Service) exportMeasurementWithTemplate(ctx context.Context, templatePat
 			}
 		}
 
-		for j, val := range channels[i] {
+		// B 列填正程显示值（单程模式即唯一显示值）
+		for j, val := range forwardChannels[i] {
 			cell := fmt.Sprintf("B%d", block.DataStart+j)
 			rounded := math.Round(val*1e6) / 1e6
 			if err := f.SetCellValue(block.Sheet, cell, rounded); err != nil {
 				return fmt.Errorf("%w: fill measure data block %d row %d: %v", apperrors.ErrReportExport, i+1, j+1, err)
+			}
+		}
+
+		// 回程模式：C 列按 A 列标准压力精确匹配回程显示值（Return stroke），
+		// 缺失的回程点保留模板初值，绝不写错行。
+		if isRoundTrip && i < len(backwardByTarget) {
+			lookup := backwardByTarget[i]
+			for j, std := range standardValues {
+				val, ok := lookup[std]
+				if !ok {
+					continue
+				}
+				cell := fmt.Sprintf("C%d", block.DataStart+j)
+				rounded := math.Round(val*1e6) / 1e6
+				if err := f.SetCellValue(block.Sheet, cell, rounded); err != nil {
+					return fmt.Errorf("%w: fill return stroke block %d row %d: %v", apperrors.ErrReportExport, i+1, j+1, err)
+				}
 			}
 		}
 	}
@@ -367,8 +398,9 @@ func (s *Service) exportMeasurementWithTemplate(ctx context.Context, templatePat
 }
 
 // exportMeasurementFallback 创建无模板的计量报告。
-func (s *Service) exportMeasurementFallback(outputPath string, standardValues []float64, channels [][]float64, unit string, points []domain.PressurePoint, config domain.WorkflowConfig) error {
-	f := CreateMeasurementFallbackWorkbook(standardValues, channels, unit, points, config)
+// 回程模式下若 backwardByTarget 非空，会同时写入"回程值"列。
+func (s *Service) exportMeasurementFallback(outputPath string, standardValues []float64, forwardChannels [][]float64, backwardByTarget []map[float64]float64, unit string, points []domain.PressurePoint, config domain.WorkflowConfig) error {
+	f := CreateMeasurementFallbackWorkbook(standardValues, forwardChannels, backwardByTarget, unit, points, config)
 	defer f.Close()
 
 	fillMeasurementWorksheetMetadata(f, unit, points, config)
@@ -461,12 +493,22 @@ func fillMeasurementWorksheetMetadata(f *excelize.File, unit string, points []do
 	}
 }
 
-// collectMeasurementStandardValues 从计量压力点中提取正程已完成的标准值。
+// matchDirection 按指定方向过滤压力点。
+// direction="forward" 接受 Direction 为空或 "forward"；direction="backward" 仅接受 "backward"。
+func matchDirection(pointDirection, direction string) bool {
+	if direction == "backward" {
+		return pointDirection == "backward"
+	}
+	// 默认按正程：兼容旧数据 Direction 为空的情况
+	return pointDirection == "" || pointDirection == "forward"
+}
+
+// collectMeasurementStandardValues 从计量压力点中提取指定方向已完成的标准值。
 // 过滤条件与 collectMeasurementChannelData 保持一致，确保标准值和通道数据一一对应。
-func collectMeasurementStandardValues(points []domain.PressurePoint) []float64 {
+func collectMeasurementStandardValues(points []domain.PressurePoint, direction string) []float64 {
 	values := make([]float64, 0, len(points))
 	for _, p := range points {
-		if p.Direction == "backward" || p.Status != "completed" || len(p.CollectedData) == 0 {
+		if !matchDirection(p.Direction, direction) || p.Status != "completed" || len(p.CollectedData) == 0 {
 			continue
 		}
 		values = append(values, p.TargetPressure)
@@ -474,16 +516,18 @@ func collectMeasurementStandardValues(points []domain.PressurePoint) []float64 {
 	return values
 }
 
-// collectMeasurementChannelData 从平铺的 CollectedData 中按通道聚合平均值。
-// 计量模块的 CollectedData 是平铺格式：sample0_ch0, sample0_ch1, ..., sampleN_ch0, sampleN_ch1。
-func collectMeasurementChannelData(points []domain.PressurePoint, numChannels, averageCount int) [][]float64 {
-	channels := make([][]float64, numChannels)
-	for i := range channels {
-		channels[i] = make([]float64, 0)
+// collectMeasurementChannelByTarget 按 (通道, 标准压力) 聚合指定方向的平均值，
+// 返回 channels[ch][targetPressure] = avg。键直接使用 float64 的 TargetPressure
+// （等距生成时由 RoundToPrecision 量化，存在精确相等保证）。
+// 跳过未完成、CollectedData 为空、以及无法推断 samplesPerChannel 的异常点。
+func collectMeasurementChannelByTarget(points []domain.PressurePoint, numChannels, averageCount int, direction string) []map[float64]float64 {
+	result := make([]map[float64]float64, numChannels)
+	for i := range result {
+		result[i] = make(map[float64]float64)
 	}
 
 	for _, p := range points {
-		if p.Direction == "backward" || p.Status != "completed" {
+		if !matchDirection(p.Direction, direction) || p.Status != "completed" {
 			continue
 		}
 		if len(p.CollectedData) == 0 {
@@ -495,9 +539,58 @@ func collectMeasurementChannelData(points []domain.PressurePoint, numChannels, a
 			samplesPerChannel = len(p.CollectedData) / numChannels
 		}
 		if samplesPerChannel <= 0 {
-			for ch := 0; ch < numChannels; ch++ {
-				channels[ch] = append(channels[ch], 0)
+			log.Printf("report: skip measurement point index=%d direction=%s: cannot infer samplesPerChannel from len(CollectedData)=%d, numChannels=%d",
+				p.Index, p.Direction, len(p.CollectedData), numChannels)
+			continue
+		}
+
+		for ch := 0; ch < numChannels; ch++ {
+			sum := 0.0
+			count := 0
+			for sIdx := 0; sIdx < samplesPerChannel; sIdx++ {
+				idx := sIdx*numChannels + ch
+				if idx < len(p.CollectedData) {
+					sum += p.CollectedData[idx]
+					count++
+				}
 			}
+			if count == 0 {
+				continue
+			}
+			result[ch][p.TargetPressure] = sum / float64(count)
+		}
+	}
+
+	return result
+}
+
+// collectMeasurementChannelData 从平铺的 CollectedData 中按通道聚合指定方向的平均值。
+// 计量模块的 CollectedData 是平铺格式：sample0_ch0, sample0_ch1, ..., sampleN_ch0, sampleN_ch1。
+// direction 为 "forward" 时仅聚合正程点，为 "backward" 时仅聚合回程点。
+// 返回顺序与 points 中匹配方向点的出现顺序一致；如需按标准压力查找回程数据，
+// 请改用 collectMeasurementChannelByTarget。
+func collectMeasurementChannelData(points []domain.PressurePoint, numChannels, averageCount int, direction string) [][]float64 {
+	channels := make([][]float64, numChannels)
+	for i := range channels {
+		channels[i] = make([]float64, 0)
+	}
+
+	for _, p := range points {
+		if !matchDirection(p.Direction, direction) || p.Status != "completed" {
+			continue
+		}
+		if len(p.CollectedData) == 0 {
+			continue
+		}
+
+		samplesPerChannel := averageCount
+		if samplesPerChannel <= 0 {
+			samplesPerChannel = len(p.CollectedData) / numChannels
+		}
+		// 异常数据点直接跳过，避免向通道写入 0 导致下游对齐错误。
+		if samplesPerChannel <= 0 {
+			log.Printf("report: skip measurement point index=%d direction=%s: cannot infer samplesPerChannel from len(CollectedData)=%d, numChannels=%d",
+				p.Index, p.Direction, len(p.CollectedData), numChannels)
 			continue
 		}
 
