@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io/fs"
+	"math"
 	"os"
 	"path/filepath"
 	"sort"
@@ -336,15 +337,22 @@ func (s *Service) exportMeasurementWithTemplate(ctx context.Context, templatePat
 			break
 		}
 
-		if i == 0 {
-			if err := FillStandardValues(f, block, "B", standardValues, unit); err != nil {
-				return fmt.Errorf("%w: fill standard values: %v", apperrors.ErrReportExport, err)
+		// 计量模板列映射：A=标准压力, B=设备显示值, C=示值误差(公式), D=不确定度
+		// 模板行8已有列标题（Standard pressure, Device display value 等），只需填充数据行
+		for j, val := range standardValues {
+			cell := fmt.Sprintf("A%d", block.DataStart+j)
+			rounded := math.Round(val*100) / 100
+			if err := f.SetCellValue(block.Sheet, cell, rounded); err != nil {
+				return fmt.Errorf("%w: fill standard values block %d row %d: %v", apperrors.ErrReportExport, i+1, j+1, err)
 			}
 		}
 
-		header := fmt.Sprintf("通道%d", i+1)
-		if err := FillMeasureData(f, block, "C", header, channels[i]); err != nil {
-			return fmt.Errorf("%w: fill measure data block %d: %v", apperrors.ErrReportExport, i+1, err)
+		for j, val := range channels[i] {
+			cell := fmt.Sprintf("B%d", block.DataStart+j)
+			rounded := math.Round(val*1e6) / 1e6
+			if err := f.SetCellValue(block.Sheet, cell, rounded); err != nil {
+				return fmt.Errorf("%w: fill measure data block %d row %d: %v", apperrors.ErrReportExport, i+1, j+1, err)
+			}
 		}
 	}
 
@@ -381,11 +389,15 @@ func fillMeasurementWorksheetMetadata(f *excelize.File, unit string, points []do
 
 	nowStr := time.Now().Format("2006-01-02 15:04:05")
 
-	// 从 points 提取首条采集时间（如有）
+	// 从 points 提取首条采集时间（如有），转换为可读格式
 	startTime := nowStr
 	for _, p := range points {
 		if p.CollectTime != "" {
-			startTime = p.CollectTime
+			if t, err := time.Parse(time.RFC3339, p.CollectTime); err == nil {
+				startTime = t.Format("2006-01-02 15:04:05")
+			} else {
+				startTime = p.CollectTime
+			}
 			break
 		}
 	}
@@ -415,15 +427,46 @@ func fillMeasurementWorksheetMetadata(f *excelize.File, unit string, points []do
 				}
 				continue
 			}
+
+			// 匹配"Min(Range)"标签→右侧单元格填充最小量程
+			if strings.Contains(text, "Min(Range)") || strings.Contains(text, "Min（Range）") {
+				rightCell := cellName(col+1, row)
+				f.SetCellValue(sheet, rightCell, config.MinPressure)
+				continue
+			}
+
+			// 匹配"Max(Range)"标签→右侧单元格填充最大量程
+			if strings.Contains(text, "Max(Range)") || strings.Contains(text, "Max（Range）") {
+				rightCell := cellName(col+1, row)
+				f.SetCellValue(sheet, rightCell, config.MaxPressure)
+				continue
+			}
+
+			// 匹配"Accuracy"标签→右侧单元格填充准确度等级
+			if strings.Contains(text, "Accuracy") || strings.Contains(text, "准确度") {
+				rightCell := cellName(col+1, row)
+				f.SetCellValue(sheet, rightCell, config.PrecisionLevel)
+				continue
+			}
+
+			// 匹配"Equipment Number"或"设备编号"标签→右侧单元格填充设备编号
+			if strings.Contains(text, "Equipment Number") || strings.Contains(text, "设备编号") {
+				rightCell := cellName(col+1, row)
+				if config.DeviceNumber != "" {
+					f.SetCellValue(sheet, rightCell, config.DeviceNumber)
+				}
+				continue
+			}
 		}
 	}
 }
 
-// collectMeasurementStandardValues 从计量压力点中提取正程标准值。
+// collectMeasurementStandardValues 从计量压力点中提取正程已完成的标准值。
+// 过滤条件与 collectMeasurementChannelData 保持一致，确保标准值和通道数据一一对应。
 func collectMeasurementStandardValues(points []domain.PressurePoint) []float64 {
 	values := make([]float64, 0, len(points))
 	for _, p := range points {
-		if p.Direction == "backward" {
+		if p.Direction == "backward" || p.Status != "completed" || len(p.CollectedData) == 0 {
 			continue
 		}
 		values = append(values, p.TargetPressure)

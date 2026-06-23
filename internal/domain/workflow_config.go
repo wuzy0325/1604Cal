@@ -30,4 +30,5 @@ type WorkflowConfig struct {
 	ControlMode       ControlMode  `json:"controlMode"`
 	PressureMode      PressureMode `json:"pressureMode"`
 	CustomPoints      []float64    `json:"customPoints"`
+	DeviceNumber      string       `json:"deviceNumber"`
 }
