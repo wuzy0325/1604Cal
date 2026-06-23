@@ -296,7 +296,6 @@ defineExpose({ checkUnitConsistency })
   background: #f6f7f6;
   border-right: 1px solid $slate-200;
   position: relative;
-  transition: width 0.25s ease;
   flex-shrink: 0;
   display: flex;
   flex-direction: column;

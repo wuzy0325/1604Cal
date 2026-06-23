@@ -47,15 +47,23 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import {
   House, Tools, DataLine, SetUp, Odometer, DArrowRight, Document
 } from '@element-plus/icons-vue'
 
+const emit = defineEmits<{
+  'collapse-change': [collapsed: boolean]
+}>()
+
 const router = useRouter()
 const route = useRoute()
 const collapsed = ref(false)
+
+watch(collapsed, (val) => {
+  emit('collapse-change', val)
+})
 
 const menuItems = [
   { path: '/device-management', icon: Tools, title: '设备管理' },
@@ -75,7 +83,7 @@ function handleNavigate(path: string): void {
 </script>
 
 <style scoped lang="scss">
-$font-sans: 'Inter', 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+$font-sans: 'DM Sans', 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
 $mint: #10b981;
 $mint-light: #34d399;
 $mint-dark: #059669;
@@ -87,12 +95,8 @@ $slate-700: #374151;
 $slate-800: #1f2937;
 $slate-900: #111827;
 
-$sidebar-expanded: 180px;
-$sidebar-collapsed: 52px;
-$transition-sidebar: 250ms cubic-bezier(0.4, 0, 0.2, 1);
-
 .sidebar {
-  width: $sidebar-expanded;
+  width: 100%;
   height: 100%;
   background: #f6f7f6;
   border-right: 1px solid $slate-200;
@@ -102,11 +106,9 @@ $transition-sidebar: 250ms cubic-bezier(0.4, 0, 0.2, 1);
   position: relative;
   z-index: 20;
   overflow: hidden;
-  transition: width $transition-sidebar;
   font-family: $font-sans;
 
   &.collapsed {
-    width: $sidebar-collapsed;
     align-items: center;
   }
 }

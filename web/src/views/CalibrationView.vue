@@ -44,7 +44,7 @@
     </header>
 
     <!-- ═══ 工作台 ═══ -->
-    <div class="workbench">
+    <div class="workbench" :class="{ 'sidebar-collapsed': sidebarCollapsed }">
       <CalibrationSidebar :collapsed="sidebarCollapsed" @toggle="sidebarCollapsed = !sidebarCollapsed" />
 
       <main class="workbench-main">
@@ -180,7 +180,7 @@ const deviationClass = computed(() => {
 
 <style scoped lang="scss">
 /* ── 设计令牌 ── */
-$font-sans: 'Inter', 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+$font-sans: 'DM Sans', 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
 $font-mono: 'JetBrains Mono', 'Fira Code', 'SF Mono', Consolas, monospace;
 $mint: #10b981;
 $mint-light: #34d399;
@@ -348,11 +348,17 @@ $amber: #f59e0b;
 .workbench {
   flex: 1;
   min-height: 0;
-  display: flex;
+  display: grid;
+  grid-template-columns: 280px 1fr;
   gap: 16px;
   overflow: hidden;
   position: relative;
   padding: 4px 24px 24px;
+  transition: grid-template-columns 250ms cubic-bezier(0.4, 0, 0.2, 1);
+
+  &.sidebar-collapsed {
+    grid-template-columns: 32px 1fr;
+  }
 
   // 坐标纸背景
   &::before {

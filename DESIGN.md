@@ -28,29 +28,29 @@ colors:
   border: "#e5e7eb"
 typography:
   display:
-    fontFamily: "'Inter', 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif"
+    fontFamily: "'DM Sans', 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif"
     fontSize: "36px"
     fontWeight: 700
     lineHeight: 1.2
     letterSpacing: "-0.02em"
   headline:
-    fontFamily: "'Inter', 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif"
+    fontFamily: "'DM Sans', 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif"
     fontSize: "28px"
     fontWeight: 700
     lineHeight: 1.2
     letterSpacing: "-0.02em"
   title:
-    fontFamily: "'Inter', 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif"
+    fontFamily: "'DM Sans', 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif"
     fontSize: "20px"
     fontWeight: 600
     lineHeight: 1.25
   body:
-    fontFamily: "'Inter', 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif"
+    fontFamily: "'DM Sans', 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif"
     fontSize: "14px"
     fontWeight: 400
     lineHeight: 1.5
   label:
-    fontFamily: "'Inter', 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif"
+    fontFamily: "'DM Sans', 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif"
     fontSize: "12px"
     fontWeight: 500
     lineHeight: 1.5
@@ -144,7 +144,7 @@ The palette is restrained: one primary accent (Fresh Mint) against a Warm Slate 
 
 ## 3. Typography: The Engineered Sans
 
-**Display Font:** Inter, SF Pro Display, -apple-system, BlinkMacSystemFont, Segoe UI, PingFang SC, Microsoft YaHei, sans-serif
+**Display Font:** DM Sans, SF Pro Display, -apple-system, BlinkMacSystemFont, Segoe UI, PingFang SC, Microsoft YaHei, sans-serif
 **Body Font:** Same stack.
 **Label/Mono Font:** JetBrains Mono, Fira Code, SF Mono, Consolas, monospace.
 

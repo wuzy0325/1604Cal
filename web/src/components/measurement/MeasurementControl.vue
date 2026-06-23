@@ -55,7 +55,7 @@
           <span class="progress-percent">{{ progressPercent }}%</span>
         </div>
         <div class="progress-track">
-          <div class="progress-fill" :style="{ width: progressPercent + '%' }" />
+          <div class="progress-fill" :style="{ transform: 'scaleX(' + progressPercent / 100 + ')' }" />
         </div>
       </div>
 
@@ -393,7 +393,9 @@ const canStart = computed(() => {
 .progress-fill {
   height: 100%;
   background: linear-gradient(90deg, $mint, $mint-light);
-  transition: width 0.3s ease;
+  width: 100%;
+  transform-origin: left;
+  transition: transform 0.3s ease;
 }
 
 .control-buttons {

@@ -28,45 +28,32 @@
       </div>
     </header>
 
-    <section class="metric-grid">
-      <article class="metric-card">
-        <p class="metric-label">
-          设备总数
-        </p>
-        <strong class="metric-value">{{ devices.length }}</strong>
-      </article>
-      <article class="metric-card">
-        <p class="metric-label">
-          计量设备
-        </p>
-        <strong class="metric-value">{{ measureCount }}</strong>
-      </article>
-      <article class="metric-card">
-        <p class="metric-label">
-          打压设备
-        </p>
-        <strong class="metric-value">{{ pressureCount }}</strong>
-      </article>
-      <article class="metric-card">
-        <p class="metric-label">
-          在线设备
-        </p>
-        <strong class="metric-value success">{{ connectedCount }}</strong>
-      </article>
-      <article class="metric-card">
-        <p class="metric-label">
-          异常设备
-        </p>
-        <strong class="metric-value danger">{{ errorCount }}</strong>
-      </article>
-      <article class="metric-card">
-        <p class="metric-label">
-          单位一致性
-        </p>
-        <strong :class="['metric-value', unitConsistent ? 'success' : 'warning']">
-          {{ unitStatusText }}
-        </strong>
-      </article>
+    <section class="status-strip">
+      <!-- 关键状态：异常与在线 -->
+      <div class="status-highlight">
+        <div class="status-item" :class="{ 'has-error': errorCount > 0 }">
+          <span class="status-dot" :class="errorCount > 0 ? 'dot-danger' : 'dot-success'" />
+          <strong class="status-value" :class="errorCount > 0 ? 'danger' : 'success'">{{ errorCount }}</strong>
+          <span class="status-label">异常</span>
+        </div>
+        <div class="status-item">
+          <span class="status-dot dot-success" />
+          <strong class="status-value success">{{ connectedCount }}</strong>
+          <span class="status-label">在线</span>
+        </div>
+        <div class="status-item">
+          <span class="status-dot" :class="unitConsistent ? 'dot-success' : 'dot-warning'" />
+          <strong :class="['status-value', unitConsistent ? 'success' : 'warning']">{{ unitStatusText }}</strong>
+          <span class="status-label">单位</span>
+        </div>
+      </div>
+      <!-- 辅助信息：设备分类计数 -->
+      <div class="status-aux">
+        <span>共 <strong>{{ devices.length }}</strong> 台</span>
+        <span class="aux-divider" />
+        <span>计量 <strong>{{ measureCount }}</strong></span>
+        <span>打压 <strong>{{ pressureCount }}</strong></span>
+      </div>
     </section>
 
     <section class="policy-strip">
@@ -991,48 +978,81 @@ onUnmounted(() => {
   }
 }
 
-.metric-grid {
-  display: grid;
-  gap: 10px;
-  grid-template-columns: repeat(6, 1fr);
-  margin-bottom: 12px;
-  flex-shrink: 0;
-}
-
-.metric-card {
+.status-strip {
   background: $slate-50;
   border: 1px solid $slate-200;
   border-radius: 8px;
-  padding: 10px 12px;
-  text-align: center;
+  padding: 12px 16px;
+  margin-bottom: 12px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
 }
 
-.metric-label {
-  color: $slate-500;
-  font-size: 11px;
-  margin: 0 0 4px;
-  font-weight: 500;
-  letter-spacing: 0.05em;
+.status-highlight {
+  display: flex;
+  align-items: center;
+  gap: 20px;
 }
 
-.metric-value {
-  color: $slate-800;
-  display: block;
-  font-size: 18px;
+.status-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+
+  &.has-error {
+    .status-value { font-size: 18px; }
+  }
+}
+
+.status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+
+  &.dot-success { background: $green; }
+  &.dot-danger { background: $red; box-shadow: 0 0 4px rgba(239, 68, 68, 0.4); }
+  &.dot-warning { background: $amber; }
+}
+
+.status-value {
+  font-size: 15px;
   font-weight: 600;
   font-family: $font-mono;
+  color: $slate-800;
 
-  &.success {
-    color: $green;
-  }
+  &.success { color: $green; }
+  &.danger { color: $red; }
+  &.warning { color: $amber; }
+}
 
-  &.danger {
-    color: $red;
-  }
+.status-label {
+  font-size: 12px;
+  color: $slate-500;
+  font-weight: 500;
+}
 
-  &.warning {
-    color: $amber;
+.status-aux {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: $slate-400;
+
+  strong {
+    color: $slate-600;
+    font-weight: 600;
+    font-family: $font-mono;
   }
+}
+
+.aux-divider {
+  width: 1px;
+  height: 12px;
+  background: $slate-200;
 }
 
 .policy-strip {
@@ -1370,19 +1390,9 @@ onUnmounted(() => {
   }
 }
 
-@media (max-width: 1200px) {
-  .metric-grid {
-    grid-template-columns: repeat(3, 1fr);
-  }
-}
-
 @media (max-width: 900px) {
   .panel-header {
     flex-direction: column;
-  }
-
-  .metric-grid {
-    grid-template-columns: repeat(2, 1fr);
   }
 
   .policy-strip {

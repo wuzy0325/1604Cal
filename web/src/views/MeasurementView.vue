@@ -37,7 +37,7 @@
     </header>
 
     <!-- ═══ 工作台主体 ═══ -->
-    <div class="workbench">
+    <div class="workbench" :class="{ 'sidebar-collapsed': sidebarCollapsed }">
       <MeasurementSidebar
         ref="sidebarRef"
         :collapsed="sidebarCollapsed"
@@ -227,16 +227,13 @@ watch(
     measurementStore.alarmConfig.enabled,
     measurementStore.alarmConfig.soundEnabled,
     measurementStore.alarmConfig.confirmOnAlarm,
-    measurementStore.channels,
-    measurementStore.measurementParams.precisionLevel
+    measurementStore.channels
   ],
   () => {
     if (alarmSaveTimer) clearTimeout(alarmSaveTimer)
     alarmSaveTimer = setTimeout(() => {
       const cfg = { ...measurementStore.alarmConfig }
       cfg.enabledChannels = [...measurementStore.channels]
-      cfg.threshold = measurementStore.measurementParams.precisionLevel
-      cfg.isRelative = true
       saveMeasurementAlarmConfig(cfg)
     }, 250)
   },
@@ -294,15 +291,8 @@ watch(() => measurementStore.stabilityTimeoutPending, async (pending) => {
   }
 })
 
-async function handleAlarmDecision(decision: 'continue' | 'retry') {
-  if (decision === 'retry') {
-    const pointIndex = alarmPoint.value?.index
-    if (pointIndex === undefined) return
-    await measurementStore.resolveAlarm('retry')
-    await measurementStore.manualCollect(pointIndex)
-  } else {
-    await measurementStore.resolveAlarm(decision)
-  }
+async function handleAlarmDecision(decision: 'continue' | 'recollect') {
+  await measurementStore.resolveAlarm(decision)
 }
 
 /* ── 导出 ── */
@@ -322,7 +312,7 @@ async function handleExport(path: string) {
 </script>
 
 <style scoped lang="scss">
-$font-sans: 'Inter', 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+$font-sans: 'DM Sans', 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
 $font-mono: 'JetBrains Mono', 'Fira Code', 'SF Mono', Consolas, monospace;
 $mint: #10b981;
 $mint-light: #34d399;
@@ -481,11 +471,17 @@ $amber: #f59e0b;
 .workbench {
   flex: 1;
   min-height: 0;
-  display: flex;
+  display: grid;
+  grid-template-columns: 280px 1fr;
   gap: 16px;
   overflow: hidden;
   position: relative;
   padding: 4px 24px 24px;
+  transition: grid-template-columns 250ms cubic-bezier(0.4, 0, 0.2, 1);
+
+  &.sidebar-collapsed {
+    grid-template-columns: 32px 1fr;
+  }
 
   &::before {
     content: '';

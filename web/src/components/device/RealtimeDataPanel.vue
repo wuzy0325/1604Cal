@@ -48,7 +48,7 @@
         >
           <div
             class="mini-bar-fill"
-            :style="{ width: pressurePercentage + '%' }"
+            :style="{ transform: 'scaleX(' + pressurePercentage / 100 + ')' }"
             :class="pressureBarClass"
           />
         </div>
@@ -137,7 +137,7 @@
       >
         <div
           class="progress-fill"
-          :style="{ width: progressPercent + '%' }"
+          :style="{ transform: 'scaleX(' + progressPercent / 100 + ')' }"
         />
       </div>
       <div class="progress-meta">
@@ -692,7 +692,9 @@ onUnmounted(() => {
 .mini-bar-fill {
   height: 100%;
   border-radius: 2px;
-  transition: width 0.3s ease, background-color 0.3s ease;
+  width: 100%;
+  transform-origin: left;
+  transition: transform 0.3s ease, background-color 0.3s ease;
 }
 
 .bar-normal { background: var(--status-info); }
@@ -899,7 +901,9 @@ onUnmounted(() => {
   height: 100%;
   background: var(--accent-primary);
   border-radius: 2px;
-  transition: width 0.3s ease;
+  width: 100%;
+  transform-origin: left;
+  transition: transform 0.3s ease;
 }
 
 .progress-meta {

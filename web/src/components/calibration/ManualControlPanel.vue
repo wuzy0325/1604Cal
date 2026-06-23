@@ -34,7 +34,7 @@
     <!-- 稳定进度条 -->
     <div v-if="stabilityStatus && !stabilityStatus.isStable" class="stability-progress">
       <div class="progress-track">
-        <div class="progress-fill" :style="{ width: (stabilityStatus.progress || 0) + '%' }" />
+        <div class="progress-fill" :style="{ transform: 'scaleX(' + (Math.min(Math.max(stabilityStatus.progress || 0, 0), 100) / 100) + ')' }" />
       </div>
     </div>
 
@@ -101,7 +101,7 @@ async function handleCollect() {
 </script>
 
 <style scoped lang="scss">
-$font-sans: 'Inter', 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+$font-sans: 'DM Sans', 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
 $font-mono: 'JetBrains Mono', 'Fira Code', 'SF Mono', Consolas, monospace;
 $mint: #10b981;
 $mint-light: #34d399;
@@ -284,6 +284,8 @@ $blue: #3b82f6;
 .progress-fill {
   height: 100%;
   background: linear-gradient(90deg, $mint, $mint-light);
-  transition: width 0.3s ease;
+  width: 100%;
+  transform-origin: left;
+  transition: transform 0.3s ease;
 }
 </style>

@@ -125,7 +125,7 @@ async function handleStopAll(): Promise<void> {
 </script>
 
 <style scoped lang="scss">
-$font-sans: 'Inter', 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+$font-sans: 'DM Sans', 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
 $font-mono: 'JetBrains Mono', 'Fira Code', 'SF Mono', Consolas, monospace;
 $mint: #10b981;
 $slate-50: #f9fafb;
@@ -224,9 +224,10 @@ $red: #ef4444;
 /* ═══ 统计栏 ═══ */
 .stats-bar {
   display: flex;
-  gap: 12px;
+  gap: 8px;
   flex-shrink: 0;
-  padding: 16px 24px 0;
+  padding: 12px 24px 0;
+  align-items: center;
 }
 
 /* ═══ 内容滚动区 ═══ */

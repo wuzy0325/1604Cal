@@ -7,7 +7,7 @@
           <span class="stable-label">{{ calibrationStore.isStable ? '已稳定' : '稳定中' }}</span>
         </div>
         <div class="progress-track">
-          <div class="progress-fill" :style="{ width: progressPercent + '%' }" />
+          <div class="progress-fill" :style="{ transform: 'scaleX(' + progressPercent / 100 + ')' }" />
         </div>
       </div>
 
@@ -160,7 +160,7 @@ const progressPercent = computed(() => {
 </script>
 
 <style scoped lang="scss">
-$font-sans: 'Inter', 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+$font-sans: 'DM Sans', 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
 $font-mono: 'JetBrains Mono', 'Fira Code', 'SF Mono', Consolas, monospace;
 $mint: #10b981;
 $mint-light: #34d399;
@@ -240,7 +240,9 @@ $amber: #f59e0b;
 .progress-fill {
   height: 100%;
   background: linear-gradient(90deg, $mint, $mint-light);
-  transition: width 0.3s ease;
+  width: 100%;
+  transform-origin: left;
+  transition: transform 0.3s ease;
 }
 
 .action-group {

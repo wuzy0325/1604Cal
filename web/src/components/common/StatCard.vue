@@ -1,14 +1,8 @@
 <template>
-  <div class="stat-card">
-    <div class="label">
-      {{ label }}
-    </div>
-    <div
-      class="value"
-      :style="{ color: color }"
-    >
-      {{ value }}
-    </div>
+  <div class="stat-chip" :class="{ highlighted: !!color }">
+    <span v-if="color" class="chip-dot" :style="{ background: color }" />
+    <span class="chip-label">{{ label }}</span>
+    <strong class="chip-value" :style="color ? { color } : {}">{{ value }}</strong>
   </div>
 </template>
 
@@ -21,36 +15,40 @@ defineProps<{
 </script>
 
 <style scoped lang="scss">
-.stat-card {
+.stat-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
   background: #ffffff;
   border: 1px solid $slate-200;
-  border-radius: 10px;
-  padding: 12px 20px;
-  text-align: center;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
-  transition: all 0.2s ease;
+  border-radius: 8px;
   font-family: $font-sans;
-  min-width: 100px;
+  transition: border-color 0.2s ease;
 
-  &:hover {
-    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.07), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
-    border-color: rgba($mint, 0.3);
+  &.highlighted {
+    background: $slate-50;
   }
+}
 
-  .label {
-    color: $slate-500;
-    font-size: 12px;
-    margin-bottom: 4px;
-    font-weight: 500;
-    letter-spacing: 0.05em;
-  }
+.chip-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
 
-  .value {
-    color: $slate-800;
-    font-size: 24px;
-    font-weight: 700;
-    font-family: $font-mono;
-    line-height: 1.2;
-  }
+.chip-label {
+  font-size: 12px;
+  color: $slate-500;
+  font-weight: 500;
+}
+
+.chip-value {
+  font-size: 15px;
+  font-weight: 600;
+  color: $slate-800;
+  font-family: $font-mono;
+  line-height: 1;
 }
 </style>
