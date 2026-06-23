@@ -1,12 +1,12 @@
 package domain
 
 // AlarmConfig 报警配置，控制精度超限的判定与响应行为。
-// 标定流程使用 PrecisionThreshold（满量程百分比），计量流程使用 Threshold + IsRelative。
+// 标定与计量流程统一使用量程引用误差（FS%）：
+//   允许偏差 = (MaxPressure - MinPressure) × PrecisionThreshold
+// 当量程为 0 时降级为按目标值比例计算。
 type AlarmConfig struct {
 	Enabled            bool    `json:"enabled"`
-	PrecisionThreshold float64 `json:"precisionThreshold"` // 标定用：满量程百分比
-	Threshold          float64 `json:"threshold"`          // 计量用：绝对/相对阈值
-	IsRelative         bool    `json:"isRelative"`          // 计量用：是否相对目标值
+	PrecisionThreshold float64 `json:"precisionThreshold"` // 满量程百分比（标定模块使用）
 	SoundEnabled       bool    `json:"soundEnabled"`
 	ConfirmOnAlarm     bool    `json:"confirmOnAlarm"`
 	EnabledChannels    []int   `json:"enabledChannels"`

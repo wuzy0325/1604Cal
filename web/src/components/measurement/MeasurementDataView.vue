@@ -168,29 +168,27 @@ const currentPointIndex = computed(() => measurementStore.currentPointIndex)
 const precisionStep = computed(() => Math.pow(10, -(measurementStore.measurementParams.precision || 2)))
 
 const alarmEnabled = computed(() => measurementStore.alarmConfig.enabled)
-const precisionLevel = computed(() => measurementStore.measurementParams.precisionLevel)
-const minPressure = computed(() => measurementStore.measurementParams.minPressure)
-const maxPressure = computed(() => measurementStore.measurementParams.maxPressure)
+
+// 量程引用误差容差：与后端 CheckAlarm、报告模板公式一致。
+function calculateAllowance(target: number): number {
+  const p = measurementStore.measurementParams
+  const span = Math.abs(p.maxPressure - p.minPressure)
+  const allowance = span * p.precisionLevel
+  if (allowance < 1e-10) {
+    return Math.abs(target) * p.precisionLevel
+  }
+  return allowance
+}
 
 function getPointOverLimitChannels(pt: MeasurementPoint): number[] {
   if (!alarmEnabled.value) return []
   if (!pt.collectedData || pt.collectedData.length === 0) return []
 
-  const span = Math.abs(maxPressure.value - minPressure.value)
-  let allowance: number
-  
-  if (span > 1e-10) {
-    allowance = span * precisionLevel.value
-  } else {
-    allowance = Math.abs(pt.targetPressure) * precisionLevel.value
-  }
-
+  const allowance = calculateAllowance(pt.targetPressure)
   const overLimit: number[] = []
   for (let ch = 1; ch <= pt.collectedData.length; ch++) {
     const collectedVal = pt.collectedData[ch - 1]
-    const deviation = Math.abs(collectedVal - pt.targetPressure)
-
-    if (deviation > allowance) {
+    if (Math.abs(collectedVal - pt.targetPressure) > allowance) {
       overLimit.push(ch)
     }
   }
@@ -211,15 +209,7 @@ function isSampleOverLimit(row: DisplayRow, ch: number): boolean {
   const target = currentTargetPressure.value
   if (target === undefined) return false
 
-  const span = Math.abs(maxPressure.value - minPressure.value)
-  let allowance: number
-  if (span > 1e-10) {
-    allowance = span * precisionLevel.value
-  } else {
-    allowance = Math.abs(target) * precisionLevel.value
-  }
-
-  return Math.abs(raw - target) > allowance
+  return Math.abs(raw - target) > calculateAllowance(target)
 }
 
 const currentTargetPressure = computed(() => {

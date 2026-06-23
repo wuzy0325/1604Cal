@@ -13,7 +13,6 @@ type Alarm struct {
 	TargetPressure    float64 `json:"targetPressure"`
 	ActualPressure    float64 `json:"actualPressure"`
 	Threshold         float64 `json:"threshold"`
-	IsRelative        bool    `json:"isRelative"`
 	MaxDeviation      float64 `json:"maxDeviation"`
 	OverLimitChannels []int   `json:"overLimitChannels"`
 }
@@ -33,6 +32,7 @@ func (s *Service) GetAlarmConfig() domain.AlarmConfig {
 func (s *Service) CheckAlarm(point domain.PressurePoint) (*Alarm, error) {
 	s.mu.Lock()
 	cfg := s.alarmConfig
+	workCfg := s.config
 	s.mu.Unlock()
 
 	if !cfg.Enabled {
@@ -50,6 +50,14 @@ func (s *Service) CheckAlarm(point domain.PressurePoint) (*Alarm, error) {
 		}
 	}
 
+	// 量程引用误差：允许偏差 = 量程 x 准确度等级。
+	// 当量程为 0（如配置异常或固定单点）时降级为按目标值比例计算。
+	span := math.Abs(workCfg.MaxPressure - workCfg.MinPressure)
+	allowance := span * workCfg.PrecisionLevel
+	if allowance < 1e-10 {
+		allowance = math.Abs(point.TargetPressure) * workCfg.PrecisionLevel
+	}
+
 	var overLimit []int
 	maxDev := 0.0
 
@@ -60,14 +68,7 @@ func (s *Service) CheckAlarm(point domain.PressurePoint) (*Alarm, error) {
 		collectedVal := point.CollectedData[ch-1]
 		dev := math.Abs(collectedVal - point.TargetPressure)
 
-		var exceeds bool
-		if cfg.IsRelative && point.TargetPressure != 0 {
-			exceeds = dev/point.TargetPressure > cfg.Threshold
-		} else {
-			exceeds = dev > cfg.Threshold
-		}
-
-		if exceeds {
+		if dev > allowance {
 			overLimit = append(overLimit, ch)
 			if dev > maxDev {
 				maxDev = dev
@@ -75,28 +76,42 @@ func (s *Service) CheckAlarm(point domain.PressurePoint) (*Alarm, error) {
 		}
 	}
 
-	if len(overLimit) > 0 {
-		alarm := &Alarm{
-			PointID:           point.ID,
-			TargetPressure:    point.TargetPressure,
-			ActualPressure:    func() float64 { if point.ActualPressure != nil { return *point.ActualPressure }; return 0 }(),
-			Threshold:         cfg.Threshold,
-			IsRelative:        cfg.IsRelative,
-			MaxDeviation:      maxDev,
-			OverLimitChannels: overLimit,
-		}
-
-		s.mu.Lock()
-		s.alarmPending = true
-		s.currentAlarm = alarm
-		s.mu.Unlock()
-
-		s.publish(events.EventMeasurementAlarmTriggered, alarm)
-
-		return alarm, nil
+	if len(overLimit) == 0 {
+		return nil, nil
 	}
 
-	return nil, nil
+	// maxDeviation 表示最大偏差占量程的比值（FS 百分比小数形式）。
+	// 量程为 0 时退化为相对目标值的比例，目标值也为 0 时为 0。
+	var maxDevRatio float64
+	switch {
+	case span > 1e-10:
+		maxDevRatio = maxDev / span
+	case point.TargetPressure != 0:
+		maxDevRatio = maxDev / math.Abs(point.TargetPressure)
+	}
+
+	var actualPressure float64
+	if point.ActualPressure != nil {
+		actualPressure = *point.ActualPressure
+	}
+
+	alarm := &Alarm{
+		PointID:           point.ID,
+		TargetPressure:    point.TargetPressure,
+		ActualPressure:    actualPressure,
+		Threshold:         workCfg.PrecisionLevel,
+		MaxDeviation:      maxDevRatio,
+		OverLimitChannels: overLimit,
+	}
+
+	s.mu.Lock()
+	s.alarmPending = true
+	s.currentAlarm = alarm
+	s.mu.Unlock()
+
+	s.publish(events.EventMeasurementAlarmTriggered, alarm)
+
+	return alarm, nil
 }
 
 func (s *Service) IsAlarmPending() bool {
@@ -115,7 +130,6 @@ func (s *Service) ResolveAlarm(decision string) error {
 	alarmCh := s.alarmCh
 	s.mu.Unlock()
 
-	// 通过 channel 将决定发送给阻塞等待的采集流程
 	if alarmCh != nil {
 		select {
 		case alarmCh <- decision:
@@ -135,8 +149,6 @@ func (s *Service) ResolveAlarm(decision string) error {
 	return nil
 }
 
-// ResolveStabilityTimeout 接收前端用户对稳定超时的决定。
-// decision: "continue" 继续等待， "skip" 跳过当前点。
 func (s *Service) ResolveStabilityTimeout(decision string) {
 	select {
 	case s.stabilityTimeoutCh <- decision:

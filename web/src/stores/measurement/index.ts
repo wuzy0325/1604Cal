@@ -34,7 +34,8 @@ import {
   manualStartMeasurement,
   type MeasurementPoint,
   type MeasurementAlarmConfig,
-  type MeasurementParamsPayload
+  type MeasurementParamsPayload,
+  type AlarmDecision
 } from '@/api/measurement'
 import type { MeasurementState, CollectedRow, StabilityUpdate, AlarmData } from './types'
 import { ControlMode, PressureMode } from '@/types/calibration'
@@ -92,9 +93,7 @@ export const useMeasurementStore = defineStore('measurement', () => {
     enabled: true,
     enabledChannels: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16],
     confirmOnAlarm: false,
-    soundEnabled: true,
-    threshold: 5.0,
-    isRelative: true
+    soundEnabled: true
   })
   const alarmPending = ref(false)
   const alarmData = ref<AlarmData | null>(null)
@@ -384,7 +383,7 @@ export const useMeasurementStore = defineStore('measurement', () => {
     } catch { /* 静默 */ }
   }
 
-  const resolveAlarm = async (decision: 'continue' | 'retry') => {
+  const resolveAlarm = async (decision: AlarmDecision) => {
     await resolveMeasurementAlarm(decision)
     alarmPending.value = false
   }

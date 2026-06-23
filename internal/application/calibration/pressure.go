@@ -193,16 +193,9 @@ func (s *Service) Pressurize(ctx context.Context, pointIndex int) error {
 		}
 	}
 
-	s.updatePointStatus(pointIndex, domain.PointStatusStabilizing)
-
-	// 状态迁移: pressurizing -> stabilizing
-	if err := s.coordinator.Machine().Transition(domain.SessionStateStabilizing); err != nil {
-		// 可能已经在 stabilizing，忽略
-	}
-	s.publishSessionState()
-
-	// 等待压力稳定
-	if err := s.waitForStabilityWithMonitor(ctx, targetPressure); err != nil {
+	// 稳定等待：压力首次进入容差范围时才切换到 stabilizing，
+	// 避免压力远离目标时就显示"稳定中"。
+	if err := s.waitForStabilityWithMonitor(ctx, pointIndex, targetPressure); err != nil {
 		return fmt.Errorf("wait for stability: %w", err)
 	}
 
@@ -228,7 +221,8 @@ func (s *Service) Pressurize(ctx context.Context, pointIndex int) error {
 // 超时取 config.StabilityTimeoutMs（默认 120s），读取压力连续失败时跳过而非报错。
 // 每次 tick 发布 calibration.stability.update 事件，前端可实时展示稳定计时和进度。
 // 超时时发布 timeout 事件等待用户决策（continue/skip）。
-func (s *Service) waitForStabilityWithMonitor(ctx context.Context, targetPressure float64) error {
+// 压力首次进入容差范围时才从 pressurizing 切换到 stabilizing，避免压力远离目标就显示"稳定中"。
+func (s *Service) waitForStabilityWithMonitor(ctx context.Context, pointIndex int, targetPressure float64) error {
 	stableWaitMs := s.config.StableWaitMs
 	if stableWaitMs <= 0 {
 		stableWaitMs = 5000
@@ -248,6 +242,9 @@ func (s *Service) waitForStabilityWithMonitor(ctx context.Context, targetPressur
 
 	// 软件判稳：使用固定容差 0.001，与计量工作台保持一致
 	monitor := workflow.NewStabilityMonitor(0.001, stableDuration, nil)
+
+	// 标记是否已从 pressurizing 切换到 stabilizing
+	transitionedToStabilizing := false
 
 	for {
 		select {
@@ -296,6 +293,16 @@ func (s *Service) waitForStabilityWithMonitor(ctx context.Context, targetPressur
 					continue
 				}
 				status = monitor.FeedSample(targetPressure, currentVal)
+			}
+
+			// 压力首次进入容差范围时，才从 pressurizing 切换到 stabilizing
+			if status.IsInRange && !transitionedToStabilizing {
+				transitionedToStabilizing = true
+				s.updatePointStatus(pointIndex, domain.PointStatusStabilizing)
+				if err := s.coordinator.Machine().Transition(domain.SessionStateStabilizing); err != nil {
+					// 可能已经在 stabilizing，忽略
+				}
+				s.publishSessionState()
 			}
 
 			// 每次 tick 发布统一的稳定状态更新（对齐计量 measurement.stability.update）

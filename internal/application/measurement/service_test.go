@@ -3,7 +3,9 @@ package measurement_test
 import (
 	"bytes"
 	"context"
+	"math"
 	"testing"
+	"time"
 
 	"cal1604/internal/application/measurement"
 	"cal1604/internal/application/session"
@@ -643,7 +645,6 @@ func TestMeasurementAlarmConfig(t *testing.T) {
 		EnabledChannels: []int{1, 2},
 		ConfirmOnAlarm:  true,
 		SoundEnabled:    false,
-		Threshold:       0.01,
 	})
 
 	cfg := svc.GetAlarmConfig()
@@ -660,11 +661,15 @@ func TestMeasurementAlarmConfig(t *testing.T) {
 
 func TestMeasurementAlarmCheckNoAlarm(t *testing.T) {
 	svc, _ := setupMeasurementService()
+	svc.SetConfig(domain.WorkflowConfig{
+		MinPressure:    0,
+		MaxPressure:    1000,
+		PrecisionLevel: 0.0002, // 0.02% FS
+	})
 	svc.SetAlarmConfig(domain.AlarmConfig{
 		Enabled:         true,
 		EnabledChannels: []int{1},
 		ConfirmOnAlarm:  true,
-		Threshold:       0.1,
 	})
 
 	point := domain.PressurePoint{
@@ -684,11 +689,15 @@ func TestMeasurementAlarmCheckNoAlarm(t *testing.T) {
 
 func TestMeasurementAlarmCheckTriggersAlarm(t *testing.T) {
 	svc, _ := setupMeasurementService()
+	svc.SetConfig(domain.WorkflowConfig{
+		MinPressure:    0,
+		MaxPressure:    100,
+		PrecisionLevel: 0.0004, // 0.04% FS, allowance=0.04, dev=0.05 > 0.04
+	})
 	svc.SetAlarmConfig(domain.AlarmConfig{
 		Enabled:         true,
 		EnabledChannels: []int{1},
 		ConfirmOnAlarm:  true,
-		Threshold:       0.0004,
 	})
 
 	point := domain.PressurePoint{
@@ -708,15 +717,22 @@ func TestMeasurementAlarmCheckTriggersAlarm(t *testing.T) {
 	if len(alarm.OverLimitChannels) == 0 {
 		t.Fatal("expected over limit channels")
 	}
+	if alarm.Threshold != 0.0004 {
+		t.Fatalf("expected threshold 0.0004, got %v", alarm.Threshold)
+	}
 }
 
 func TestMeasurementAlarmBlocksWhenConfirmRequired(t *testing.T) {
 	svc, _ := setupMeasurementService()
+	svc.SetConfig(domain.WorkflowConfig{
+		MinPressure:    0,
+		MaxPressure:    100,
+		PrecisionLevel: 0.0004, // 0.04% FS, allowance=0.04, dev=0.05 > 0.04
+	})
 	svc.SetAlarmConfig(domain.AlarmConfig{
 		Enabled:         true,
 		EnabledChannels: []int{1},
 		ConfirmOnAlarm:  true,
-		Threshold:       0.0004,
 	})
 
 	point := domain.PressurePoint{
@@ -745,6 +761,188 @@ func TestMeasurementAlarmBlocksWhenConfirmRequired(t *testing.T) {
 
 	if svc.IsAlarmPending() {
 		t.Fatal("expected alarm to be resolved")
+	}
+}
+
+// TestMeasurementAlarmZeroSpanFallback 验证量程为 0 时降级为按目标值比例计算，
+// 且 MaxDeviation 不出现 NaN/Inf。
+func TestMeasurementAlarmZeroSpanFallback(t *testing.T) {
+	svc, _ := setupMeasurementService()
+	svc.SetConfig(domain.WorkflowConfig{
+		MinPressure:    100,
+		MaxPressure:    100, // span = 0
+		PrecisionLevel: 0.01,
+	})
+	svc.SetAlarmConfig(domain.AlarmConfig{
+		Enabled:         true,
+		EnabledChannels: []int{1},
+	})
+
+	point := domain.PressurePoint{
+		Index:          1,
+		TargetPressure: 100,
+		ActualPressure: float64Ptr(100),
+		CollectedData:  []float64{102}, // 偏差 2，超过 100*0.01=1
+	}
+
+	alarm, err := svc.CheckAlarm(point)
+	if err != nil {
+		t.Fatalf("CheckAlarm: %v", err)
+	}
+	if alarm == nil {
+		t.Fatal("expected alarm to be triggered")
+	}
+	// 验证 maxDeviation 是有限值，没有 NaN/Inf
+	if math.IsNaN(alarm.MaxDeviation) || math.IsInf(alarm.MaxDeviation, 0) {
+		t.Fatalf("MaxDeviation must be finite, got %v", alarm.MaxDeviation)
+	}
+	// span=0 退化到按目标值的比例：2/100 = 0.02
+	if alarm.MaxDeviation < 0.0199 || alarm.MaxDeviation > 0.0201 {
+		t.Fatalf("expected MaxDeviation ~0.02, got %v", alarm.MaxDeviation)
+	}
+}
+
+// TestRunAutoCollectionRecollect 验证用户选 recollect 后重新仅采集，不重新打压。
+func TestRunAutoCollectionRecollect(t *testing.T) {
+	svc, mDrv, pDrv := setupMeasurementServiceWithPressure()
+	pDrv.stable = true
+	svc.SetConfig(domain.WorkflowConfig{
+		MinPressure:    0,
+		MaxPressure:    100,
+		PointCount:     1,
+		CustomPoints:   []float64{50},
+		PrecisionLevel: 0.0004,
+		StableWaitMs:   1,
+		ControlMode:    domain.ControlModeAuto,
+		PressureMode:   domain.PressureModeSingle,
+	})
+	svc.SetAlarmConfig(domain.AlarmConfig{
+		Enabled:         true,
+		EnabledChannels: []int{1},
+		ConfirmOnAlarm:  true,
+	})
+
+	if _, err := svc.GeneratePressurePoints(); err != nil {
+		t.Fatalf("GeneratePressurePoints: %v", err)
+	}
+	if err := svc.StartWorkflow(context.Background(), []int{1}); err != nil {
+		t.Fatalf("StartWorkflow: %v", err)
+	}
+
+	// 第一次采集触发报警，等待用户决策时返回 recollect；第二次采集合格。
+	mDrv.data = []float64{60} // 偏差 10，远超允许偏差 0.04
+
+	done := make(chan error, 1)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	go func() {
+		done <- svc.RunAutoCollection(ctx)
+	}()
+
+	// 等报警触发后选 recollect，并把采集数据调整为合格值。
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		if svc.IsAlarmPending() {
+			break
+		}
+		select {
+		case err := <-done:
+			t.Fatalf("RunAutoCollection exited early: %v", err)
+		default:
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if !svc.IsAlarmPending() {
+		t.Fatal("expected alarm to be pending")
+	}
+
+	mDrv.data = []float64{50} // 重采集时返回合格数据
+	pressurizeCountBefore := len(pDrv.targets)
+	if err := svc.ResolveAlarm("recollect"); err != nil {
+		t.Fatalf("ResolveAlarm: %v", err)
+	}
+
+	if err := <-done; err != nil {
+		t.Fatalf("RunAutoCollection: %v", err)
+	}
+
+	// recollect 后不能再次打压（targets 数量保持）。
+	if got := len(pDrv.targets); got != pressurizeCountBefore {
+		t.Fatalf("expected no additional pressurize after recollect, got %d -> %d", pressurizeCountBefore, got)
+	}
+}
+
+// TestRunAutoCollectionContinueAfterAlarm 回归测试：用户在报警对话框选 continue 后，
+// 状态机必须能从 await_alarm_resolution 合法迁回 collecting，并继续完成后续测点。
+// 此前的实现在第二个点触发报警时 continue 后会因状态机非法迁移而中断自动采集。
+func TestRunAutoCollectionContinueAfterAlarm(t *testing.T) {
+	svc, mDrv, pDrv := setupMeasurementServiceWithPressure()
+	pDrv.stable = true
+	svc.SetConfig(domain.WorkflowConfig{
+		MinPressure:    0,
+		MaxPressure:    100,
+		PointCount:     3,
+		CustomPoints:   []float64{25, 50, 75},
+		PrecisionLevel: 0.0004,
+		StableWaitMs:   1,
+		ControlMode:    domain.ControlModeAuto,
+		PressureMode:   domain.PressureModeSingle,
+	})
+	svc.SetAlarmConfig(domain.AlarmConfig{
+		Enabled:         true,
+		EnabledChannels: []int{1},
+		ConfirmOnAlarm:  true,
+	})
+
+	if _, err := svc.GeneratePressurePoints(); err != nil {
+		t.Fatalf("GeneratePressurePoints: %v", err)
+	}
+	if err := svc.StartWorkflow(context.Background(), []int{1}); err != nil {
+		t.Fatalf("StartWorkflow: %v", err)
+	}
+
+	// 让每个点都触发报警（偏差远超允许偏差 0.04），以验证 continue 后能继续到第3点。
+	mDrv.data = []float64{60}
+
+	done := make(chan error, 1)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	go func() {
+		done <- svc.RunAutoCollection(ctx)
+	}()
+
+	// 期待 3 次报警，每次都选 continue。
+	for i := 1; i <= 3; i++ {
+		deadline := time.Now().Add(2 * time.Second)
+		for time.Now().Before(deadline) {
+			if svc.IsAlarmPending() {
+				break
+			}
+			select {
+			case err := <-done:
+				t.Fatalf("RunAutoCollection exited early at point %d: %v", i, err)
+			default:
+			}
+			time.Sleep(5 * time.Millisecond)
+		}
+		if !svc.IsAlarmPending() {
+			t.Fatalf("expected alarm pending at point %d", i)
+		}
+		if err := svc.ResolveAlarm("continue"); err != nil {
+			t.Fatalf("ResolveAlarm continue at point %d: %v", i, err)
+		}
+	}
+
+	if err := <-done; err != nil {
+		t.Fatalf("RunAutoCollection: %v", err)
+	}
+
+	// 3 个点应全部完成打压。
+	if got := len(pDrv.targets); got < 3 {
+		t.Fatalf("expected 3 pressurize targets, got %d", got)
+	}
+	if st := svc.State(); st != domain.SessionStateCompleted {
+		t.Fatalf("expected completed state, got %s", st)
 	}
 }
 

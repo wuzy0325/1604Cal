@@ -19,6 +19,9 @@ import (
 
 var ErrPointSkipped = errors.New("point skipped by user")
 
+// ErrRecollectPoint 表示用户选择重新采集当前压力点，调用方应重试当前点。
+var ErrRecollectPoint = errors.New("point recollect requested by user")
+
 // allChannels 全部16个通道，用于始终读取全部通道数据。
 var allChannels = []int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16}
 

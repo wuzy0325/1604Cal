@@ -32,6 +32,8 @@ pointsLoop:
 			break pointsLoop
 		default:
 		}
+
+		// 打压成功后，采集可能因报警需要重新采集，仅重试采集不重新打压。
 		if err := s.ManualPressurize(ctx, point.Index); err != nil {
 			if errors.Is(err, ErrPointSkipped) {
 				log.Printf("[measurement] point %d skipped by user", point.Index)
@@ -40,9 +42,34 @@ pointsLoop:
 			collectErr = err
 			break
 		}
-		if err := s.ManualCollect(ctx, point.Index); err != nil {
-			collectErr = err
-			break
+		// 单点最多重采集 maxRecollectAttempts 次，避免用户连续选择造成无限循环。
+		const maxRecollectAttempts = 10
+		recollectAttempts := 0
+	collectLoop:
+		for {
+			select {
+			case <-ctx.Done():
+				collectErr = ctx.Err()
+				break pointsLoop
+			default:
+			}
+			if err := s.ManualCollect(ctx, point.Index); err != nil {
+				if errors.Is(err, ErrRecollectPoint) {
+					recollectAttempts++
+					if recollectAttempts > maxRecollectAttempts {
+						collectErr = fmt.Errorf("point %d: exceeded max recollect attempts (%d)", point.Index, maxRecollectAttempts)
+						break pointsLoop
+					}
+					log.Printf("[measurement] point %d recollect requested (attempt %d/%d), retrying collect only",
+						point.Index, recollectAttempts, maxRecollectAttempts)
+					// ManualCollect 在报警时已转到 await_alarm_resolution，
+					// 再次调用 ManualCollect 可直接迁回 collecting。
+					continue collectLoop
+				}
+				collectErr = err
+				break pointsLoop
+			}
+			break collectLoop
 		}
 	}
 
@@ -93,11 +120,8 @@ func (s *Service) ManualPressurize(ctx context.Context, pointIndex int) error {
 		}
 	}
 
-	s.updatePointStatus(pointIndex, domain.PointStatusStabilizing)
-	if err := s.transitionTo(domain.SessionStateStabilizing); err != nil {
-		return err
-	}
-
+	// 稳定等待：压力首次进入容差范围时才切换到 stabilizing，
+	// 避免压力远离目标时就显示"稳定中"。
 	if err := s.waitForMeasurementStability(ctx, pointIndex, pressureDriver, point.TargetPressure, stableWaitMs, stabilityTimeoutMs); err != nil {
 		return err
 	}
@@ -151,6 +175,11 @@ func (s *Service) ManualCollect(ctx context.Context, pointIndex int) error {
 	if alarm, _ := s.CheckAlarm(updatedPoint); alarm != nil {
 		s.publish(events.EventMeasurementAlarmTriggered, alarm)
 
+		// 进入等待报警决策状态，便于 recollect 后能合法重新进入 collecting。
+		if err := s.transitionTo(domain.SessionStateAwaitAlarmResolution); err != nil {
+			return fmt.Errorf("transition to await_alarm_resolution: %w", err)
+		}
+
 		// 阻塞等待用户确认报警决定
 		s.mu.Lock()
 		s.alarmCh = make(chan string, 1)
@@ -169,8 +198,19 @@ func (s *Service) ManualCollect(ctx context.Context, pointIndex int) error {
 				return fmt.Errorf("alarm: user stopped after point %d", pointIndex)
 			case workflow.AlarmDecisionSkip:
 				// 跳过，继续下一个点
+			case workflow.AlarmDecisionRecollect:
+				// 用户选择重新采集当前点：由上层 collectLoop 再次进入 ManualCollect，
+				// 此时状态停留在 await_alarm_resolution，刚好可以合法迁移到 collecting。
+				return ErrRecollectPoint
 			default:
-				// continue / recollect：继续流程
+				// continue：继续流程
+			}
+
+			// 用户选择 continue 或 skip 时，需要先从 await_alarm_resolution
+			// 迁回 collecting，否则下方 transitionTo(Ready/Completed) 会因为
+			// await_alarm_resolution -> ready 非法而失败，导致自动采集中断。
+			if err := s.transitionTo(domain.SessionStateCollecting); err != nil {
+				return fmt.Errorf("transition back to collecting: %w", err)
 			}
 		case <-ctx.Done():
 			s.mu.Lock()
@@ -337,6 +377,9 @@ func (s *Service) waitForMeasurementStability(
 	// 软件判稳：使用偏差计算
 	monitor := workflow.NewStabilityMonitor(0.001, stableDuration, nil)
 
+	// 标记是否已从 pressurizing 切换到 stabilizing
+	transitionedToStabilizing := false
+
 	for {
 		select {
 		case <-ctx.Done():
@@ -383,6 +426,15 @@ func (s *Service) waitForMeasurementStability(
 					continue
 				}
 				status = monitor.FeedSample(targetPressure, currentVal)
+			}
+
+			// 压力首次进入容差范围时，才从 pressurizing 切换到 stabilizing
+			if status.IsInRange && !transitionedToStabilizing {
+				transitionedToStabilizing = true
+				s.updatePointStatus(pointIndex, domain.PointStatusStabilizing)
+				if err := s.transitionTo(domain.SessionStateStabilizing); err != nil {
+					return err
+				}
 			}
 
 			s.publish(events.EventMeasurementStabilityUpdate, map[string]any{

@@ -80,8 +80,6 @@ export interface MeasurementAlarmConfig {
   enabledChannels: number[]
   confirmOnAlarm: boolean
   soundEnabled: boolean
-  threshold: number
-  isRelative: boolean
 }
 
 export interface MeasurementAlarm {
@@ -118,8 +116,11 @@ export async function checkMeasurementAlarmPending(): Promise<boolean> {
   return (await apiGet<{ pending: boolean }>('/measurement/alarm/pending')).pending
 }
 
+/** 报警决策：与后端 workflow.AlarmDecision* 常量保持一致 */
+export type AlarmDecision = 'continue' | 'recollect' | 'skip' | 'stop'
+
 /** 处理报警 */
-export async function resolveMeasurementAlarm(decision: 'continue' | 'retry'): Promise<void> {
+export async function resolveMeasurementAlarm(decision: AlarmDecision): Promise<void> {
   await apiPost('/measurement/alarm/resolve', { decision })
 }
 

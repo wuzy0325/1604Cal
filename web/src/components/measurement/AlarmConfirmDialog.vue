@@ -53,7 +53,7 @@
 
     <template #footer>
       <div class="dialog-footer">
-        <el-button @click="decide('retry')" type="warning" plain>重新采集</el-button>
+        <el-button @click="decide('recollect')" type="warning" plain>重新采集</el-button>
         <el-button @click="decide('continue')" type="primary">忽略继续</el-button>
       </div>
     </template>
@@ -78,10 +78,10 @@ defineProps<{
 }>()
 
 const emit = defineEmits<{
-  decision: [action: 'continue' | 'retry']
+  decision: [action: 'continue' | 'recollect']
 }>()
 
-function decide(action: 'continue' | 'retry') {
+function decide(action: 'continue' | 'recollect') {
   emit('decision', action)
   visible.value = false
 }
