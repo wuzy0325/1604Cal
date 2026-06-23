@@ -219,6 +219,9 @@ watch(
       selectedMeasureUnit.value = ''
       return
     }
+    // 仅在设备已绑定到会话时刷新，避免使用未绑定的旧驱动导致 "not connected" 错误。
+    // 绑定和刷新由 MeasurementSidebar.handleMeasureDeviceConnect 统一编排。
+    if (!measurementStore.deviceBound) return
     void Promise.all([
       measurementStore.refreshDeviceInfo(),
       measurementStore.refreshValveStatus(),

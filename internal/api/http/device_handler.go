@@ -57,15 +57,16 @@ type deviceConnector interface {
 }
 
 type upsertDeviceRequest struct {
-	ID        string `json:"id"`
-	Name      string `json:"name"`
-	Type      string `json:"type"`
-	Model     string `json:"model"`
-	Host      string `json:"host"`
-	Port      int    `json:"port"`
-	Unit      string `json:"unit"`
-	LocalAddr string `json:"localAddr"`
-	Status    string `json:"status"`
+	ID          string `json:"id"`
+	Name        string `json:"name"`
+	Type        string `json:"type"`
+	Model       string `json:"model"`
+	Host        string `json:"host"`
+	Port        int    `json:"port"`
+	Unit        string `json:"unit"`
+	LocalAddr   string `json:"localAddr"`
+	Status      string `json:"status"`
+	IsSimulated bool   `json:"isSimulated"`
 }
 
 type setDeviceStatusRequest struct {
@@ -195,15 +196,16 @@ func (s *apiServer) handleUpsertDevice(w http.ResponseWriter, r *http.Request) {
 	status := domain.ResolveStatus(requestedStatus, old, existed)
 
 	dev := domain.Device{
-		ID:        id,
-		Name:      strings.TrimSpace(req.Name),
-		Type:      deviceType,
-		Model:     strings.TrimSpace(req.Model),
-		Host:      host,
-		Port:      req.Port,
-		Unit:      unit,
-		LocalAddr: strings.TrimSpace(req.LocalAddr),
-		Status:    status,
+		ID:          id,
+		Name:        strings.TrimSpace(req.Name),
+		Type:        deviceType,
+		Model:       strings.TrimSpace(req.Model),
+		Host:        host,
+		Port:        req.Port,
+		Unit:        unit,
+		LocalAddr:   strings.TrimSpace(req.LocalAddr),
+		Status:      status,
+		IsSimulated: req.IsSimulated,
 	}
 
 	if err := dev.Validate(); err != nil {
