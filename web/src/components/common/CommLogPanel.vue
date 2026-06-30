@@ -22,6 +22,13 @@
         <el-button size="small" @click="toggleAutoScroll">
           {{ autoScroll ? '停止滚动' : '自动滚动' }}
         </el-button>
+        <el-switch
+          v-model="hidePoll"
+          size="small"
+          active-text="隐藏轮询"
+          inactive-text="显示全部"
+          inline-prompt
+        />
       </div>
     </div>
     <div ref="logListEl" class="log-list" @scroll="onScroll">
@@ -47,10 +54,15 @@ const store = useHardwareLogStore()
 const filterKind = ref<HwLogKind | ''>('')
 const searchKeyword = ref('')
 const autoScroll = ref(true)
+const hidePoll = ref(false)
 const logListEl = ref<HTMLElement | null>(null)
 
 const filtered = computed(() => {
   let result = store.entries
+
+  if (hidePoll.value) {
+    result = result.filter(e => !e.poll)
+  }
 
   if (filterKind.value) {
     result = result.filter(e => e.kind === filterKind.value)

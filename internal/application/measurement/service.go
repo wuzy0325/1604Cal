@@ -14,6 +14,7 @@ import (
 	"cal1604/internal/domain"
 	apperrors "cal1604/internal/errors"
 	"cal1604/internal/events"
+	"cal1604/internal/infrastructure/driver"
 	"cal1604/internal/workflow"
 )
 
@@ -433,7 +434,8 @@ func (s *Service) startCollectLoop(_ context.Context) {
 				}
 				s.mu.Unlock()
 
-				data, err := s.sess.ReadMeasureData(collectCtx, s.sess.Token())
+				pollCtx := driver.WithPollContext(collectCtx)
+				data, err := s.sess.ReadMeasureData(pollCtx, s.sess.Token())
 				if err != nil {
 					consecutiveErrors++
 					if consecutiveErrors >= maxConsecutiveErrors {

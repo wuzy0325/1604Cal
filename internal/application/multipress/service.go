@@ -481,6 +481,7 @@ func (s *Service) pollDevicesConcurrently(ctx context.Context, targets []*device
 			defer wg.Done()
 			pollCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
 			defer cancel()
+			pollCtx = driver.WithPollContext(pollCtx)
 
 			pressure, pErr := e.driver.ReadCurrentPressure(pollCtx)
 			stable, sErr := e.driver.ReadStability(pollCtx)

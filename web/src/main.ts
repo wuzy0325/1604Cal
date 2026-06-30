@@ -44,13 +44,13 @@ async function bootstrap() {
   const { subscribeGlobal } = useEventHub()
   subscribeGlobal((payload: StreamEventPayload) => {
     if (payload.type === EVENT_HARDWARE_COMMAND) {
-      const data = payload.data as { model?: string; proto?: string; cmd?: string }
-      hardwareLog.addEntry('hw-cmd', data?.model ?? '', data?.proto ?? '', data?.cmd ?? '')
+      const data = payload.data as { model?: string; proto?: string; cmd?: string; poll?: boolean }
+      hardwareLog.addEntry('hw-cmd', data?.model ?? '', data?.proto ?? '', data?.cmd ?? '', data?.poll)
     }
     if (payload.type === EVENT_HARDWARE_RESPONSE) {
-      const data = payload.data as { model?: string; proto?: string; resp?: string; cmd?: string }
+      const data = payload.data as { model?: string; proto?: string; resp?: string; cmd?: string; poll?: boolean }
       const detail = data?.resp ?? ''
-      hardwareLog.addEntry('hw-res', data?.model ?? '', data?.proto ?? '', detail.length > 200 ? detail.slice(0, 200) + '...' : detail)
+      hardwareLog.addEntry('hw-res', data?.model ?? '', data?.proto ?? '', detail.length > 200 ? detail.slice(0, 200) + '...' : detail, data?.poll)
     }
     if (payload.type === EVENT_SYSTEM_ERROR) {
       const data = payload.data as { code?: string; status?: number; message?: string }

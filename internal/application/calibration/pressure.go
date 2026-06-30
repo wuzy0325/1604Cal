@@ -9,6 +9,7 @@ import (
 	"cal1604/internal/device"
 	"cal1604/internal/domain"
 	"cal1604/internal/events"
+	"cal1604/internal/infrastructure/driver"
 	"cal1604/internal/workflow"
 )
 
@@ -251,6 +252,7 @@ func (s *Service) waitForStabilityWithMonitor(ctx context.Context, pointIndex in
 		case <-ctx.Done():
 			return ctx.Err()
 		case <-ticker.C:
+			pollCtx := driver.WithPollContext(ctx)
 			if time.Now().After(deadline) {
 				// 超时：发布事件并等待前端用户决定
 				s.publish(events.EventCalibrationStabilityTimeout, map[string]any{
@@ -278,7 +280,7 @@ func (s *Service) waitForStabilityWithMonitor(ctx context.Context, pointIndex in
 				// 设备判稳路径：SCPI 设备硬件自行判断压力稳定，软件仅依赖硬件 IsStable 标志。
 				// 设备报告稳定时 FeedSample 偏差为 0（累积器继续计时）；
 				// 设备报告不稳定时 FeedSample 大偏差（累积器重置）。
-				stable, err := deviceStability.IsStable(ctx)
+				stable, err := deviceStability.IsStable(pollCtx)
 				if err != nil {
 					continue
 				}
@@ -288,7 +290,7 @@ func (s *Service) waitForStabilityWithMonitor(ctx context.Context, pointIndex in
 				}
 				status = monitor.FeedSample(targetPressure, feedVal)
 			} else {
-				currentVal, valErr := pressureDriver.ReadCurrentPressure(ctx)
+				currentVal, valErr := pressureDriver.ReadCurrentPressure(pollCtx)
 				if valErr != nil {
 					continue
 				}

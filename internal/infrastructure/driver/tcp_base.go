@@ -16,6 +16,12 @@ import (
 	"cal1604/internal/events"
 )
 
+// contextKeyPoll 是 context 中标记"轮询"的键，轮询循环设置此标记后，
+// tcp_base.go 在发布硬件事件时会附带 "poll": true，前端可据此过滤轮询日志。
+type contextKeyPollType struct{}
+
+var contextKeyPoll = contextKeyPollType{}
+
 const defaultTCPDialTimeout = 3 * time.Second
 
 // tcpConnectionDriver 负责维护 TCP 级别连接与命令交互。
@@ -199,16 +205,35 @@ func (d *tcpConnectionDriver) closeConn() {
 
 // sendSCPICommand 发送 SCPI 命令并读取响应（带超时）。
 // 对于设置类命令（不含 ?），设备通常不回复，直接返回空响应以免阻塞 3 秒。
+
+// WithPollContext 返回一个标记了"轮询"的新 context。
+// 此标记会随硬件事件传递到前端，用于过滤轮询产生的日志。
+func WithPollContext(ctx context.Context) context.Context {
+	return context.WithValue(ctx, contextKeyPoll, true)
+}
+
+// IsPollContext 检查 context 中是否标记了轮询操作。
+func IsPollContext(ctx context.Context) bool {
+	v := ctx.Value(contextKeyPoll)
+	b, _ := v.(bool)
+	return b
+}
+
 func (d *tcpConnectionDriver) sendSCPICommand(ctx context.Context, cmd string, readTimeout time.Duration) (string, error) {
+	poll := IsPollContext(ctx)
 	commandData := map[string]any{
 		"model": d.model,
 		"proto": "SCPI",
 		"cmd":   cmd,
 	}
+	if poll {
+		commandData["poll"] = true
+	}
 	events.GlobalBus.Publish(events.Event{Type: events.EventHardwareCommand, Data: map[string]any{
 		"model": d.model,
 		"proto": "SCPI",
 		"cmd":   cmd,
+		"poll":  poll,
 	}})
 	d.mu.Lock()
 	defer d.mu.Unlock()
@@ -265,6 +290,7 @@ func (d *tcpConnectionDriver) sendSCPICommand(ctx context.Context, cmd string, r
 		"proto": "SCPI",
 		"resp":  response,
 		"cmd":   cmd,
+		"poll":  poll,
 	}})
 	return response, nil
 }
@@ -275,15 +301,18 @@ func publishHardwareError(commandData map[string]any, err error) {
 		"proto": commandData["proto"],
 		"resp":  "ERROR: " + err.Error(),
 		"cmd":   commandData["cmd"],
+		"poll":  commandData["poll"],
 	}})
 }
 
 // sendWTN1604Command 发送 WTN1604 命令并读取长度前缀响应。
 func (d *tcpConnectionDriver) sendWTN1604Command(ctx context.Context, cmd string, readTimeout time.Duration) (string, error) {
+	poll := IsPollContext(ctx)
 	events.GlobalBus.Publish(events.Event{Type: events.EventHardwareCommand, Data: map[string]any{
 		"model": d.model,
 		"proto": "WTN1604",
 		"cmd":   cmd,
+		"poll":  poll,
 	}})
 	d.mu.Lock()
 	defer d.mu.Unlock()
@@ -337,6 +366,7 @@ func (d *tcpConnectionDriver) sendWTN1604Command(ctx context.Context, cmd string
 		"proto": "WTN1604",
 		"resp":  response,
 		"cmd":   cmd,
+		"poll":  poll,
 	}})
 	return response, nil
 }
