@@ -62,14 +62,28 @@
       <!-- 操作按钮组 -->
       <div class="control-buttons">
         <template v-if="measurementStore.measurementParams.controlMode === ControlMode.Auto">
+          <!-- 主按钮：单一焦点，文案/图标/色阶随会话状态自动切换 -->
           <button
             type="button"
-            class="ctrl-btn btn-start"
-            :disabled="!canStart"
-            @click="$emit('start')"
+            class="ctrl-btn ctrl-btn-primary"
+            :class="`btn-${measurementStore.primaryAction.variant}`"
+            :disabled="isPrimaryDisabled"
+            @click="dispatchPrimary"
           >
-            <el-icon><VideoPlay /></el-icon>
-            开始采集
+            <el-icon><component :is="iconMap[measurementStore.primaryAction.icon]" /></el-icon>
+            {{ measurementStore.primaryAction.label }}
+          </button>
+
+          <!-- 副按钮：仅在该状态下确实可用时才出现 -->
+          <button
+            v-for="action in measurementStore.secondaryActions"
+            :key="action.key"
+            type="button"
+            class="ctrl-btn"
+            :class="`btn-${action.variant}`"
+            @click="dispatchSecondary(action)"
+          >
+            {{ action.label }}
           </button>
         </template>
         <template v-else>
@@ -90,51 +104,51 @@
           >
             手动打压
           </button>
+          <button
+            type="button"
+            class="ctrl-btn btn-pause"
+            :disabled="!measurementStore.isRunning"
+            @click="$emit('pause')"
+          >
+            <el-icon><VideoPause /></el-icon>
+            暂停
+          </button>
+          <button
+            type="button"
+            class="ctrl-btn btn-resume"
+            :disabled="!measurementStore.isPaused"
+            @click="$emit('resume')"
+          >
+            恢复
+          </button>
+          <button
+            type="button"
+            class="ctrl-btn btn-stop"
+            :disabled="measurementStore.isIdle"
+            @click="$emit('stop')"
+          >
+            <el-icon><CloseBold /></el-icon>
+            停止
+          </button>
+          <button
+            v-if="measurementStore.hasCompletedPoints"
+            type="button"
+            class="ctrl-btn btn-reset"
+            @click="$emit('reset')"
+          >
+            重置
+          </button>
+          <button
+            v-if="measurementStore.hasCompletedPoints"
+            type="button"
+            class="ctrl-btn btn-export"
+            :disabled="exporting"
+            @click="$emit('export')"
+          >
+            <el-icon><Download /></el-icon>
+            {{ exporting ? '导出中...' : '导出报告' }}
+          </button>
         </template>
-        <button
-          type="button"
-          class="ctrl-btn btn-pause"
-          :disabled="!measurementStore.isRunning"
-          @click="$emit('pause')"
-        >
-          <el-icon><VideoPause /></el-icon>
-          暂停
-        </button>
-        <button
-          type="button"
-          class="ctrl-btn btn-resume"
-          :disabled="!measurementStore.isPaused"
-          @click="$emit('resume')"
-        >
-          恢复
-        </button>
-        <button
-          type="button"
-          class="ctrl-btn btn-stop"
-          :disabled="measurementStore.isIdle"
-          @click="$emit('stop')"
-        >
-          <el-icon><CloseBold /></el-icon>
-          停止
-        </button>
-        <button
-          v-if="hasCompletedPoints"
-          type="button"
-          class="ctrl-btn btn-reset"
-          @click="$emit('reset')"
-        >
-          重置
-        </button>
-        <button
-          v-if="hasCompletedPoints"
-          type="button"
-          class="ctrl-btn btn-export"
-          @click="$emit('export')"
-        >
-          <el-icon><Download /></el-icon>
-          导出报告
-        </button>
-
       </div>
     </div>
 
@@ -177,8 +191,10 @@
 
 <script setup lang="ts">
 import { computed, ref, type PropType } from 'vue'
-import { VideoPlay, VideoPause, CloseBold, Download, Grid } from '@element-plus/icons-vue'
+import { VideoPlay, VideoPause, CloseBold, Download, Grid, Refresh } from '@element-plus/icons-vue'
+import { ElMessageBox } from 'element-plus'
 import { useMeasurementStore } from '@/stores/measurement'
+import type { SecondaryAction } from '@/stores/measurement/types'
 import ChannelSelectDialog from '@/components/common/ChannelSelectDialog.vue'
 import { ControlMode, PressureMode } from '@/types/calibration'
 
@@ -206,19 +222,33 @@ const props = defineProps({
   hasPressureDevice: {
     type: Boolean,
     default: true
+  },
+  exporting: {
+    type: Boolean,
+    default: false
   }
 })
 
-defineEmits<{
+const emit = defineEmits<{
   start: []
   pause: []
   resume: []
   stop: []
   reset: []
   export: []
+  retry: []
+  restart: []
+  'view-error': []
   'manual-start': []
   'manual-pressurize': []
 }>()
+
+const iconMap: Record<string, unknown> = {
+  VideoPlay,
+  VideoPause,
+  Download,
+  Refresh
+}
 
 const measurementStore = useMeasurementStore()
 
@@ -243,10 +273,6 @@ function setControlMode(mode: ControlMode) {
   measurementStore.measurementParams.controlMode = mode
 }
 
-const hasCompletedPoints = computed(() =>
-  measurementStore.points.some(p => p.status === 'completed')
-)
-
 const canManualPressurize = computed(() =>
   props.hasPressureDevice &&
   measurementStore.points.length > 0 &&
@@ -259,13 +285,47 @@ const canManualStart = computed(() =>
   ['idle', 'stopped', 'completed'].includes(measurementStore.state)
 )
 
-const canStart = computed(() => {
-  if (typeof props.canStart === 'boolean') {
-    return props.canStart
+const isPrimaryDisabled = computed(() => {
+  if (props.exporting) return true
+  if (!measurementStore.deviceBound) return true
+  if (measurementStore.primaryAction.key === 'start') {
+    return measurementStore.points.length === 0
+  }
+  return false
+})
+
+function dispatchPrimary() {
+  const key = measurementStore.primaryAction.key
+  switch (key) {
+    case 'start':  emit('start'); break
+    case 'pause':  emit('pause'); break
+    case 'resume': emit('resume'); break
+    case 'export': emit('export'); break
+    case 'retry':  emit('retry'); break
+  }
+}
+
+async function dispatchSecondary(action: SecondaryAction) {
+  if (action.confirm) {
+    try {
+      await ElMessageBox.confirm(action.confirm, '操作确认', {
+        confirmButtonText: '确认',
+        cancelButtonText: '取消',
+        type: 'warning'
+      })
+    } catch {
+      return
+    }
   }
 
-  return measurementStore.isStartable && measurementStore.deviceBound
-})
+  switch (action.key) {
+    case 'stop':       emit('stop'); break
+    case 'reset':      emit('reset'); break
+    case 'export':     emit('export'); break
+    case 'restart':    emit('restart'); break
+    case 'view-error': emit('view-error'); break
+  }
+}
 
 </script>
 
@@ -430,7 +490,14 @@ const canStart = computed(() => {
   }
 }
 
+/* 主按钮：默认较宽，视觉层级最高 */
+.ctrl-btn-primary {
+  min-width: 120px;
+  justify-content: center;
+}
+
 /* Primary：渐变 + 白色文字 + Mint 阴影 */
+.btn-mint,
 .btn-start {
   background: linear-gradient(135deg, $mint, $mint-dark);
   color: #fff;
@@ -444,41 +511,9 @@ const canStart = computed(() => {
 }
 
 /* Default：半透明 slate */
-.btn-pause {
-  background: rgba(55, 65, 81, 0.08);
-  color: $slate-400;
-  border: 1px solid $slate-200;
-
-  &:hover:not(:disabled) {
-    background: rgba(55, 65, 81, 0.14);
-    color: $slate-500;
-    border-color: $slate-300;
-  }
-}
-
-.btn-resume {
-  background: rgba(55, 65, 81, 0.08);
-  color: $slate-700;
-  border: 1px solid $slate-200;
-
-  &:hover:not(:disabled) {
-    background: rgba(55, 65, 81, 0.14);
-    border-color: $slate-300;
-  }
-}
-
-/* Stop Red */
-.btn-stop {
-  background: rgba(239, 68, 68, 0.1);
-  color: $red;
-  border: 1px solid rgba(239, 68, 68, 0.2);
-
-  &:hover:not(:disabled) {
-    background: rgba(239, 68, 68, 0.16);
-    border-color: rgba(239, 68, 68, 0.35);
-  }
-}
-
+.btn-slate,
+.btn-pause,
+.btn-resume,
 .btn-reset {
   background: rgba(55, 65, 81, 0.08);
   color: $slate-700;
@@ -490,7 +525,8 @@ const canStart = computed(() => {
   }
 }
 
-/* Info Blue */
+/* Blue：信息主色 */
+.btn-blue,
 .btn-export {
   background: rgba(59, 130, 246, 0.1);
   color: $blue;
@@ -499,6 +535,32 @@ const canStart = computed(() => {
   &:hover:not(:disabled) {
     background: rgba(59, 130, 246, 0.16);
     border-color: rgba(59, 130, 246, 0.35);
+  }
+}
+
+/* Amber：警告色，用于重试 */
+.btn-amber {
+  background: rgba(245, 158, 11, 0.1);
+  color: $amber;
+  border: 1px solid rgba(245, 158, 11, 0.2);
+
+  &:hover:not(:disabled) {
+    background: rgba(245, 158, 11, 0.18);
+    border-color: rgba(245, 158, 11, 0.35);
+    box-shadow: 0 2px 8px rgba(245, 158, 11, 0.2);
+  }
+}
+
+/* Stop Red */
+.btn-red,
+.btn-stop {
+  background: rgba(239, 68, 68, 0.1);
+  color: $red;
+  border: 1px solid rgba(239, 68, 68, 0.2);
+
+  &:hover:not(:disabled) {
+    background: rgba(239, 68, 68, 0.16);
+    border-color: rgba(239, 68, 68, 0.35);
   }
 }
 

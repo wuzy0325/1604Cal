@@ -67,10 +67,14 @@
 
           <section class="card-block card-block-data">
             <div class="card-accent" />
-            <CalibrationDataView @select-template="dialogsRef?.openTemplateDialog()" @export-report="dialogsRef?.openExportDialog()" />
-            <div v-if="dialogsRef?.templateFilename" class="template-bar">
-              <el-icon><DocumentChecked /></el-icon>
-              <span>当前报告模板：{{ dialogsRef.templateFilename }}</span>
+            <CalibrationDataView />
+            <div class="template-bar">
+              <el-icon v-if="dialogsRef?.templateFilename"><DocumentChecked /></el-icon>
+              <span v-if="dialogsRef?.templateFilename">当前报告模板：{{ dialogsRef.templateFilename }}</span>
+              <button type="button" class="export-btn" :disabled="isExporting" @click="handleExport">
+                <el-icon><Download /></el-icon>
+                {{ isExporting ? '导出中...' : '导出报告' }}
+              </button>
             </div>
           </section>
         </div>
@@ -84,11 +88,14 @@
 <script setup lang="ts">
 import { ref, computed, provide } from 'vue'
 import { useRouter } from 'vue-router'
-import { ArrowLeft, DocumentChecked } from '@element-plus/icons-vue'
+import { ArrowLeft, DocumentChecked, Download } from '@element-plus/icons-vue'
 import type { SessionState } from '@/types/calibration'
+import { ElMessage } from 'element-plus'
 import { useCalibrationStore } from '@/stores/calibration'
 import { useCalibrationSync, stabilityStatusKey } from '@/composables/useCalibrationSync'
 import { useConfigPersistence } from '@/composables/useConfigPersistence'
+import { showSaveDialog } from '@/composables/useFileSaveDialog'
+import { exportCalibrationReport } from '@/api/calibration'
 import PageLayout from '@/components/common/PageLayout.vue'
 import CalibrationSidebar from '@/components/calibration/CalibrationSidebar.vue'
 import CalibrationParams from '@/components/calibration/CalibrationParams.vue'
@@ -101,6 +108,7 @@ const router = useRouter()
 const calibrationStore = useCalibrationStore()
 const sidebarCollapsed = ref(false)
 const dialogsRef = ref<InstanceType<typeof CalibrationDialogs>>()
+const isExporting = ref(false)
 
 const { stabilityStatus, alarmEvent } = useCalibrationSync()
 provide(stabilityStatusKey, stabilityStatus)
@@ -176,6 +184,21 @@ const deviationClass = computed(() => {
   if (d < 0.1) return 'dev-warn'
   return 'dev-bad'
 })
+
+/* ── 导出报告 ── */
+async function handleExport() {
+  const path = await showSaveDialog('calibration_report.xlsx', 'Excel 文件', '*.xlsx')
+  if (!path) return
+  isExporting.value = true
+  try {
+    await exportCalibrationReport(path)
+    ElMessage.success('报告导出成功')
+  } catch (e) {
+    ElMessage.error(e instanceof Error ? e.message : '报告导出失败')
+  } finally {
+    isExporting.value = false
+  }
+}
 </script>
 
 <style scoped lang="scss">
@@ -452,6 +475,31 @@ $amber: #f59e0b;
   font-family: $font-sans;
 
   .el-icon { color: $mint; font-size: 16px; }
+}
+
+.export-btn {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border-radius: 8px;
+  border: 1px solid $slate-200;
+  background: #fff;
+  color: $slate-700;
+  font-size: 12px;
+  font-weight: 600;
+  font-family: $font-sans;
+  cursor: pointer;
+  transition: all 0.15s ease;
+
+  &:hover {
+    background: rgba(16, 185, 129, 0.06);
+    color: $mint-dark;
+    border-color: $mint;
+  }
+
+  .el-icon { color: currentColor; font-size: 14px; }
 }
 
 /* ── 偏差颜色 ── */

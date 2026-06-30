@@ -13,6 +13,11 @@ export async function selectReportTemplate(points: number, mode: 'single' | 'ret
   return apiGet<ReportTemplateDTO>(`/reports/templates/select?points=${points}&mode=${mode}`)
 }
 
+/** 导出标定报告 */
+export async function exportCalibrationReport(outputPath: string): Promise<string> {
+  return (await apiPost<{ status: string; path: string }>('/reports/export', { outputPath })).path
+}
+
 // ---------------------------------------------------------------------------
 // 校准流程 API
 // ---------------------------------------------------------------------------

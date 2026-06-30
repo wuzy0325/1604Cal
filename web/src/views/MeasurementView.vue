@@ -51,6 +51,7 @@
             :is-stable="measurementStore.isStable"
             :stable-seconds="measurementStore.stabilityState.stableDurationMs / 1000"
             :has-pressure-device="hasPressureDevice"
+            :exporting="isExporting"
             @start="handleStart"
             @pause="handlePause"
             @resume="handleResume"
@@ -58,7 +59,7 @@
             @retry="handleRetry"
             @restart="handleRestart"
             @reset="handleReset"
-            @export="exportDialogVisible = true"
+            @export="handleExport"
             @view-error="handleViewError"
             @manual-start="handleManualStart"
             @manual-pressurize="handleManualPressurize"
@@ -76,17 +77,6 @@
         </div>
       </main>
     </div>
-
-    <ExportReportDialog
-      :visible="exportDialogVisible"
-      :template-name="reportTemplateName"
-      :point-count="measurementStore.points.length"
-      :channel-count="measurementStore.channels.length"
-      :pressure-mode="measurementStore.measurementParams.pressureMode"
-      :exporting="isExporting"
-      @close="exportDialogVisible = false"
-      @export="handleExport"
-    />
 
     <AlarmConfirmDialog
       :visible="showAlarmDialog"
@@ -108,13 +98,12 @@ import { useMeasurementDeviceStore } from '@/stores/measurement/deviceStore'
 import { useMeasurementUI } from '@/composables/useMeasurementUI'
 import { useMeasurementSync } from '@/composables/useMeasurementSync'
 import { saveMeasurementAlarmConfig, exportMeasurementReport, resolveStabilityTimeout } from '@/api/measurement'
-import { PressureMode } from '@/types/calibration'
+import { showSaveDialog } from '@/composables/useFileSaveDialog'
 import PageLayout from '@/components/common/PageLayout.vue'
 import MeasurementSidebar from '@/components/measurement/MeasurementSidebar.vue'
 import MeasurementControl from '@/components/measurement/MeasurementControl.vue'
 import MeasurementParamsPanel from '@/components/measurement/MeasurementParamsPanel.vue'
 import MeasurementDataView from '@/components/measurement/MeasurementDataView.vue'
-import ExportReportDialog from '@/components/measurement/ExportReportDialog.vue'
 import AlarmConfirmDialog from '@/components/measurement/AlarmConfirmDialog.vue'
 
 const router = useRouter()
@@ -124,7 +113,6 @@ const measurementUI = useMeasurementUI()
 
 const sidebarCollapsed = ref(false)
 const sidebarRef = ref()
-const exportDialogVisible = ref(false)
 const isExporting = ref(false)
 
 // canStart：设备连接 + 计量绑定 + 点位已生成 + 阀门=校准模式（启动必要条件）。
@@ -154,12 +142,6 @@ const startBlockedReason = computed<string>(() => {
 const hasPressureDevice = computed(() =>
   deviceStore.pressureDevices.some(d => d.status === 'connected')
 )
-
-const reportTemplateName = computed(() => {
-  const count = measurementStore.points.length
-  const mode = measurementStore.measurementParams.pressureMode === PressureMode.Single ? 's' : 'm'
-  return `${count}点${mode === 's' ? '单程' : '回程'}模板`
-})
 
 onMounted(async () => {
   await deviceStore.loadDevices()
@@ -332,13 +314,13 @@ async function handleAlarmDecision(decision: 'continue' | 'recollect') {
 }
 
 /* ── 导出 ── */
-async function handleExport(path: string) {
-  if (!path) { ElMessage.warning('请先选择导出路径'); return }
+async function handleExport() {
+  const path = await showSaveDialog('measurement-report.xlsx', 'Excel 文件', '*.xlsx')
+  if (!path) return
   isExporting.value = true
   try {
     await exportMeasurementReport(path)
     ElMessage.success('报告导出成功')
-    exportDialogVisible.value = false
   } catch (e) {
     ElMessage.error(e instanceof Error ? e.message : '报告导出失败')
   } finally {

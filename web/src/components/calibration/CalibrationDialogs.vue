@@ -26,24 +26,18 @@
     <el-icon><Warning /></el-icon>
     {{ errorMessage }}
   </div>
-
-  <!-- 报告导出对话框 -->
-  <ReportExportDialog ref="reportExportRef" @done="onExportDone" />
 </template>
 
 <script setup lang="ts">
 import { ref } from 'vue'
 import { Warning } from '@element-plus/icons-vue'
 import { selectReportTemplate } from '@/api/calibration'
-import ReportExportDialog from '@/components/calibration/ReportExportDialog.vue'
 
 const showTemplateDialog = ref(false)
 const templatePoints = ref(5)
 const templateMode = ref<'single' | 'return'>('single')
 const templateFilename = ref('')
 const errorMessage = ref('')
-
-const reportExportRef = ref<{ open: () => void }>()
 
 function openTemplateDialog() {
   showTemplateDialog.value = true
@@ -60,18 +54,8 @@ async function confirmTemplate() {
   }
 }
 
-/** 打开报告导出对话框。 */
-function openExportDialog() {
-  reportExportRef.value?.open()
-}
-
-function onExportDone() {
-  templateFilename.value = ''
-}
-
 defineExpose({
   openTemplateDialog,
-  openExportDialog,
   templateFilename,
 })
 </script>
