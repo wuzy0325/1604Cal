@@ -75,6 +75,12 @@
         >
           {{ valveStatusLabel }}
         </el-tag>
+        <span
+          v-if="isConnected && normalizedValveStatus !== 'calibration'"
+          class="valve-hint"
+        >
+          阀门需切换到「校准模式」后才能开始标定
+        </span>
       </div>
       <div class="status-row">
         <span class="label">单位类型:</span>
@@ -102,19 +108,24 @@
       <el-button
         :type="normalizedValveStatus === 'calibration' ? 'primary' : 'default'"
         size="small"
-        @click="calibrationStore.setValveStatus('calibration')"
+        :loading="valvePending"
+        :disabled="valvePending"
+        @click="handleValveClick('calibration')"
       >
         校准模式
       </el-button>
       <el-button
         :type="normalizedValveStatus === 'measurement' ? 'primary' : 'default'"
         size="small"
-        @click="calibrationStore.setValveStatus('measurement')"
+        :loading="valvePending"
+        :disabled="valvePending"
+        @click="handleValveClick('measurement')"
       >
         测量模式
       </el-button>
       <el-button
         size="small"
+        :disabled="valvePending"
         @click="calibrationStore.resetDevice()"
       >
         复位
@@ -131,6 +142,13 @@ import DeviceStatusBadge from '@/components/common/DeviceStatusBadge.vue'
 import { useDeviceInventoryStore } from '@/stores/device/inventoryStore'
 import { useCalibrationStore } from '@/stores/calibration'
 import { fetchDevices, upsertDevice } from '@/api/device'
+import { useValveControl } from '@/composables/useValveControl'
+import {
+  normalizeValveStatus as normalizeValveState,
+  valveTagType as toValveTagType,
+  valveStatusLabel as toValveStatusLabel,
+  type ValveState,
+} from '@/types/valve'
 
 const emit = defineEmits<{
   connect: [deviceId: string]
@@ -143,6 +161,13 @@ const { measureDevices } = storeToRefs(deviceStore)
 
 const selectedDeviceId = ref('')
 const selectedMeasureUnit = ref('')
+
+// 阀门切换交互（pending / 写后回读 / toast 四态反馈）统一由 composable 提供，
+// 避免与 MeasurementDevicePanel 出现 30 行重复代码。
+const { valvePending, setValve: handleValveClick } = useValveControl(
+  calibrationStore,
+  { scenario: 'calibration' }
+)
 
 const measureUnitOptions = [
   { value: 'kPa', label: 'kPa' },
@@ -180,28 +205,14 @@ const deviceStatus = computed(() => {
   return 'disconnected'
 })
 
-const normalizedValveStatus = computed(() => normalizeValveStatus(calibrationStore.valveStatus))
+const normalizedValveStatus = computed<ValveState>(() => normalizeValveState(calibrationStore.valveStatus))
 
-const valveTagType = computed(() => {
-  if (normalizedValveStatus.value === 'calibration') {
-    return 'success'
-  }
-  if (normalizedValveStatus.value === 'measurement') {
-    return 'info'
-  }
-  return 'warning'
-})
+const valveTagType = computed(() => toValveTagType(normalizedValveStatus.value))
 
 const valveStatusLabel = computed(() => {
-  if (normalizedValveStatus.value === 'calibration') {
-    return '校准(开启)'
-  }
-  if (normalizedValveStatus.value === 'measurement') {
-    return '测量(关闭)'
-  }
-
-  const raw = calibrationStore.valveStatus?.trim()
-  return raw ? `未知(${raw})` : '--'
+  const raw = (calibrationStore.valveStatus || '').trim()
+  if (!raw) return '--'
+  return toValveStatusLabel(normalizedValveStatus.value, raw)
 })
 
 // 自动选中第一个可用设备
@@ -248,34 +259,6 @@ function statusLabel(status: string): string {
     case 'error': return '异常'
     default: return '未连接'
   }
-}
-
-function normalizeValveStatus(rawValue: string): 'calibration' | 'measurement' | '' {
-  let value = (rawValue || '').trim().toLowerCase()
-  if (!value) {
-    return ''
-  }
-
-  if (value.startsWith('a')) {
-    value = value.slice(1).trim()
-  }
-
-  if (['1', 'calibration', 'calibrate', 'open', 'opened', 'on', 'c/p'].includes(value)) {
-    return 'calibration'
-  }
-  if (['0', '2', '3', 'measurement', 'measure', 'close', 'closed', 'off', 'run'].includes(value)) {
-    return 'measurement'
-  }
-
-  const firstDigit = value.match(/\d+/)?.[0]
-  if (firstDigit === '1') {
-    return 'calibration'
-  }
-  if (firstDigit === '0' || firstDigit === '2' || firstDigit === '3') {
-    return 'measurement'
-  }
-
-  return ''
 }
 
 const toggleConnection = async () => {
@@ -447,6 +430,16 @@ const handleMeasureUnitChange = async (unit: string) => {
 
       .unit-select {
         width: 110px;
+      }
+
+      .valve-hint {
+        margin-left: auto;
+        color: #d97706;
+        font-size: 12px;
+        font-weight: 500;
+        background: rgba(217, 119, 6, 0.08);
+        border-radius: 4px;
+        padding: 2px 8px;
       }
     }
   }

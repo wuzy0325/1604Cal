@@ -11,6 +11,7 @@ import (
 	"cal1604/internal/application/session"
 	"cal1604/internal/device"
 	"cal1604/internal/domain"
+	apperrors "cal1604/internal/errors"
 	"cal1604/internal/events"
 	"cal1604/internal/infrastructure/driver"
 	"cal1604/internal/workflow"
@@ -64,8 +65,9 @@ type StartPrerequisiteConfig struct {
 }
 
 func defaultStartPrerequisiteConfig() StartPrerequisiteConfig {
-	// 默认关闭阀门门禁，便于设备阀门状态异常时持续联调后续流程。
-	return StartPrerequisiteConfig{EnforceValveCalibration: false}
+	// 「阀门=校准模式」是标定与计量启动的必要条件，默认开启门禁。
+	// 联调阶段如需放开，可通过 calibration.enforceValveCalibrationGate=false 关闭。
+	return StartPrerequisiteConfig{EnforceValveCalibration: true}
 }
 
 // Service 校准流程编排服务。
@@ -188,23 +190,24 @@ func (s *Service) StartCalibration(ctx context.Context) error {
 		return fmt.Errorf("%w: %s", ErrInvalidStartState, s.coordinator.State())
 	}
 
-	// 阀门门禁（持有锁时执行，ReadValveStatus 可能 I/O 阻塞，但门禁仅用于开发联调阶段可接受）
+	calDev, calDevOK := measureDriver.(device.CalibrationCapable)
+	s.mu.Unlock()
+
+	// 阀门门禁：必须在锁外执行，避免 TCP I/O（最长 3s）阻塞会话锁，
+	// 影响其他并发请求。失败 / 非校准态都要回滚 coordinator，
+	// 并统一 wrap ErrPrerequisiteNotMet，让 HTTP 层映射到 409 PREREQUISITE_NOT_MET。
 	if enforceValveGate {
 		valveStatus, err := measureDriver.ReadValveStatus(ctx)
 		if err != nil {
 			s.coordinator.End()
-			s.mu.Unlock()
-			return fmt.Errorf("read valve status: %w", err)
+			return fmt.Errorf("%w: read valve status: %v", apperrors.ErrPrerequisiteNotMet, err)
 		}
-		if valveStatus != "calibration" {
+		if valveStatus != driver.ValveStateCalibration {
 			s.coordinator.End()
-			s.mu.Unlock()
-			return fmt.Errorf("valve must be in calibration state, current: %s", valveStatus)
+			return fmt.Errorf("%w: valve must be in calibration state, current: %s",
+				apperrors.ErrPrerequisiteNotMet, valveStatus)
 		}
 	}
-
-	calDev, calDevOK := measureDriver.(device.CalibrationCapable)
-	s.mu.Unlock()
 
 	// WTN1604 开始多点校准（不持有锁，避免 I/O 阻塞影响其他操作）
 	if calDevOK {
@@ -271,10 +274,11 @@ func (s *Service) ValidateStartPrerequisites(ctx context.Context) error {
 	if enforceValveGate {
 		valveStatus, err := measureDriver.ReadValveStatus(ctx)
 		if err != nil {
-			return fmt.Errorf("read valve status: %w", err)
+			return fmt.Errorf("%w: read valve status: %v", apperrors.ErrPrerequisiteNotMet, err)
 		}
-		if valveStatus != "calibration" {
-			return fmt.Errorf("valve must be in calibration state, current: %s", valveStatus)
+		if valveStatus != driver.ValveStateCalibration {
+			return fmt.Errorf("%w: valve must be in calibration state, current: %s",
+				apperrors.ErrPrerequisiteNotMet, valveStatus)
 		}
 	}
 

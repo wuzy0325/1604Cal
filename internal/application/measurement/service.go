@@ -34,6 +34,18 @@ type CollectedRow struct {
 // EventPublisher 广播事件。
 type EventPublisher func(eventType string, data any)
 
+// StartPrerequisiteConfig 定义计量启动门禁配置。
+// 与标定模块同款：阀门=校准模式是必要条件。
+type StartPrerequisiteConfig struct {
+	EnforceValveCalibration bool
+}
+
+// defaultStartPrerequisiteConfig 返回默认启动门禁配置。
+// 默认开启：阀门=校准模式是标定与计量启动的必要条件。
+func defaultStartPrerequisiteConfig() StartPrerequisiteConfig {
+	return StartPrerequisiteConfig{EnforceValveCalibration: true}
+}
+
 // Service 计量模块服务，管理简化的采集工作流。
 type Service struct {
 	mu          sync.Mutex
@@ -75,6 +87,9 @@ type Service struct {
 
 	// sessionStore 历史会话持久化存储。
 	sessionStore *SessionStore
+
+	// startPrerequisiteConfig 启动门禁配置（阀门=校准必要条件等）。
+	startPrerequisiteConfig StartPrerequisiteConfig
 }
 
 // NewService 创建计量服务。
@@ -83,11 +98,19 @@ func NewService(sess *session.Service, publisher EventPublisher, coordinator *wo
 		publisher = func(string, any) {}
 	}
 	return &Service{
-		coordinator:        coordinator,
-		sess:               sess,
-		publish:            publisher,
-		stabilityTimeoutCh: make(chan string, 1),
+		coordinator:             coordinator,
+		sess:                    sess,
+		publish:                 publisher,
+		stabilityTimeoutCh:      make(chan string, 1),
+		startPrerequisiteConfig: defaultStartPrerequisiteConfig(),
 	}
+}
+
+// SetStartPrerequisiteConfig 设置计量启动门禁配置。
+func (s *Service) SetStartPrerequisiteConfig(cfg StartPrerequisiteConfig) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.startPrerequisiteConfig = cfg
 }
 
 // SetSessionStore 设置会话持久化存储。
@@ -110,7 +133,23 @@ func (s *Service) Start(ctx context.Context, channels []int) error {
 		s.mu.Unlock()
 		return session.ErrMeasureDeviceNotSet
 	}
+	enforceValveGate := s.startPrerequisiteConfig.EnforceValveCalibration
+	measureDriver := s.sess.MeasureDriver()
 	s.mu.Unlock()
+
+	// 阀门门禁：阀门=校准模式是计量启动的必要条件。
+	// 必须在 coordinator.Begin 之前校验，避免占用工作流锁后又因门禁失败回滚。
+	// 锁外读阀（最长 3s I/O），不阻塞会话锁。
+	if enforceValveGate {
+		valveStatus, err := measureDriver.ReadValveStatus(ctx)
+		if err != nil {
+			return fmt.Errorf("%w: read valve status: %v", apperrors.ErrPrerequisiteNotMet, err)
+		}
+		if domain.ValveState(valveStatus) != domain.ValveStateCalibration {
+			return fmt.Errorf("%w: valve must be in calibration state, current: %s",
+				apperrors.ErrPrerequisiteNotMet, valveStatus)
+		}
+	}
 
 	// 单活工作流冲突校验
 	if err := s.coordinator.Begin(workflow.OwnerMeasurement); err != nil {

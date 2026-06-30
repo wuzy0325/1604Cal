@@ -14,6 +14,7 @@ import { initDesktopApiBase } from './api/client'
 import { useEventHub } from './composables/useEventHub'
 import { EVENT_HARDWARE_COMMAND, EVENT_HARDWARE_RESPONSE, EVENT_SYSTEM_ERROR } from './shared/events'
 import { useHardwareLogStore } from './stores/hardwareLog'
+import { useGatesStore } from './stores/app/gates'
 import type { StreamEventPayload } from './types/api'
 import './styles/global.scss'
 
@@ -32,6 +33,11 @@ async function bootstrap() {
   app.use(pinia)
   app.use(router)
   app.use(ElementPlus)
+
+  // 拉取启动门禁开关（阀门=校准模式 是否为标定/计量启动必要条件），
+  // 与后端 /api/v1/config/gates 同源，避免前端硬编码。
+  // 失败时 store 保持默认值（严格门禁），不阻塞应用启动。
+  void useGatesStore().refresh()
 
   // 全局监听硬件通讯事件与系统错误事件
   const hardwareLog = useHardwareLogStore()

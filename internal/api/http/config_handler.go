@@ -46,6 +46,19 @@ func durationToMilliseconds(value time.Duration) int {
 	return int(value / time.Millisecond)
 }
 
+// gatesConfigPayload 描述启动门禁开关，用于前端与后端保持开关同源。
+type gatesConfigPayload struct {
+	EnforceValveCalibrationGate bool `json:"enforceValveCalibrationGate"`
+}
+
+// gatesConfigHandler 返回当前生效的启动门禁开关。
+// 前端在 bootstrap 阶段拉取该接口，用于决定计量/标定启动前是否需要阀门=校准。
+func (s *apiServer) gatesConfigHandler(w http.ResponseWriter, _ *http.Request) {
+	writeSuccess(w, http.StatusOK, gatesConfigPayload{
+		EnforceValveCalibrationGate: s.calibrationConfig.EnforceValveCalibrationGate,
+	})
+}
+
 // calibrationReadConfigHandler 返回当前校准参数。
 func (s *apiServer) calibrationReadConfigHandler(w http.ResponseWriter, _ *http.Request) {
 	if s.appConfig != nil {

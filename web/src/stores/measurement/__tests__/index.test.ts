@@ -243,6 +243,8 @@ describe('useMeasurementStore', () => {
       vi.mocked(measurementApi.startMeasurement).mockResolvedValue('collecting')
       const store = useMeasurementStore()
       await store.bindMeasureDevice('m1')
+      // 阀门=校准模式是启动的必要条件，先把状态置为 calibration。
+      store.valveStatus = 'calibration'
       store.rows = [{ timestamp: 'old', channels: { '1': 0 } }]
 
       const result = await store.start([1, 2, 3])
@@ -261,11 +263,24 @@ describe('useMeasurementStore', () => {
       vi.mocked(measurementApi.startMeasurement).mockRejectedValue(new Error('transition denied'))
       const store = useMeasurementStore()
       await store.bindMeasureDevice('m1')
+      store.valveStatus = 'calibration'
 
       const result = await store.start([1])
 
       expect(result).toEqual({ ok: false, error: 'START_FAILED', detail: 'transition denied' })
       expect(store.state).toBe('idle')
+    })
+
+    it('rejects start when valve is not in calibration mode', async () => {
+      // 阀门门禁：valve != calibration 时 store 应直接拒绝，不调用 API。
+      const store = useMeasurementStore()
+      await store.bindMeasureDevice('m1')
+      store.valveStatus = 'measurement'
+
+      const result = await store.start([1])
+
+      expect(measurementApi.startMeasurement).not.toHaveBeenCalled()
+      expect(result).toEqual({ ok: false, error: 'VALVE_NOT_READY', detail: '请先将阀门切换到校准模式' })
     })
   })
 

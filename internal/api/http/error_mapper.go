@@ -48,7 +48,7 @@ func writeError(w http.ResponseWriter, err error) {
 	} else if errors.Is(err, apperrors.ErrPrerequisiteNotMet) {
 		status = http.StatusConflict
 		code = "PREREQUISITE_NOT_MET"
-		message = "calibration prerequisite not met"
+		message = "prerequisite not met"
 	} else if errors.Is(err, apperrors.ErrNoData) {
 		status = http.StatusNotFound
 		code = "NO_DATA"

@@ -159,6 +159,9 @@ func (s *apiServer) sessionSetValveHandler(w http.ResponseWriter, r *http.Reques
 		writeError(w, err)
 		return
 	}
+	// 设备应答 "A" 即视为命令已接收。
+	// 真实硬件状态由前端在收到响应后短延时主动 GET /valve 校核，
+	// 避免在 handler 内同步执行第二次 3s I/O，把用户感知延迟翻倍。
 	writeSuccess(w, http.StatusOK, valveResponse{Status: normalizedStatus})
 }
 

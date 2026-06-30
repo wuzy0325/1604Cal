@@ -44,16 +44,17 @@ describe('MeasurementControl', () => {
     expect(pauseButton?.attributes('disabled')).toBeUndefined()
   })
 
-  it('shows start button enabled when completed and device bound', () => {
+  it('shows export primary button enabled when completed and device bound', () => {
+    // 主按钮在 completed 状态文案为「导出报告」，启用即可。
     const store = useMeasurementStore()
     store.measureDeviceId = 'measure-1'
     store.syncState('completed')
 
     const wrapper = mountControl()
 
-    const startButton = wrapper.findAll('button').find(btn => btn.text().includes('开始'))
-    expect(startButton).toBeTruthy()
-    expect(startButton?.attributes('disabled')).toBeUndefined()
+    const primary = wrapper.findAll('button').find(btn => btn.text().includes('导出报告'))
+    expect(primary).toBeTruthy()
+    expect(primary?.attributes('disabled')).toBeUndefined()
   })
 
   it('renders mode toggles and channel selector', () => {

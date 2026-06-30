@@ -85,10 +85,10 @@ func TestToDeviceConnectConfigFallsBackToDefaultsOnInvalidValues(t *testing.T) {
 	}
 }
 
-func TestDefaultCalibrationConfigDisablesValveGate(t *testing.T) {
+func TestDefaultCalibrationConfigEnablesValveGate(t *testing.T) {
 	appCfg := config.Default()
-	if appCfg.Calibration.EnforceValveCalibrationGate {
-		t.Fatalf("expected valve gate disabled by default")
+	if !appCfg.Calibration.EnforceValveCalibrationGate {
+		t.Fatalf("expected valve gate enabled by default (valve=calibration is required for both calibration and measurement startup)")
 	}
 }
 
@@ -98,7 +98,7 @@ func TestLoadFromFileOverridesCalibrationValveGate(t *testing.T) {
 
 	content := `{
 		"calibration": {
-			"enforceValveCalibrationGate": true
+			"enforceValveCalibrationGate": false
 		}
 	}`
 
@@ -111,8 +111,8 @@ func TestLoadFromFileOverridesCalibrationValveGate(t *testing.T) {
 		t.Fatalf("load config: %v", err)
 	}
 
-	if !appCfg.Calibration.EnforceValveCalibrationGate {
-		t.Fatalf("expected valve gate enabled from config file")
+	if appCfg.Calibration.EnforceValveCalibrationGate {
+		t.Fatalf("expected valve gate disabled from config file")
 	}
 }
 

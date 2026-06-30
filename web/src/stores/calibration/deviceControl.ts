@@ -252,8 +252,11 @@ export const useDeviceControlStore = defineStore('deviceControl', () => {
       valveStatus.value = status
       return { ok: true }
     } catch (error) {
+      // 把设备拒绝（N09 等）/网络错误的 message 一起带回，
+      // 由调用方决定如何展示给用户（ElMessage.error）。
+      const detail = error instanceof Error ? error.message : '设置阀门状态失败'
       console.error('设置阀门状态失败:', error)
-      return { ok: false, error: 'VALVE_SET_FAILED', detail: '设置阀门状态失败' }
+      return { ok: false, error: 'VALVE_SET_FAILED', detail }
     }
   }
 

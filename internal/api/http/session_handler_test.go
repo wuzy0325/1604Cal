@@ -95,7 +95,9 @@ func newSessionRouterWithMeasureDriverAndFakeDriver(t *testing.T) (http.Handler,
 	t.Helper()
 
 	fakeDriver := &sessionFakeMeasureDriver{
-		valveStatus:              "measurement",
+		// 默认阀门处于校准态，满足后端启动门禁。
+		// 显式测门禁拒绝的用例可在拿到 fakeDriver 句柄后改写 valveStatus = "measurement"。
+		valveStatus:              "calibration",
 		unit:                     "kPa",
 		calibrateZeroResult:      []float64{0.11},
 		calibrateFullScaleResult: []float64{9.99},
@@ -337,7 +339,9 @@ func (d *sessionFakeMeasureDriver) Disconnect(_ context.Context) error {
 
 func (d *sessionFakeMeasureDriver) ReadValveStatus(_ context.Context) (string, error) {
 	if d.valveStatus == "" {
-		return "measurement", nil
+		// 默认返回校准态，满足启动门禁的必要条件。
+		// 需要验证门禁失败的用例可显式设置 valveStatus = "measurement"。
+		return "calibration", nil
 	}
 	return d.valveStatus, nil
 }

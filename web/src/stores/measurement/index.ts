@@ -37,9 +37,10 @@ import {
   type MeasurementParamsPayload,
   type AlarmDecision
 } from '@/api/measurement'
-import type { MeasurementState, CollectedRow, StabilityUpdate, AlarmData } from './types'
+import type { MeasurementState, CollectedRow, StabilityUpdate, AlarmData, PrimaryAction, SecondaryAction } from './types'
 import { ControlMode, PressureMode } from '@/types/calibration'
 import { useMeasurementDeviceStore } from '@/stores/measurement/deviceStore'
+import { useGatesStore } from '@/stores/app/gates'
 
 export type { MeasurementState, CollectedRow, StabilityUpdate }
 
@@ -101,7 +102,7 @@ export const useMeasurementStore = defineStore('measurement', () => {
 
   // ── 计算属性 ──
   const runningStates: MeasurementState[] = ['pressurizing', 'stabilizing', 'collecting']
-  const startableStates: MeasurementState[] = ['idle', 'completed', 'error']
+  const startableStates: MeasurementState[] = ['idle', 'completed', 'error', 'stopped']
 
   const isCollecting = computed(() => state.value === 'collecting')
   const isRunning = computed(() => runningStates.includes(state.value))
@@ -110,6 +111,64 @@ export const useMeasurementStore = defineStore('measurement', () => {
   const isIdle = computed(() => state.value === 'idle')
   const totalRows = computed(() => rows.value.length)
   const deviceBound = computed(() => measureDeviceId.value !== '')
+  const hasCompletedPoints = computed(() => points.value.some(p => p.status === 'completed'))
+
+  // 阀门=校准模式是计量启动的必要条件，
+  // 与标定模块共用同一规则。
+  // 开关由 gate store 从后端 /api/v1/config/gates 拉取，避免前端硬编码。
+  const valveReady = computed(() => valveStatus.value === 'calibration')
+  const gatesStore = useGatesStore()
+  const enforceValveCalibrationGate = computed(() => gatesStore.enforceValveCalibrationGate)
+  const canStart = computed(() => !enforceValveCalibrationGate.value || valveReady.value)
+
+  // 主按钮：随会话状态自动切换文案、图标、色阶
+  const primaryAction = computed<PrimaryAction>(() => {
+    switch (state.value) {
+      case 'idle':
+      case 'ready':
+      case 'stopped':
+        return { key: 'start', label: '开始采集', icon: 'VideoPlay', variant: 'mint' }
+      case 'pressurizing':
+      case 'stabilizing':
+      case 'collecting':
+        return { key: 'pause', label: '暂停', icon: 'VideoPause', variant: 'slate' }
+      case 'paused':
+        return { key: 'resume', label: '继续采集', icon: 'VideoPlay', variant: 'mint' }
+      case 'completed':
+        return { key: 'export', label: '导出报告', icon: 'Download', variant: 'blue' }
+      case 'error':
+        return { key: 'retry', label: '重试', icon: 'Refresh', variant: 'amber' }
+      default:
+        return { key: 'start', label: '开始采集', icon: 'VideoPlay', variant: 'mint' }
+    }
+  })
+
+  // 副按钮：仅在该状态确实可用时才出现
+  const secondaryActions = computed<SecondaryAction[]>(() => {
+    const out: SecondaryAction[] = []
+    switch (state.value) {
+      case 'pressurizing':
+      case 'stabilizing':
+      case 'collecting':
+      case 'paused':
+        out.push({ key: 'stop', label: '停止', variant: 'red', confirm: '确认终止采集？已采集数据将保留。' })
+        break
+      case 'completed':
+        out.push({ key: 'restart', label: '重新采集', variant: 'slate', confirm: '将清空当前结果，重新开始？' })
+        break
+      case 'stopped':
+        if (hasCompletedPoints.value) {
+          out.push({ key: 'export', label: '导出报告', variant: 'blue' })
+        }
+        out.push({ key: 'reset', label: '清空数据', variant: 'slate', confirm: '将永久删除当前采集结果？' })
+        break
+      case 'error':
+        out.push({ key: 'stop', label: '停止', variant: 'red', confirm: '确认终止当前会话？' })
+        out.push({ key: 'view-error', label: '查看错误', variant: 'amber' })
+        break
+    }
+    return out
+  })
 
   // ── 设备绑定 ──
 
@@ -159,9 +218,19 @@ export const useMeasurementStore = defineStore('measurement', () => {
     catch { /* 静默 */ }
   }
 
-  const setValveStatus = async (status: string) => {
-    await apiSetValveStatus(status)
-    valveStatus.value = status
+  // setValveStatus 切换阀门状态：
+  // 成功时本地状态先按请求值更新，调用方应再通过 refreshValveStatus 校核硬件实际状态；
+  // 失败时返回结构化错误（含 N09 等设备拒绝信息），便于 UI 弹出可读提示。
+  const setValveStatus = async (status: string): Promise<ActionResult> => {
+    try {
+      await apiSetValveStatus(status)
+      valveStatus.value = status
+      return { ok: true }
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : '设置阀门状态失败'
+      console.error('设置阀门状态失败:', error)
+      return { ok: false, error: 'VALVE_SET_FAILED', detail }
+    }
   }
 
   const refreshMeasureUnit = async () => {
@@ -197,6 +266,11 @@ export const useMeasurementStore = defineStore('measurement', () => {
     if (!deviceBound.value) {
       return { ok: false, error: 'DEVICE_NOT_BOUND', detail: '请先绑定计量设备' }
     }
+    // 阀门=校准模式是启动的必要条件，前端先做一次轻量门禁，
+    // 给用户即时反馈；后端会做权威校验，避免绕过。
+    if (enforceValveCalibrationGate.value && !valveReady.value) {
+      return { ok: false, error: 'VALVE_NOT_READY', detail: '请先将阀门切换到校准模式' }
+    }
     try {
       await ensureDevicesBound()
       await syncPointsBeforeStart()
@@ -214,6 +288,9 @@ export const useMeasurementStore = defineStore('measurement', () => {
   const manualStart = async (selectedChannels: number[]): Promise<ActionResult> => {
     if (!deviceBound.value) {
       return { ok: false, error: 'DEVICE_NOT_BOUND', detail: '请先绑定计量设备' }
+    }
+    if (enforceValveCalibrationGate.value && !valveReady.value) {
+      return { ok: false, error: 'VALVE_NOT_READY', detail: '请先将阀门切换到校准模式' }
     }
     try {
       await ensureDevicesBound()
@@ -472,6 +549,11 @@ export const useMeasurementStore = defineStore('measurement', () => {
     isIdle,
     totalRows,
     deviceBound,
+    hasCompletedPoints,
+    valveReady,
+    canStart,
+    primaryAction,
+    secondaryActions,
     // 设备绑定
     bindDevices,
     bindMeasureDevice,

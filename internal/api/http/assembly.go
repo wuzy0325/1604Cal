@@ -143,6 +143,10 @@ func newDependencies(
 		measurementSvc.SetConfig(measurementConfigFromParams(config.Default().MeasurementParams))
 		measurementSvc.SetAlarmConfig(config.Default().Alarm)
 	}
+	// 计量启动门禁：阀门=校准模式是必要条件，与标定服务共用同一开关。
+	measurementSvc.SetStartPrerequisiteConfig(measurement.StartPrerequisiteConfig{
+		EnforceValveCalibration: calibrationConfig.EnforceValveCalibrationGate,
+	})
 
 	// 校准服务
 	calibrationSvc := calibration.NewService(

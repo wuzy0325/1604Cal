@@ -55,8 +55,11 @@
             @pause="handlePause"
             @resume="handleResume"
             @stop="handleStop"
+            @retry="handleRetry"
+            @restart="handleRestart"
             @reset="handleReset"
             @export="exportDialogVisible = true"
+            @view-error="handleViewError"
             @manual-start="handleManualStart"
             @manual-pressurize="handleManualPressurize"
           />
@@ -124,12 +127,29 @@ const sidebarRef = ref()
 const exportDialogVisible = ref(false)
 const isExporting = ref(false)
 
+// canStart：设备连接 + 计量绑定 + 点位已生成 + 阀门=校准模式（启动必要条件）。
+// valveReady / enforceValveCalibrationGate 由 measurementStore 提供，与后端门禁同源。
 const canStart = computed(() =>
   deviceStore.measureDevices.some(d => d.status === 'connected') &&
   deviceStore.pressureDevices.some(d => d.status === 'connected') &&
   measurementStore.deviceBound &&
-  measurementStore.points.length > 0
+  measurementStore.points.length > 0 &&
+  measurementStore.canStart
 )
+
+// startBlockedReason：返回阻断"开始采集"的具体原因文案，
+// 给 UI 在按钮 tooltip / 弹框中提示用户该如何修复。
+// 所有 canStart 分支都在这里穷举，调用方无需再写 `|| '兜底'` fallback。
+const startBlockedReason = computed<string>(() => {
+  if (!deviceStore.measureDevices.some(d => d.status === 'connected')) return '请先连接计量设备'
+  if (!deviceStore.pressureDevices.some(d => d.status === 'connected')) return '请先连接压力源设备'
+  if (!measurementStore.deviceBound) return '请先绑定计量设备'
+  if (measurementStore.points.length === 0) return '请先生成压力表'
+  if (!measurementStore.canStart) return '请先将阀门切换到校准模式'
+  // 安全网：理论上 canStart=true 时该 computed 不会被读到；
+  // 兜底文案让逻辑回归时仍有一条可读提示。
+  return '设备状态异常，请检查后重试'
+})
 
 const hasPressureDevice = computed(() =>
   deviceStore.pressureDevices.some(d => d.status === 'connected')
@@ -191,13 +211,28 @@ function goBack() { router.push('/') }
 
 /* ── 采集控制 ── */
 async function handleStart() {
-  if (!canStart.value) { ElMessage.warning('请先连接设备并生成压力表'); return }
+  if (!canStart.value) { ElMessage.warning(startBlockedReason.value); return }
   await measurementUI.start(measurementStore.channels)
 }
 
 async function handlePause() { await measurementUI.pause() }
 async function handleResume() { await measurementUI.start(measurementStore.channels) }
 async function handleStop() { await measurementUI.stop() }
+
+async function handleRetry() {
+  if (!canStart.value) { ElMessage.warning(startBlockedReason.value); return }
+  await measurementUI.start(measurementStore.channels)
+}
+
+async function handleRestart() {
+  if (!canStart.value) { ElMessage.warning(startBlockedReason.value); return }
+  measurementStore.resetCollection()
+  await measurementUI.start(measurementStore.channels)
+}
+
+function handleViewError() {
+  ElMessage.info('请检查设备连接和报警信息')
+}
 
 function handleReset() {
   measurementStore.resetCollection()
@@ -208,6 +243,7 @@ async function handleManualStart() {
   const hasMeasure = deviceStore.measureDevices.some(d => d.status === 'connected')
   if (!hasMeasure) { ElMessage.warning('请先连接计量设备'); return }
   if (measurementStore.points.length === 0) { ElMessage.warning('请先生成压力表'); return }
+  if (!measurementStore.canStart) { ElMessage.warning('请先将阀门切换到校准模式'); return }
   await measurementUI.manualStart(measurementStore.channels)
 }
 

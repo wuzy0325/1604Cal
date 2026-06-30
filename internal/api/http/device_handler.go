@@ -37,6 +37,7 @@ type apiServer struct {
 	coordinator        *workflow.WorkflowCoordinator
 	deviceConnector    deviceConnector
 	connectConfig      deviceconnect.Config
+	calibrationConfig  CalibrationRuntimeConfig
 	calibrationService *calibration.Service
 	multipressService  *multipress.Service
 	sessionService     *session.Service

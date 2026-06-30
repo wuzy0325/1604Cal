@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"math"
+	"strings"
 	"testing"
 	"time"
 
@@ -18,15 +19,21 @@ import (
 func float64Ptr(v float64) *float64 { return &v }
 
 // fakeMeasureDriver 最小实现，仅 CollectData。
+// 默认返回 calibration 阀位以满足启动门禁（阀门=校准模式是必要条件）。
+// 单测如需验证门禁失败场景，可通过 valveStatus 字段覆盖。
 type fakeMeasureDriver struct {
-	data []float64
-	err  error
+	data        []float64
+	err         error
+	valveStatus string
 }
 
 func (f *fakeMeasureDriver) Connect(_ context.Context) error    { return nil }
 func (f *fakeMeasureDriver) Disconnect(_ context.Context) error { return nil }
 func (f *fakeMeasureDriver) ReadValveStatus(_ context.Context) (string, error) {
-	return "measurement", nil
+	if f.valveStatus == "" {
+		return "calibration", nil
+	}
+	return f.valveStatus, nil
 }
 func (f *fakeMeasureDriver) SetValveStatus(_ context.Context, _ string) error { return nil }
 func (f *fakeMeasureDriver) ReadUnit(_ context.Context) (string, error)       { return "kPa", nil }
@@ -205,6 +212,51 @@ func TestStartWorkflowUsesGeneratedPointsAndTransitionsToReady(t *testing.T) {
 	}
 	if len(session.Config.Channels) != 2 {
 		t.Fatalf("expected workflow channels to be stored, got %+v", session.Config.Channels)
+	}
+}
+
+func TestStartWorkflowRejectedWhenValveNotCalibration(t *testing.T) {
+	// 阀门=校准模式是计量启动的必要条件，valve != calibration 时应直接拒绝。
+	svc, mDrv := setupMeasurementService()
+	mDrv.valveStatus = "measurement"
+
+	svc.SetConfig(domain.WorkflowConfig{
+		MinPressure: 0,
+		MaxPressure: 20,
+		PointCount:  3,
+		Precision:   2,
+	})
+	if _, err := svc.GeneratePressurePoints(); err != nil {
+		t.Fatalf("GeneratePressurePoints: %v", err)
+	}
+
+	err := svc.StartWorkflow(context.Background(), []int{1})
+	if err == nil {
+		t.Fatal("expected StartWorkflow to be rejected when valve is not calibration")
+	}
+	if !strings.Contains(err.Error(), "valve must be in calibration state") {
+		t.Fatalf("expected valve gate error, got: %v", err)
+	}
+}
+
+func TestStartWorkflowBypassesValveGateWhenDisabled(t *testing.T) {
+	// 显式关闭门禁后，测量阀位也允许启动（用于联调/特殊运维场景）。
+	svc, mDrv := setupMeasurementService()
+	mDrv.valveStatus = "measurement"
+	svc.SetStartPrerequisiteConfig(measurement.StartPrerequisiteConfig{EnforceValveCalibration: false})
+
+	svc.SetConfig(domain.WorkflowConfig{
+		MinPressure: 0,
+		MaxPressure: 20,
+		PointCount:  3,
+		Precision:   2,
+	})
+	if _, err := svc.GeneratePressurePoints(); err != nil {
+		t.Fatalf("GeneratePressurePoints: %v", err)
+	}
+
+	if err := svc.StartWorkflow(context.Background(), []int{1}); err != nil {
+		t.Fatalf("expected StartWorkflow to succeed with gate disabled: %v", err)
 	}
 }
 

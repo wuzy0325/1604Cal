@@ -33,9 +33,16 @@ type DeviceConnectFileConfig struct {
 	DisconnectMaxBackoffMs     int `json:"disconnectMaxBackoffMs"`
 }
 
-// CalibrationFileConfig 定义标定流程运行开关。
+// CalibrationFileConfig 定义启动门禁开关。
+//
+// 命名注意：字段名仍以 calibration 起头是出于历史兼容（v1 仅标定模块用），
+// 但该开关现在同时控制【标定】与【计量】两条启动路径的"阀门=校准模式"门禁。
+// 详见 docs/adr/0002-阀门校准模式作为启动必要条件.md。
+//
+// 下一次大版本重构时计划升格为 WorkflowGateConfig，把所有跨模块启动门禁
+// 收拢到一个独立配置块，到那时此字段会通过 LoadFromFile 的迁移逻辑做兼容。
 type CalibrationFileConfig struct {
-	// EnforceValveCalibrationGate 为 true 时，开始标定前必须校验阀门=calibration。
+	// EnforceValveCalibrationGate 为 true 时，开始【标定 / 计量】前都必须校验阀门=calibration。
 	EnforceValveCalibrationGate bool `json:"enforceValveCalibrationGate"`
 }
 
@@ -87,7 +94,8 @@ func Default() AppConfig {
 			DisconnectMaxBackoffMs:     int(defaults.DisconnectMaxBackoff / time.Millisecond),
 		},
 		Calibration: CalibrationFileConfig{
-			EnforceValveCalibrationGate: false,
+			// 默认开启阀门门禁：阀门=校准模式是标定与计量启动的必要条件。
+			EnforceValveCalibrationGate: true,
 		},
 		CalibrationParams: CalibrationParamsConfig{
 			MinPressure:      0,

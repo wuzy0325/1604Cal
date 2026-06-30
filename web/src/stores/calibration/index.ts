@@ -13,6 +13,7 @@ import { type SessionState, ControlMode } from "@/types/calibration"
 import { useDeviceInventoryStore } from '@/stores/device/inventoryStore'
 import { usePressurePointStore } from './pressurePoints'
 import { useDeviceControlStore } from './deviceControl'
+import { useGatesStore } from '@/stores/app/gates'
 import { sessionStateToStep, isSessionRunning } from '@/composables/useCalibrationFlow'
 import { useCalibrationConfig } from '@/composables/useCalibrationConfig'
 import { CalibrationStep } from './types'
@@ -51,11 +52,14 @@ export const useCalibrationStore = defineStore('calibration', () => {
   const channelsSelected = computed(() => selectedChannels.value.length > 0)
   const hasCollectedData = computed(() => pressurePointStore.hasCollectedData)
   const valveReady = computed(() => deviceControlStore.valveStatus === 'calibration')
-  const enforceValveCalibrationGate = false
+  // 阀门=校准模式是标定与计量启动的必要条件。
+  // 开关由 gate store 从后端 /api/v1/config/gates 拉取，避免前端硬编码短路后端配置。
+  const gatesStore = useGatesStore()
+  const enforceValveCalibrationGate = computed(() => gatesStore.enforceValveCalibrationGate)
 
-  // 前端阀门门禁统一开关：false 表示放开（联调），true 表示严格门禁。
+  // 前端阀门门禁统一开关：true 表示严格门禁。
   const canStartCalibration = computed(() =>
-    device1604Connected.value && channelsSelected.value && (!enforceValveCalibrationGate || valveReady.value)
+    device1604Connected.value && channelsSelected.value && (!enforceValveCalibrationGate.value || valveReady.value)
   )
   const isRunning = computed(() => isSessionRunning(sessionState.value))
 
@@ -136,7 +140,7 @@ export const useCalibrationStore = defineStore('calibration', () => {
       const missing: string[] = []
       if (!device1604Connected.value) missing.push('连接计量设备')
       if (!channelsSelected.value) missing.push('选择通道')
-      if (enforceValveCalibrationGate && !valveReady.value) missing.push('将阀门切换到校准状态')
+      if (enforceValveCalibrationGate.value && !valveReady.value) missing.push('将阀门切换到校准状态')
       return { ok: false, error: 'MISSING_REQUIREMENTS', detail: `请先${missing.join('并')}` }
     }
     // 自动模式额外校验打压设备

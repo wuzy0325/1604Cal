@@ -18,7 +18,8 @@ type CalibrationRuntimeConfig struct {
 }
 
 func defaultCalibrationRuntimeConfig() CalibrationRuntimeConfig {
-	return CalibrationRuntimeConfig{EnforceValveCalibrationGate: false}
+	// 默认开启阀门门禁：阀门=校准模式是标定与计量启动的必要条件。
+	return CalibrationRuntimeConfig{EnforceValveCalibrationGate: true}
 }
 
 // NewRouterWithDeviceManager 基于指定设备管理器创建路由。
@@ -112,6 +113,7 @@ func newRouterWithServer(
 		coordinator:        deps.WorkflowCoordinator,
 		deviceConnector:    deps.DeviceConnector,
 		connectConfig:      deps.ConnectConfig,
+		calibrationConfig:  calibrationConfig,
 		calibrationService: deps.CalibrationService,
 		multipressService:  deps.MultipressService,
 		sessionService:     deps.SessionService,
@@ -135,6 +137,8 @@ func newRouterWithServer(
 	mux.HandleFunc("POST /api/v1/config/measurement", server.measurementSaveConfigHandler)
 	mux.HandleFunc("GET /api/v1/config/alarm", server.alarmReadConfigHandler)
 	mux.HandleFunc("POST /api/v1/config/alarm", server.alarmSaveConfigHandler)
+	// 启动门禁开关：让前端与后端配置同源，避免前端硬编码短路后端配置。
+	mux.HandleFunc("GET /api/v1/config/gates", server.gatesConfigHandler)
 
 	// 设备管理
 	mux.HandleFunc("GET /api/v1/devices", server.listDevicesHandler)
