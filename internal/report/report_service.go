@@ -474,10 +474,10 @@ func fillMeasurementWorksheetMetadata(f *excelize.File, unit string, points []do
 				continue
 			}
 
-			// 匹配"Accuracy"标签→右侧单元格填充准确度等级
+			// 匹配"Accuracy"标签→右侧单元格填充准确度等级（按百分数显示，如 0.02 表示 0.02%）
 			if strings.Contains(text, "Accuracy") || strings.Contains(text, "准确度") {
 				rightCell := cellName(col+1, row)
-				f.SetCellValue(sheet, rightCell, config.PrecisionLevel)
+				f.SetCellValue(sheet, rightCell, fmt.Sprintf("%.2f", config.PrecisionLevel*100))
 				continue
 			}
 
