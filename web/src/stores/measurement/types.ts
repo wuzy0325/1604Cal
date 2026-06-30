@@ -36,3 +36,19 @@ export interface AlarmData {
   maxDeviation: number
   overLimitChannels: number[]
 }
+
+/** 主按钮动作定义 */
+export interface PrimaryAction {
+  key: string
+  label: string
+  icon: string
+  variant: 'mint' | 'slate' | 'blue' | 'amber'
+}
+
+/** 副按钮动作定义 */
+export interface SecondaryAction {
+  key: string
+  label: string
+  variant: 'slate' | 'red' | 'blue' | 'amber'
+  confirm?: string
+}
