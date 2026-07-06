@@ -15,8 +15,10 @@ func TestResolveConnectConfigUsesDefaultsWhenEnvMissing(t *testing.T) {
 		t.Fatalf("resolve config returned unexpected error: %v", err)
 	}
 
-	if cfg.ConnectMaxAttempts != 5 {
-		t.Fatalf("expected default connect max attempts 5, got %d", cfg.ConnectMaxAttempts)
+	// 默认值与 deviceconnect.DefaultConfig() 对齐：2 次重试用于短时网络抖动容错。
+	// 详见 internal/application/deviceconnect/service.go DefaultConfig 注释。
+	if cfg.ConnectMaxAttempts != 2 {
+		t.Fatalf("expected default connect max attempts 2, got %d", cfg.ConnectMaxAttempts)
 	}
 }
 
