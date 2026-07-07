@@ -5,6 +5,8 @@ import (
 	"math"
 	"strconv"
 	"strings"
+
+	"cal1604/internal/device"
 )
 
 // ---------------------------------------------------------------------------
@@ -21,17 +23,10 @@ func isValidPressureUnit(unit string) bool {
 }
 
 // NormalizePressureUnit 将单位字符串规范化为标准大小写形式。
-// 设备可能返回全小写（如 "kpa"、"mmhg"），前端和显示需要标准形式（如 "kPa"、"mmHg"）。
+// 实现已上移到 device 包（ports 层），此处保留转发以维持 driver 包内部调用不变。
+// application 层应直接调用 device.NormalizePressureUnit，避免依赖 adapters 层。
 func NormalizePressureUnit(unit string) string {
-	m := map[string]string{
-		"pa": "Pa", "kpa": "kPa", "mpa": "MPa",
-		"bar": "bar", "mbar": "mbar", "psi": "psi",
-		"kgf/cm2": "kgf/cm2", "mmhg": "mmHg", "atm": "atm", "inhg": "inHg",
-	}
-	if normalized, ok := m[strings.ToLower(strings.TrimSpace(unit))]; ok {
-		return normalized
-	}
-	return unit
+	return device.NormalizePressureUnit(unit)
 }
 
 func pressureUnitToCode(unit string) (string, bool) {

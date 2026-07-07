@@ -9,7 +9,6 @@ import (
 	"cal1604/internal/device"
 	"cal1604/internal/domain"
 	"cal1604/internal/events"
-	"cal1604/internal/infrastructure/driver"
 	"cal1604/internal/workflow"
 )
 
@@ -252,7 +251,7 @@ func (s *Service) waitForStabilityWithMonitor(ctx context.Context, pointIndex in
 		case <-ctx.Done():
 			return ctx.Err()
 		case <-ticker.C:
-			pollCtx := driver.WithPollContext(ctx)
+			pollCtx := device.WithPollContext(ctx)
 			if time.Now().After(deadline) {
 				// 超时：发布事件并等待前端用户决定
 				s.publish(events.EventCalibrationStabilityTimeout, map[string]any{

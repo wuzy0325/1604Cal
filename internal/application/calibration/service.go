@@ -13,7 +13,6 @@ import (
 	"cal1604/internal/domain"
 	apperrors "cal1604/internal/errors"
 	"cal1604/internal/events"
-	"cal1604/internal/infrastructure/driver"
 	"cal1604/internal/workflow"
 )
 
@@ -74,7 +73,7 @@ func defaultStartPrerequisiteConfig() StartPrerequisiteConfig {
 type Service struct {
 	mu             sync.Mutex
 	coordinator    *workflow.WorkflowCoordinator
-	factory        *driver.Factory
+	factory        device.DriverFactory
 	deviceManager  device.DeviceStore
 	driverProvider device.ActiveDriverProvider
 	sessionService *session.Service
@@ -112,7 +111,7 @@ type Service struct {
 // NewService 创建校准服务。
 func NewService(
 	coordinator *workflow.WorkflowCoordinator,
-	factory *driver.Factory,
+	factory device.DriverFactory,
 	deviceManager device.DeviceStore,
 	publisher StatusPublisher,
 	driverProvider device.ActiveDriverProvider,
@@ -202,7 +201,7 @@ func (s *Service) StartCalibration(ctx context.Context) error {
 			s.coordinator.End()
 			return fmt.Errorf("%w: read valve status: %v", apperrors.ErrPrerequisiteNotMet, err)
 		}
-		if valveStatus != driver.ValveStateCalibration {
+		if valveStatus != string(domain.ValveStateCalibration) {
 			s.coordinator.End()
 			return fmt.Errorf("%w: valve must be in calibration state, current: %s",
 				apperrors.ErrPrerequisiteNotMet, valveStatus)
@@ -276,7 +275,7 @@ func (s *Service) ValidateStartPrerequisites(ctx context.Context) error {
 		if err != nil {
 			return fmt.Errorf("%w: read valve status: %v", apperrors.ErrPrerequisiteNotMet, err)
 		}
-		if valveStatus != driver.ValveStateCalibration {
+		if valveStatus != string(domain.ValveStateCalibration) {
 			return fmt.Errorf("%w: valve must be in calibration state, current: %s",
 				apperrors.ErrPrerequisiteNotMet, valveStatus)
 		}

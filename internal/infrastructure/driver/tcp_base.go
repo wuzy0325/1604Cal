@@ -13,14 +13,14 @@ import (
 	"sync"
 	"time"
 
+	"cal1604/internal/device"
 	"cal1604/internal/events"
 )
 
-// contextKeyPoll 是 context 中标记"轮询"的键，轮询循环设置此标记后，
-// tcp_base.go 在发布硬件事件时会附带 "poll": true，前端可据此过滤轮询日志。
-type contextKeyPollType struct{}
-
-var contextKeyPoll = contextKeyPollType{}
+// contextKeyPoll 已上移到 device 包（ports 层）。
+// 保留此处变量作为转发，driver 内部代码可继续使用 driver.contextKeyPoll，
+// 实际指向 device.ContextKeyPoll，保持 context 跨层传递一致性。
+var contextKeyPoll = device.ContextKeyPoll
 
 const defaultTCPDialTimeout = 3 * time.Second
 
@@ -207,16 +207,16 @@ func (d *tcpConnectionDriver) closeConn() {
 // 对于设置类命令（不含 ?），设备通常不回复，直接返回空响应以免阻塞 3 秒。
 
 // WithPollContext 返回一个标记了"轮询"的新 context。
-// 此标记会随硬件事件传递到前端，用于过滤轮询产生的日志。
+// 实现已上移到 device 包（ports 层），此处保留转发以维持 driver 包内部调用不变。
+// application 层应直接调用 device.WithPollContext，避免依赖 adapters 层。
 func WithPollContext(ctx context.Context) context.Context {
-	return context.WithValue(ctx, contextKeyPoll, true)
+	return device.WithPollContext(ctx)
 }
 
 // IsPollContext 检查 context 中是否标记了轮询操作。
+// 实现已上移到 device 包（ports 层），此处保留转发以维持 driver 包内部调用不变。
 func IsPollContext(ctx context.Context) bool {
-	v := ctx.Value(contextKeyPoll)
-	b, _ := v.(bool)
-	return b
+	return device.IsPollContext(ctx)
 }
 
 func (d *tcpConnectionDriver) sendSCPICommand(ctx context.Context, cmd string, readTimeout time.Duration) (string, error) {

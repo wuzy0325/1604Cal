@@ -83,3 +83,17 @@ type ActiveDriverProvider interface {
 type StabilityStatusProvider interface {
 	IsStable(ctx context.Context) (bool, error)
 }
+
+// DriverFactory 按设备型号创建对应驱动实例（ports 层接口）。
+// application 层通过此接口创建驱动，不直接依赖 infrastructure/driver 包，
+// 维持六边形架构"usecase 不得导入 adapters"的依赖方向约束。
+// 具体实现由 composition root（cmd/server 或 api/http/assembly）注入。
+type DriverFactory interface {
+	// Create 返回通用连接驱动（仅含 Connect/Disconnect）。
+	Create(dev domain.Device) (ConnectionDriver, error)
+	// CreateMeasureDriver 返回计量设备驱动（含阀门控制、数据采集、校准等）。
+	CreateMeasureDriver(dev domain.Device) (MeasureDriver, error)
+	// CreatePressureDriver 返回打压设备驱动（含压力控制、稳定检测等）。
+	CreatePressureDriver(dev domain.Device) (PressureDriver, error)
+}
+

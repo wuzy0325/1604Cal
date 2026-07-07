@@ -10,7 +10,6 @@ import (
 	"cal1604/internal/application/session"
 	"cal1604/internal/device"
 	"cal1604/internal/domain"
-	"cal1604/internal/infrastructure/driver"
 )
 
 // DevicePressureState 单台打压设备的运行状态。
@@ -40,7 +39,7 @@ type deviceEntry struct {
 type Service struct {
 	mu            sync.Mutex
 	entries       map[string]*deviceEntry // deviceID -> entry
-	factory       *driver.Factory
+	factory       device.DriverFactory
 	deviceManager device.DeviceStore
 	publish       StatusPublisher
 
@@ -50,7 +49,7 @@ type Service struct {
 
 // NewService 创建多设备打压控制服务。
 func NewService(
-	factory *driver.Factory,
+	factory device.DriverFactory,
 	deviceManager device.DeviceStore,
 	publisher StatusPublisher,
 ) *Service {
@@ -117,7 +116,7 @@ func (s *Service) RegisterDevice(ctx context.Context, deviceID string) error {
 	}
 
 	// 读取当前单位并规范化大小写
-	unit := driver.NormalizePressureUnit(dev.Unit)
+	unit := device.NormalizePressureUnit(dev.Unit)
 	readUnit := ""
 	if u, err := pDrv.ReadUnit(ctx); err == nil && u != "" {
 		unit = u
@@ -326,7 +325,7 @@ func (s *Service) ReadUnit(ctx context.Context, deviceID string) (string, error)
 		return "", fmt.Errorf("read unit from %s: %w", deviceID, err)
 	}
 
-	unit = driver.NormalizePressureUnit(unit)
+	unit = device.NormalizePressureUnit(unit)
 	entry.state.Unit = unit
 	log.Printf("[multipress.ReadUnit] %s → %q", deviceID, unit)
 	return unit, nil
@@ -346,7 +345,7 @@ func (s *Service) SetUnit(ctx context.Context, deviceID string, unit string) err
 		return fmt.Errorf("set unit on %s: %w", deviceID, err)
 	}
 
-	entry.state.Unit = driver.NormalizePressureUnit(unit)
+	entry.state.Unit = device.NormalizePressureUnit(unit)
 
 	// 切换单位后立即重读压力，确保显示值与新单位匹配
 	if pressure, err := entry.driver.ReadCurrentPressure(ctx); err == nil {
@@ -481,7 +480,7 @@ func (s *Service) pollDevicesConcurrently(ctx context.Context, targets []*device
 			defer wg.Done()
 			pollCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
 			defer cancel()
-			pollCtx = driver.WithPollContext(pollCtx)
+			pollCtx = device.WithPollContext(pollCtx)
 
 			pressure, pErr := e.driver.ReadCurrentPressure(pollCtx)
 			stable, sErr := e.driver.ReadStability(pollCtx)

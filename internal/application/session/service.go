@@ -10,7 +10,6 @@ import (
 
 	"cal1604/internal/device"
 	"cal1604/internal/events"
-	"cal1604/internal/infrastructure/driver"
 )
 
 // BindingToken 设备绑定租约令牌，标识一次设备绑定的所有权。
@@ -47,7 +46,7 @@ type EventPublisher func(eventType string, data any)
 type Service struct {
 	mu             sync.Mutex
 	deviceManager  device.DeviceStore
-	factory        *driver.Factory
+	factory        device.DriverFactory
 	driverProvider device.ActiveDriverProvider
 	resolver       *DriverResolver
 
@@ -65,7 +64,7 @@ type Service struct {
 // NewService 创建设备会话服务。
 func NewService(
 	deviceManager device.DeviceStore,
-	factory *driver.Factory,
+	factory device.DriverFactory,
 	publisher EventPublisher,
 	driverProvider device.ActiveDriverProvider,
 ) *Service {
