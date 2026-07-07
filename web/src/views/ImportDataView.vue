@@ -2,12 +2,17 @@
   <PageLayout>
     <header class="instrument-header">
       <div class="header-nav">
-        <button class="back-btn" @click="goBack">
+        <button
+          class="back-btn"
+          @click="goBack"
+        >
           <el-icon><ArrowLeft /></el-icon>
         </button>
       </div>
       <div class="header-identity">
-        <h1 class="header-title">导入数据</h1>
+        <h1 class="header-title">
+          导入数据
+        </h1>
         <span class="header-sub">在系统间同步数据</span>
       </div>
     </header>
@@ -16,9 +21,13 @@
       <!-- 简介 -->
       <section class="hero">
         <div class="hero-icon">
-          <el-icon class="hero-svg"><Upload /></el-icon>
+          <el-icon class="hero-svg">
+            <Upload />
+          </el-icon>
         </div>
-        <h2 class="hero-title">导入你的数据</h2>
+        <h2 class="hero-title">
+          导入你的数据
+        </h2>
         <p class="hero-desc">
           无论你是在探索 Cal1604 系统、运行试点项目，还是准备完成完整迁移，我们都能提供支持。
         </p>
@@ -26,33 +35,55 @@
 
       <!-- 探索与评估 -->
       <section class="section-group">
-        <h3 class="section-label">探索与评估</h3>
+        <h3 class="section-label">
+          探索与评估
+        </h3>
 
         <div class="card-grid">
           <div class="import-card">
             <div class="card-body">
-              <div class="card-icon-box" style="--card-accent: #3b82f6">
+              <div
+                class="card-icon-box"
+                style="--card-accent: #3b82f6"
+              >
                 <el-icon><Document /></el-icon>
               </div>
-              <h4 class="card-title">了解标定系统</h4>
-              <p class="card-desc">构建业务用例，建立组织认同，了解 Cal1604 系统功能全景。</p>
+              <h4 class="card-title">
+                了解标定系统
+              </h4>
+              <p class="card-desc">
+                构建业务用例，建立组织认同，了解 Cal1604 系统功能全景。
+              </p>
             </div>
             <div class="card-foot">
-              <a class="card-link" href="#">查看文档</a>
+              <a
+                class="card-link"
+                href="#"
+              >查看文档</a>
               <el-icon><ArrowRight /></el-icon>
             </div>
           </div>
 
           <div class="import-card">
             <div class="card-body">
-              <div class="card-icon-box" style="--card-accent: #f59e0b">
+              <div
+                class="card-icon-box"
+                style="--card-accent: #f59e0b"
+              >
                 <el-icon><Monitor /></el-icon>
               </div>
-              <h4 class="card-title">运行试点项目</h4>
-              <p class="card-desc">先在小团队中测试标定工作流，验证系统适配性后再推广至全部门。</p>
+              <h4 class="card-title">
+                运行试点项目
+              </h4>
+              <p class="card-desc">
+                先在小团队中测试标定工作流，验证系统适配性后再推广至全部门。
+              </p>
             </div>
             <div class="card-foot">
-              <a class="card-link" href="#">开始试点</a>
+              <a
+                class="card-link"
+                href="#"
+              >开始试点</a>
               <el-icon><ArrowRight /></el-icon>
             </div>
           </div>
@@ -61,47 +92,79 @@
 
       <!-- 数据迁移准备就绪 -->
       <section class="section-group">
-        <h3 class="section-label">数据迁移准备就绪</h3>
+        <h3 class="section-label">
+          数据迁移准备就绪
+        </h3>
 
         <div class="card-grid">
           <div class="import-card">
             <div class="card-body">
-              <div class="card-icon-box" style="--card-accent: #10b981">
+              <div
+                class="card-icon-box"
+                style="--card-accent: #10b981"
+              >
                 <el-icon><Files /></el-icon>
               </div>
-              <h4 class="card-title">导入设备配置</h4>
-              <p class="card-desc">从现有系统导入打压设备与计量设备配置，快速完成系统初始化。</p>
+              <h4 class="card-title">
+                导入设备配置
+              </h4>
+              <p class="card-desc">
+                从现有系统导入打压设备与计量设备配置，快速完成系统初始化。
+              </p>
             </div>
             <div class="card-foot">
-              <a class="card-link" href="#">开始导入</a>
+              <a
+                class="card-link"
+                href="#"
+              >开始导入</a>
               <el-icon><ArrowRight /></el-icon>
             </div>
           </div>
 
           <div class="import-card">
             <div class="card-body">
-              <div class="card-icon-box" style="--card-accent: #8b5cf6">
+              <div
+                class="card-icon-box"
+                style="--card-accent: #8b5cf6"
+              >
                 <el-icon><Reading /></el-icon>
               </div>
-              <h4 class="card-title">导入标定模板</h4>
-              <p class="card-desc">迁移标定流程模板、压力点配置与报告模板到新系统。</p>
+              <h4 class="card-title">
+                导入标定模板
+              </h4>
+              <p class="card-desc">
+                迁移标定流程模板、压力点配置与报告模板到新系统。
+              </p>
             </div>
             <div class="card-foot">
-              <a class="card-link" href="#">开始导入</a>
+              <a
+                class="card-link"
+                href="#"
+              >开始导入</a>
               <el-icon><ArrowRight /></el-icon>
             </div>
           </div>
 
           <div class="import-card">
             <div class="card-body">
-              <div class="card-icon-box" style="--card-accent: #ec4899">
+              <div
+                class="card-icon-box"
+                style="--card-accent: #ec4899"
+              >
                 <el-icon><FolderOpened /></el-icon>
               </div>
-              <h4 class="card-title">从旧系统迁移</h4>
-              <p class="card-desc">从 1604 旧版标定软件或历史会话数据中批量导入记录，保留完整审计追溯。</p>
+              <h4 class="card-title">
+                从旧系统迁移
+              </h4>
+              <p class="card-desc">
+                从 1604 旧版标定软件或历史会话数据中批量导入记录，保留完整审计追溯。
+              </p>
             </div>
             <div class="card-foot">
-              <a class="card-link" href="#">迁移指南</a>
+              <a
+                class="card-link"
+                href="#"
+              >迁移指南</a>
               <el-icon><ArrowRight /></el-icon>
             </div>
           </div>
@@ -111,7 +174,9 @@
       <!-- 技术支持 -->
       <section class="support-section">
         <div class="support-card">
-          <div class="support-icon"><el-icon><ChatLineSquare /></el-icon></div>
+          <div class="support-icon">
+            <el-icon><ChatLineSquare /></el-icon>
+          </div>
           <div class="support-body">
             <strong>遇到问题？</strong>
             按下键盘 <code>?</code> 键，选择「联系我们」获取技术支持。

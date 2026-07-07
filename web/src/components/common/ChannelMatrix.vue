@@ -36,8 +36,14 @@
         @keydown.enter="toggleChannel(ch)"
         @keydown.space.prevent="toggleChannel(ch)"
       >
-        <span class="check-box" aria-hidden="true">
-          <span v-if="isSelected(ch)" class="check-mark">✓</span>
+        <span
+          class="check-box"
+          aria-hidden="true"
+        >
+          <span
+            v-if="isSelected(ch)"
+            class="check-mark"
+          >✓</span>
         </span>
         <span class="channel-label">CH{{ ch }}</span>
       </div>

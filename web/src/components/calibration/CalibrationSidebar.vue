@@ -59,8 +59,18 @@
             class="prereq-item"
             :class="{ satisfied: item.satisfied, unsatisfied: !item.satisfied }"
           >
-            <el-icon v-if="item.satisfied" class="icon-satisfied"><CircleCheckFilled /></el-icon>
-            <el-icon v-else class="icon-unsatisfied"><CircleClose /></el-icon>
+            <el-icon
+              v-if="item.satisfied"
+              class="icon-satisfied"
+            >
+              <CircleCheckFilled />
+            </el-icon>
+            <el-icon
+              v-else
+              class="icon-unsatisfied"
+            >
+              <CircleClose />
+            </el-icon>
             <span class="prereq-label">{{ item.label }}</span>
             <span class="prereq-status">{{ item.satisfied ? '已满足' : '未满足' }}</span>
           </div>

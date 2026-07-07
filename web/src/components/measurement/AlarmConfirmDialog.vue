@@ -9,7 +9,11 @@
     class="measurement-alarm-dialog"
   >
     <div class="alarm-body">
-      <el-alert type="warning" :closable="false" show-icon>
+      <el-alert
+        type="warning"
+        :closable="false"
+        show-icon
+      >
         <template #title>
           <span>采集数据精度超限 — 压力点 {{ point?.id || '未知' }}</span>
         </template>
@@ -35,8 +39,13 @@
         </template>
       </el-alert>
 
-      <div v-if="alarm?.overLimitChannels?.length" class="overlimit-section">
-        <p class="overlimit-label">超限通道（{{ alarm.overLimitChannels.length }} 个）：</p>
+      <div
+        v-if="alarm?.overLimitChannels?.length"
+        class="overlimit-section"
+      >
+        <p class="overlimit-label">
+          超限通道（{{ alarm.overLimitChannels.length }} 个）：
+        </p>
         <div class="channel-tags">
           <el-tag
             v-for="ch in alarm.overLimitChannels"
@@ -53,8 +62,19 @@
 
     <template #footer>
       <div class="dialog-footer">
-        <el-button @click="decide('recollect')" type="warning" plain>重新采集</el-button>
-        <el-button @click="decide('continue')" type="primary">忽略继续</el-button>
+        <el-button
+          type="warning"
+          plain
+          @click="decide('recollect')"
+        >
+          重新采集
+        </el-button>
+        <el-button
+          type="primary"
+          @click="decide('continue')"
+        >
+          忽略继续
+        </el-button>
       </div>
     </template>
   </el-dialog>

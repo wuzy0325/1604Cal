@@ -1,23 +1,60 @@
 <template>
-  <div ref="panelRef" class="floating-log-panel" :class="{ expanded }">
-    <div class="log-bar" @click="toggleExpand">
+  <div
+    ref="panelRef"
+    class="floating-log-panel"
+    :class="{ expanded }"
+  >
+    <div
+      class="log-bar"
+      @click="toggleExpand"
+    >
       <div class="bar-left">
-        <el-icon :size="16"><Monitor /></el-icon>
+        <el-icon :size="16">
+          <Monitor />
+        </el-icon>
         <span class="bar-title">通讯日志</span>
-        <el-tag size="small" type="info" class="bar-count">{{ store.count }}</el-tag>
-        <span v-if="hasNewEntries && !expanded" class="new-dot" />
+        <el-tag
+          size="small"
+          type="info"
+          class="bar-count"
+        >
+          {{ store.count }}
+        </el-tag>
+        <span
+          v-if="hasNewEntries && !expanded"
+          class="new-dot"
+        />
       </div>
       <div class="bar-right">
-        <el-button size="small" text @click.stop="store.clear()">清空</el-button>
-        <el-button size="small" text class="bar-toggle">
+        <el-button
+          size="small"
+          text
+          @click.stop="store.clear()"
+        >
+          清空
+        </el-button>
+        <el-button
+          size="small"
+          text
+          class="bar-toggle"
+        >
           <el-icon><ArrowDown v-if="!expanded" /><ArrowUp v-else /></el-icon>
         </el-button>
       </div>
     </div>
 
-    <div v-show="expanded" class="resize-handle" @pointerdown.prevent="startResize" :class="{ active: isResizing }" />
+    <div
+      v-show="expanded"
+      class="resize-handle"
+      :class="{ active: isResizing }"
+      @pointerdown.prevent="startResize"
+    />
 
-    <div v-show="expanded" class="log-body" ref="logBodyRef">
+    <div
+      v-show="expanded"
+      ref="logBodyRef"
+      class="log-body"
+    >
       <CommLogPanel embedded />
     </div>
   </div>

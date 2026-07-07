@@ -2,12 +2,17 @@
   <PageLayout>
     <header class="integrations-header">
       <div class="header-nav">
-        <button class="back-btn" @click="goBack">
+        <button
+          class="back-btn"
+          @click="goBack"
+        >
           <el-icon><ArrowLeft /></el-icon>
         </button>
       </div>
       <div class="header-identity">
-        <h1 class="header-title">连接工具</h1>
+        <h1 class="header-title">
+          连接工具
+        </h1>
         <span class="header-sub">集成第三方服务，实现工作流自动化与双向同步</span>
       </div>
     </header>
@@ -20,8 +25,15 @@
           <p>将常用工具连接到系统，减少手动更新，保持数据同步</p>
         </div>
         <div class="integration-grid">
-          <div v-for="card in keyIntegrations" :key="card.title" class="integration-card">
-            <div class="card-icon" :style="{ background: card.bg, color: card.color }">
+          <div
+            v-for="card in keyIntegrations"
+            :key="card.title"
+            class="integration-card"
+          >
+            <div
+              class="card-icon"
+              :style="{ background: card.bg, color: card.color }"
+            >
               <el-icon :size="24">
                 <component :is="card.icon" />
               </el-icon>
@@ -44,9 +56,14 @@
           <h2>浏览所有集成</h2>
           <p>发现 150+ 可用连接</p>
         </div>
-        <div class="directory-card" @click="openDirectory">
+        <div
+          class="directory-card"
+          @click="openDirectory"
+        >
           <div class="directory-icon">
-            <el-icon :size="32"><Grid /></el-icon>
+            <el-icon :size="32">
+              <Grid />
+            </el-icon>
           </div>
           <div class="directory-body">
             <h3>集成目录</h3>
@@ -64,9 +81,14 @@
           <h2>Linear API</h2>
           <p>如果需要更自定义的集成，可以直接基于 Linear API（GraphQL）构建</p>
         </div>
-        <div class="api-card" @click="openApiDocs">
+        <div
+          class="api-card"
+          @click="openApiDocs"
+        >
           <div class="api-icon">
-            <el-icon :size="28"><Monitor /></el-icon>
+            <el-icon :size="28">
+              <Monitor />
+            </el-icon>
           </div>
           <div class="api-body">
             <h3>开发者文档</h3>

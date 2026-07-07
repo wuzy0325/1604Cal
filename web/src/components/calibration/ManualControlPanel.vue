@@ -11,7 +11,7 @@
           :max="maxPressure"
           :step="1"
           class="compact-input"
-        />
+        >
       </div>
 
       <button
@@ -32,9 +32,15 @@
     </div>
 
     <!-- 稳定进度条 -->
-    <div v-if="stabilityStatus && !stabilityStatus.isStable" class="stability-progress">
+    <div
+      v-if="stabilityStatus && !stabilityStatus.isStable"
+      class="stability-progress"
+    >
       <div class="progress-track">
-        <div class="progress-fill" :style="{ transform: 'scaleX(' + (Math.min(Math.max(stabilityStatus.progress || 0, 0), 100) / 100) + ')' }" />
+        <div
+          class="progress-fill"
+          :style="{ transform: 'scaleX(' + (Math.min(Math.max(stabilityStatus.progress || 0, 0), 100) / 100) + ')' }"
+        />
       </div>
     </div>
 

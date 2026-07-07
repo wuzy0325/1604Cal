@@ -11,7 +11,7 @@
             step="0.1"
             class="compact-input"
             :disabled="isRunning"
-          />
+          >
           <label class="input-label">最大</label>
           <input
             v-model.number="calibrationStore.calibrationParams.maxValue"
@@ -19,7 +19,7 @@
             step="0.1"
             class="compact-input"
             :disabled="isRunning"
-          />
+          >
         </div>
       </div>
 
@@ -28,12 +28,32 @@
         <span class="group-label">采集配置</span>
         <div class="group-body">
           <label class="input-label">点数</label>
-          <input v-model.number="calibrationStore.calibrationParams.points" type="number" min="2" max="5" class="compact-input narrow" :disabled="isRunning" />
+          <input
+            v-model.number="calibrationStore.calibrationParams.points"
+            type="number"
+            min="2"
+            max="5"
+            class="compact-input narrow"
+            :disabled="isRunning"
+          >
           <label class="input-label">精度</label>
-          <input v-model.number="calibrationStore.calibrationParams.precision" type="number" min="0" max="4" class="compact-input narrow" :disabled="isRunning" />
+          <input
+            v-model.number="calibrationStore.calibrationParams.precision"
+            type="number"
+            min="0"
+            max="4"
+            class="compact-input narrow"
+            :disabled="isRunning"
+          >
           <label class="input-label">平均</label>
-          <input v-model.number="calibrationStore.calibrationParams.averageCount" type="number" min="1" max="100" class="compact-input narrow" :disabled="isRunning" />
-
+          <input
+            v-model.number="calibrationStore.calibrationParams.averageCount"
+            type="number"
+            min="1"
+            max="100"
+            class="compact-input narrow"
+            :disabled="isRunning"
+          >
         </div>
       </div>
 
@@ -41,11 +61,23 @@
         <span class="group-label">稳定设置</span>
         <div class="group-body">
           <label class="input-label">时间</label>
-          <select v-model.number="calibrationStore.calibrationParams.stableTime" class="compact-select" :disabled="isRunning">
-            <option :value="1">1s</option>
-            <option :value="3">3s</option>
-            <option :value="5">5s</option>
-            <option :value="10">10s</option>
+          <select
+            v-model.number="calibrationStore.calibrationParams.stableTime"
+            class="compact-select"
+            :disabled="isRunning"
+          >
+            <option :value="1">
+              1s
+            </option>
+            <option :value="3">
+              3s
+            </option>
+            <option :value="5">
+              5s
+            </option>
+            <option :value="10">
+              10s
+            </option>
           </select>
         </div>
       </div>
@@ -61,14 +93,18 @@
               :class="{ active: calibrationStore.controlMode === ControlMode.Auto }"
               :disabled="isRunning"
               @click="calibrationStore.controlMode = ControlMode.Auto"
-            >自动</button>
+            >
+              自动
+            </button>
             <button
               type="button"
               class="segment-btn"
               :class="{ active: calibrationStore.controlMode === ControlMode.Manual }"
               :disabled="isRunning"
               @click="calibrationStore.controlMode = ControlMode.Manual"
-            >手动</button>
+            >
+              手动
+            </button>
           </div>
         </div>
       </div>
@@ -76,7 +112,11 @@
       <div class="param-group">
         <span class="group-label">采集通道</span>
         <div class="group-body">
-          <button class="channel-select-btn" :disabled="isRunning" @click="channelDialogVisible = true">
+          <button
+            class="channel-select-btn"
+            :disabled="isRunning"
+            @click="channelDialogVisible = true"
+          >
             <el-icon><Grid /></el-icon>
             <span>{{ calibrationStore.selectedChannels.length }}/16</span>
           </button>

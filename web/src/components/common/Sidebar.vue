@@ -1,15 +1,44 @@
 <template>
-  <aside class="sidebar" :class="{ collapsed }">
+  <aside
+    class="sidebar"
+    :class="{ collapsed }"
+  >
     <div class="sidebar-header">
-      <div class="logo-icon" title="1604系统">
-        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <path d="M12 2L2 7L12 12L22 7L12 2Z" fill="currentColor" fill-opacity="0.2"/>
-          <path d="M2 17L12 22L22 17" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-          <path d="M2 12L12 17L22 12" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+      <div
+        class="logo-icon"
+        title="1604系统"
+      >
+        <svg
+          viewBox="0 0 24 24"
+          fill="none"
+          xmlns="http://www.w3.org/2000/svg"
+        >
+          <path
+            d="M12 2L2 7L12 12L22 7L12 2Z"
+            fill="currentColor"
+            fill-opacity="0.2"
+          />
+          <path
+            d="M2 17L12 22L22 17"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          />
+          <path
+            d="M2 12L12 17L22 12"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          />
         </svg>
       </div>
       <transition name="fade-text">
-        <span v-if="!collapsed" class="brand-label">Cal1604</span>
+        <span
+          v-if="!collapsed"
+          class="brand-label"
+        >Cal1604</span>
       </transition>
     </div>
 
@@ -26,21 +55,45 @@
           <component :is="item.icon" />
         </el-icon>
         <transition name="fade-text">
-          <span v-if="!collapsed" class="nav-label">{{ item.title }}</span>
+          <span
+            v-if="!collapsed"
+            class="nav-label"
+          >{{ item.title }}</span>
         </transition>
-        <span v-if="!collapsed" class="nav-indicator" />
+        <span
+          v-if="!collapsed"
+          class="nav-indicator"
+        />
       </div>
     </nav>
 
     <div class="sidebar-footer">
-      <div class="nav-item footer-item" :title="collapsed ? '返回首页' : undefined" @click="handleNavigate('/')">
-        <el-icon class="nav-icon"><House /></el-icon>
+      <div
+        class="nav-item footer-item"
+        :title="collapsed ? '返回首页' : undefined"
+        @click="handleNavigate('/')"
+      >
+        <el-icon class="nav-icon">
+          <House />
+        </el-icon>
         <transition name="fade-text">
-          <span v-if="!collapsed" class="nav-label">首页</span>
+          <span
+            v-if="!collapsed"
+            class="nav-label"
+          >首页</span>
         </transition>
       </div>
-      <button class="collapse-btn" :title="collapsed ? '展开菜单' : '收起菜单'" @click="collapsed = !collapsed">
-        <el-icon class="collapse-icon" :class="{ rotated: !collapsed }"><DArrowRight /></el-icon>
+      <button
+        class="collapse-btn"
+        :title="collapsed ? '展开菜单' : '收起菜单'"
+        @click="collapsed = !collapsed"
+      >
+        <el-icon
+          class="collapse-icon"
+          :class="{ rotated: !collapsed }"
+        >
+          <DArrowRight />
+        </el-icon>
       </button>
     </div>
   </aside>

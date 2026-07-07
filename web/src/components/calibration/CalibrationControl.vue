@@ -1,13 +1,19 @@
 <template>
   <section class="control-card">
     <div class="control-main">
-      <div v-if="calibrationStore.pressurePoints.length > 0" class="progress-group">
+      <div
+        v-if="calibrationStore.pressurePoints.length > 0"
+        class="progress-group"
+      >
         <div class="progress-labels">
           <span class="progress-text">进度 {{ completedCount }}/{{ calibrationStore.pressurePoints.length }}</span>
           <span class="stable-label">{{ calibrationStore.isStable ? '已稳定' : '稳定中' }}</span>
         </div>
         <div class="progress-track">
-          <div class="progress-fill" :style="{ transform: 'scaleX(' + progressPercent / 100 + ')' }" />
+          <div
+            class="progress-fill"
+            :style="{ transform: 'scaleX(' + progressPercent / 100 + ')' }"
+          />
         </div>
       </div>
 

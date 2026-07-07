@@ -1,17 +1,22 @@
 <template>
-  <header class="page-header" :class="{ 'has-border': showBorder }">
+  <header
+    class="page-header"
+    :class="{ 'has-border': showBorder }"
+  >
     <div class="header-left">
       <button 
         v-if="showBack" 
         class="back-btn" 
-        @click="handleBack"
         :title="backText"
+        @click="handleBack"
       >
         <el-icon><ArrowLeft /></el-icon>
       </button>
       <div class="header-title">
         <h1>{{ title }}</h1>
-        <p v-if="subtitle">{{ subtitle }}</p>
+        <p v-if="subtitle">
+          {{ subtitle }}
+        </p>
       </div>
     </div>
     <div class="header-actions">
@@ -40,8 +45,10 @@ interface Props {
 }
 
 const props = withDefaults(defineProps<Props>(), {
+  subtitle: '',
   showBack: true,
   backText: '返回',
+  backPath: '/',
   showBorder: true
 })
 

@@ -1,9 +1,18 @@
 <template>
   <div class="comm-log-panel">
     <div class="log-toolbar">
-      <div v-if="!embedded" class="toolbar-left">
+      <div
+        v-if="!embedded"
+        class="toolbar-left"
+      >
         <span class="toolbar-title">系统日志</span>
-        <el-tag size="small" type="info" class="count-tag">{{ filtered.length }}</el-tag>
+        <el-tag
+          size="small"
+          type="info"
+          class="count-tag"
+        >
+          {{ filtered.length }}
+        </el-tag>
       </div>
       <div class="toolbar-right">
         <el-input
@@ -13,13 +22,36 @@
           clearable
           style="width: 140px"
         />
-        <el-select v-model="filterKind" size="small" style="width: 110px" placeholder="全部类型" clearable>
-          <el-option label="发送命令" value="hw-cmd" />
-          <el-option label="设备响应" value="hw-res" />
-          <el-option label="系统错误" value="sys-error" />
+        <el-select
+          v-model="filterKind"
+          size="small"
+          style="width: 110px"
+          placeholder="全部类型"
+          clearable
+        >
+          <el-option
+            label="发送命令"
+            value="hw-cmd"
+          />
+          <el-option
+            label="设备响应"
+            value="hw-res"
+          />
+          <el-option
+            label="系统错误"
+            value="sys-error"
+          />
         </el-select>
-        <el-button size="small" @click="store.clear()">清空</el-button>
-        <el-button size="small" @click="toggleAutoScroll">
+        <el-button
+          size="small"
+          @click="store.clear()"
+        >
+          清空
+        </el-button>
+        <el-button
+          size="small"
+          @click="toggleAutoScroll"
+        >
           {{ autoScroll ? '停止滚动' : '自动滚动' }}
         </el-button>
         <el-switch
@@ -31,15 +63,32 @@
         />
       </div>
     </div>
-    <div ref="logListEl" class="log-list" @scroll="onScroll">
-      <div v-for="entry in filtered" :key="entry.id" class="log-row" :class="entry.kind">
+    <div
+      ref="logListEl"
+      class="log-list"
+      @scroll="onScroll"
+    >
+      <div
+        v-for="entry in filtered"
+        :key="entry.id"
+        class="log-row"
+        :class="entry.kind"
+      >
         <span class="log-time">{{ formatTime(entry.timestamp) }}</span>
         <span class="log-kind">{{ kindLabel(entry.kind) }}</span>
         <span class="log-model">{{ entry.model }}</span>
         <span class="log-proto">{{ entry.proto }}</span>
-        <span class="log-detail" :title="entry.detail">{{ entry.detail }}</span>
+        <span
+          class="log-detail"
+          :title="entry.detail"
+        >{{ entry.detail }}</span>
       </div>
-      <div v-if="filtered.length === 0" class="log-empty">暂无系统日志</div>
+      <div
+        v-if="filtered.length === 0"
+        class="log-empty"
+      >
+        暂无系统日志
+      </div>
     </div>
   </div>
 </template>

@@ -2,19 +2,30 @@
   <section class="point-flow-panel">
     <header class="panel-header">
       <div>
-        <p class="panel-caption">Pressure Point Flow</p>
+        <p class="panel-caption">
+          Pressure Point Flow
+        </p>
         <h3>测点流程</h3>
       </div>
-      <el-tag :type="pressureReady ? 'success' : 'warning'" size="small">
+      <el-tag
+        :type="pressureReady ? 'success' : 'warning'"
+        size="small"
+      >
         {{ pressureReady ? '打压设备就绪' : '打压设备未就绪' }}
       </el-tag>
     </header>
 
-    <div v-if="points.length === 0" class="empty-state">
+    <div
+      v-if="points.length === 0"
+      class="empty-state"
+    >
       暂无测点，请先调整参数并生成测点。
     </div>
 
-    <div v-else class="point-list">
+    <div
+      v-else
+      class="point-list"
+    >
       <article
         v-for="point in points"
         :key="point.index"

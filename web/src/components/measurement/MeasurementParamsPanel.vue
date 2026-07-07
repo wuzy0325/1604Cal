@@ -9,7 +9,7 @@
           type="number"
           step="0.1"
           class="compact-input"
-        />
+        >
       </div>
 
       <!-- 最大值 -->
@@ -20,7 +20,7 @@
           type="number"
           step="0.1"
           class="compact-input"
-        />
+        >
       </div>
 
       <!-- 测点数 -->
@@ -32,7 +32,7 @@
           min="2"
           max="11"
           class="compact-input narrow"
-        />
+        >
       </div>
 
       <!-- 显示精度 -->
@@ -44,7 +44,7 @@
           min="0"
           max="6"
           class="compact-input narrow"
-        />
+        >
       </div>
 
       <!-- 重复采样次数 -->
@@ -56,17 +56,28 @@
           min="1"
           max="10"
           class="compact-input narrow"
-        />
+        >
       </div>
 
       <!-- 稳定时间 -->
       <div class="control-group">
         <label>稳定:</label>
-        <select v-model.number="measurementStore.measurementParams.stableWaitS" class="compact-select">
-          <option :value="1">1s</option>
-          <option :value="3">3s</option>
-          <option :value="5">5s</option>
-          <option :value="10">10s</option>
+        <select
+          v-model.number="measurementStore.measurementParams.stableWaitS"
+          class="compact-select"
+        >
+          <option :value="1">
+            1s
+          </option>
+          <option :value="3">
+            3s
+          </option>
+          <option :value="5">
+            5s
+          </option>
+          <option :value="10">
+            10s
+          </option>
         </select>
       </div>
 

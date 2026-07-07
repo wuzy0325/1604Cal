@@ -20,17 +20,33 @@
           @click="toggle(ch)"
         >
           <span class="channel-label">通道{{ ch }}</span>
-          <el-icon v-if="selected.includes(ch)" class="check-icon"><Check /></el-icon>
+          <el-icon
+            v-if="selected.includes(ch)"
+            class="check-icon"
+          >
+            <Check />
+          </el-icon>
         </div>
       </div>
     </div>
     <template #footer>
       <div class="dialog-footer">
-        <el-button @click="selectAll">全选</el-button>
-        <el-button @click="deselectAll">全不选</el-button>
+        <el-button @click="selectAll">
+          全选
+        </el-button>
+        <el-button @click="deselectAll">
+          全不选
+        </el-button>
         <div class="footer-spacer" />
-        <el-button @click="emit('close')">取消</el-button>
-        <el-button type="primary" @click="emit('confirm', [...selected])">确定</el-button>
+        <el-button @click="emit('close')">
+          取消
+        </el-button>
+        <el-button
+          type="primary"
+          @click="emit('confirm', [...selected])"
+        >
+          确定
+        </el-button>
       </div>
     </template>
   </el-dialog>

@@ -55,7 +55,10 @@
           <span class="progress-percent">{{ progressPercent }}%</span>
         </div>
         <div class="progress-track">
-          <div class="progress-fill" :style="{ transform: 'scaleX(' + progressPercent / 100 + ')' }" />
+          <div
+            class="progress-fill"
+            :style="{ transform: 'scaleX(' + progressPercent / 100 + ')' }"
+          />
         </div>
       </div>
 
@@ -157,7 +160,10 @@
       <div class="left-controls">
         <div class="channel-item">
           <span class="mode-label">采集通道</span>
-          <button class="channel-select-btn" @click="channelDialogVisible = true">
+          <button
+            class="channel-select-btn"
+            @click="channelDialogVisible = true"
+          >
             <el-icon><Grid /></el-icon>
             <span>{{ measurementStore.channels.length }}/16</span>
           </button>
@@ -166,15 +172,24 @@
         <div class="alarm-item">
           <span class="mode-label">报警设置</span>
           <label class="inline-check">
-            <input v-model="measurementStore.alarmConfig.enabled" type="checkbox" />
+            <input
+              v-model="measurementStore.alarmConfig.enabled"
+              type="checkbox"
+            >
             <span>启用</span>
           </label>
           <label class="inline-check">
-            <input v-model="measurementStore.alarmConfig.soundEnabled" type="checkbox" />
+            <input
+              v-model="measurementStore.alarmConfig.soundEnabled"
+              type="checkbox"
+            >
             <span>声音</span>
           </label>
           <label class="inline-check">
-            <input v-model="measurementStore.alarmConfig.confirmOnAlarm" type="checkbox" />
+            <input
+              v-model="measurementStore.alarmConfig.confirmOnAlarm"
+              type="checkbox"
+            >
             <span>报警确认</span>
           </label>
         </div>

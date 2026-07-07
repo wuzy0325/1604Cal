@@ -1,8 +1,9 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
+/* eslint-disable vue/one-component-per-file */
 import { computed, defineComponent, h, inject, provide, ref } from 'vue'
 import { mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it } from 'vitest'
 
 import CalibrationDataView from '../CalibrationDataView.vue'
 import { useCalibrationStore } from '@/stores/calibration'

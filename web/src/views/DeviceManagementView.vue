@@ -2,12 +2,17 @@
   <PageLayout>
     <header class="instrument-header">
       <div class="header-nav">
-        <button class="back-btn" @click="goBack">
+        <button
+          class="back-btn"
+          @click="goBack"
+        >
           <el-icon><ArrowLeft /></el-icon>
         </button>
       </div>
       <div class="header-identity">
-        <h1 class="header-title">设备管理</h1>
+        <h1 class="header-title">
+          设备管理
+        </h1>
         <span class="header-sub">配置和管理打压设备与计量设备</span>
       </div>
     </header>

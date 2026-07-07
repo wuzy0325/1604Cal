@@ -1,5 +1,8 @@
 <template>
-  <div class="page-layout" :class="{ 'sidebar-collapsed': sidebarCollapsed }">
+  <div
+    class="page-layout"
+    :class="{ 'sidebar-collapsed': sidebarCollapsed }"
+  >
     <Sidebar @collapse-change="sidebarCollapsed = $event" />
     <main class="main-content">
       <slot />

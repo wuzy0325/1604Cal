@@ -27,6 +27,7 @@ describe('ModuleHubView', () => {
     expect(wrapper.text()).toContain('计量工作台')
     expect(wrapper.text()).toContain('标定工作台')
     expect(wrapper.text()).toContain('多设备打压')
-    expect(wrapper.text()).toContain('进入模块')
+    // 模块卡片应包含分类标签（流程控制/数据采集/统一台账/并发控制）
+    expect(wrapper.text()).toContain('流程控制')
   })
 })

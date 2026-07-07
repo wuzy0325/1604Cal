@@ -7,22 +7,42 @@
   >
     <el-form label-width="70px">
       <el-form-item label="测点数">
-        <el-input-number v-model="templatePoints" :min="2" :max="5" />
+        <el-input-number
+          v-model="templatePoints"
+          :min="2"
+          :max="5"
+        />
       </el-form-item>
       <el-form-item label="模式">
         <el-select v-model="templateMode">
-          <el-option label="单程" value="single" />
-          <el-option label="回程" value="return" />
+          <el-option
+            label="单程"
+            value="single"
+          />
+          <el-option
+            label="回程"
+            value="return"
+          />
         </el-select>
       </el-form-item>
     </el-form>
     <template #footer>
-      <el-button @click="showTemplateDialog = false">取消</el-button>
-      <el-button type="primary" @click="confirmTemplate">确定</el-button>
+      <el-button @click="showTemplateDialog = false">
+        取消
+      </el-button>
+      <el-button
+        type="primary"
+        @click="confirmTemplate"
+      >
+        确定
+      </el-button>
     </template>
   </el-dialog>
 
-  <div v-if="errorMessage" class="error-message">
+  <div
+    v-if="errorMessage"
+    class="error-message"
+  >
     <el-icon><Warning /></el-icon>
     {{ errorMessage }}
   </div>

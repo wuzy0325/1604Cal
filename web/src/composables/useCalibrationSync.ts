@@ -4,7 +4,6 @@ import { useEventHub } from '@/composables/useEventHub'
 import { connectDevice } from '@/api/device'
 import { bindMeasureDevice } from '@/api/session'
 import type { SessionState } from '@/types/calibration'
-import type { StreamEventPayload } from '@/types/api'
 import { useCalibrationStore } from '@/stores/calibration'
 import { useDeviceInventoryStore } from '@/stores/device/inventoryStore'
 import {

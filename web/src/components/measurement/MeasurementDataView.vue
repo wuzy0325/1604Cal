@@ -1,10 +1,15 @@
 <template>
   <div class="data-table-wrapper">
     <!-- 压力点表 -->
-    <div v-if="points.length > 0" class="points-section">
+    <div
+      v-if="points.length > 0"
+      class="points-section"
+    >
       <div class="table-toolbar">
         <div class="toolbar-title">
-          <el-icon class="toolbar-icon"><Aim /></el-icon>
+          <el-icon class="toolbar-icon">
+            <Aim />
+          </el-icon>
           <h3>目标压力表数据清单</h3>
           <span class="record-badge">{{ points.length }} 个测点</span>
         </div>
@@ -23,11 +28,25 @@
         <table class="data-table">
           <thead>
             <tr>
-              <th class="col-index">序号</th>
-              <th class="col-status">状态</th>
-              <th class="col-target">目标值</th>
-              <th v-for="ch in channelCount" :key="ch" class="col-channel">{{ ch }}</th>
-              <th class="col-time">采集时间</th>
+              <th class="col-index">
+                序号
+              </th>
+              <th class="col-status">
+                状态
+              </th>
+              <th class="col-target">
+                目标值
+              </th>
+              <th
+                v-for="ch in channelCount"
+                :key="ch"
+                class="col-channel"
+              >
+                {{ ch }}
+              </th>
+              <th class="col-time">
+                采集时间
+              </th>
             </tr>
           </thead>
           <tbody>
@@ -57,7 +76,10 @@
                 >
                   采集
                 </button>
-                <span v-else :class="['status-tag', getStatusType(pt.status)]">
+                <span
+                  v-else
+                  :class="['status-tag', getStatusType(pt.status)]"
+                >
                   <span :class="['status-dot', getStatusType(pt.status)]" />
                   {{ getStatusText(pt.status) }}
                 </span>
@@ -69,20 +91,35 @@
                   class="target-input"
                   :step="precisionStep"
                   @change="onTargetChange(pt.id, ($event.target as HTMLInputElement).valueAsNumber)"
-                />
+                >
               </td>
-              <td v-for="ch in channelCount" :key="ch" class="cell-channel">
+              <td
+                v-for="ch in channelCount"
+                :key="ch"
+                class="cell-channel"
+              >
                 <div
                   v-if="pt.collectedData && pt.collectedData[ch - 1] !== undefined"
                   :class="['channel-value', { 'channel-over-limit': isChannelOverLimit(pt, ch) }]"
                 >
                   {{ pt.collectedData[ch - 1].toFixed(precisionForDisplay) }}
                 </div>
-                <div v-else class="channel-value empty">--</div>
+                <div
+                  v-else
+                  class="channel-value empty"
+                >
+                  --
+                </div>
               </td>
               <td class="cell-time">
-                <span v-if="pt.collectTime" class="time-display">{{ formatTime(pt.collectTime) }}</span>
-                <span v-else class="time-display empty">--:--:--</span>
+                <span
+                  v-if="pt.collectTime"
+                  class="time-display"
+                >{{ formatTime(pt.collectTime) }}</span>
+                <span
+                  v-else
+                  class="time-display empty"
+                >--:--:--</span>
               </td>
             </tr>
           </tbody>
@@ -90,44 +127,81 @@
       </div>
     </div>
 
-    <div v-else class="empty-table-state">
-      <el-empty description="请配置参数并生成压力表" :image-size="80">
-        <p class="empty-hint">设置最小值、最大值和点数后点击"生成压力表"</p>
+    <div
+      v-else
+      class="empty-table-state"
+    >
+      <el-empty
+        description="请配置参数并生成压力表"
+        :image-size="80"
+      >
+        <p class="empty-hint">
+          设置最小值、最大值和点数后点击"生成压力表"
+        </p>
       </el-empty>
     </div>
 
     <!-- 实时采样数据 -->
-    <div v-if="tableRows.length > 0" class="sample-section">
+    <div
+      v-if="tableRows.length > 0"
+      class="sample-section"
+    >
       <div class="table-toolbar">
         <div class="toolbar-title">
-          <el-icon class="toolbar-icon"><DataLine /></el-icon>
+          <el-icon class="toolbar-icon">
+            <DataLine />
+          </el-icon>
           <h3>实时采样数据</h3>
           <span class="record-badge">{{ rows.length }} 条采样</span>
         </div>
-        <div class="toolbar-actions">
-
-        </div>
+        <div class="toolbar-actions" />
       </div>
       <div class="table-scroll custom-scroll">
         <table class="data-table">
           <thead>
             <tr>
-              <th class="col-index">序号</th>
-              <th class="col-pressure">平均压力</th>
-              <th v-for="ch in visibleChannels" :key="ch" class="col-channel">CH{{ ch }}</th>
-              <th class="col-time">时间</th>
+              <th class="col-index">
+                序号
+              </th>
+              <th class="col-pressure">
+                平均压力
+              </th>
+              <th
+                v-for="ch in visibleChannels"
+                :key="ch"
+                class="col-channel"
+              >
+                CH{{ ch }}
+              </th>
+              <th class="col-time">
+                时间
+              </th>
             </tr>
           </thead>
           <tbody>
-            <tr v-for="row in tableRows" :key="row.index" class="data-row">
-              <td class="cell-index">{{ row.index }}</td>
-              <td class="cell-pressure">{{ row.actualPressure }}</td>
-              <td v-for="ch in visibleChannels" :key="`${row.index}-${ch}`" class="cell-channel">
+            <tr
+              v-for="row in tableRows"
+              :key="row.index"
+              class="data-row"
+            >
+              <td class="cell-index">
+                {{ row.index }}
+              </td>
+              <td class="cell-pressure">
+                {{ row.actualPressure }}
+              </td>
+              <td
+                v-for="ch in visibleChannels"
+                :key="`${row.index}-${ch}`"
+                class="cell-channel"
+              >
                 <div :class="['channel-value', { 'channel-over-limit': isSampleOverLimit(row, ch) }]">
                   {{ row.channelValues[ch] ?? '--' }}
                 </div>
               </td>
-              <td class="cell-time">{{ row.collectTime }}</td>
+              <td class="cell-time">
+                {{ row.collectTime }}
+              </td>
             </tr>
           </tbody>
         </table>
@@ -138,7 +212,7 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
-import { DataLine, Download, Aim } from '@element-plus/icons-vue'
+import { DataLine, Aim } from '@element-plus/icons-vue'
 import { useMeasurementStore } from '@/stores/measurement'
 import type { CollectedRow } from '@/stores/measurement'
 import type { MeasurementPoint } from '@/api/measurement'

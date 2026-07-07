@@ -1,23 +1,52 @@
 <template>
-  <el-dialog v-model="visible" title="报警通知" width="480px" :close-on-click-modal="false" :show-close="false" draggable>
+  <el-dialog
+    v-model="visible"
+    title="报警通知"
+    width="480px"
+    :close-on-click-modal="false"
+    :show-close="false"
+    draggable
+  >
     <div class="alarm-details">
-      <el-alert type="warning" :closable="false" title="采集数据超出阈值">
+      <el-alert
+        type="warning"
+        :closable="false"
+        title="采集数据超出阈值"
+      >
         <template #default>
           <div>压力点 #{{ pointIndex }} | 目标: {{ targetPressure }} | 最大偏差: {{ maxDeviation }}</div>
         </template>
       </el-alert>
 
-      <div v-if="overLimitChannels && overLimitChannels.length > 0" class="channel-list">
-        <p class="channel-label">超限通道：</p>
-        <el-tag v-for="ch in overLimitChannels" :key="ch" type="danger" size="small" class="channel-tag">
+      <div
+        v-if="overLimitChannels && overLimitChannels.length > 0"
+        class="channel-list"
+      >
+        <p class="channel-label">
+          超限通道：
+        </p>
+        <el-tag
+          v-for="ch in overLimitChannels"
+          :key="ch"
+          type="danger"
+          size="small"
+          class="channel-tag"
+        >
           通道 {{ ch }}
         </el-tag>
       </div>
     </div>
 
     <template #footer>
-      <el-button @click="handleDecision('recollect')">重新采集</el-button>
-      <el-button type="primary" @click="handleDecision('continue')">确认继续</el-button>
+      <el-button @click="handleDecision('recollect')">
+        重新采集
+      </el-button>
+      <el-button
+        type="primary"
+        @click="handleDecision('continue')"
+      >
+        确认继续
+      </el-button>
     </template>
   </el-dialog>
 </template>

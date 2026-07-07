@@ -13,8 +13,15 @@
       @update:selected-channels="localChannels = $event"
     />
     <template #footer>
-      <el-button @click="$emit('update:visible', false)">取消</el-button>
-      <el-button type="primary" @click="handleConfirm">确定</el-button>
+      <el-button @click="$emit('update:visible', false)">
+        取消
+      </el-button>
+      <el-button
+        type="primary"
+        @click="handleConfirm"
+      >
+        确定
+      </el-button>
     </template>
   </el-dialog>
 </template>

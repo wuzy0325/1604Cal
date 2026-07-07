@@ -1,7 +1,7 @@
 {
   "deviceConnect": {
     "connectAttemptTimeoutMs": 600,
-    "connectMaxAttempts": 3,
+    "connectMaxAttempts": 2,
     "connectInitialBackoffMs": 80,
     "connectMaxBackoffMs": 300,
     "disconnectAttemptTimeoutMs": 400,

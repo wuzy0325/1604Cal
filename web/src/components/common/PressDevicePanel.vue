@@ -98,8 +98,8 @@
         </div>
         <el-button
           type="danger"
-          @click="exhaustPressure"
           class="exhaust-btn"
+          @click="exhaustPressure"
         >
           排空
         </el-button>

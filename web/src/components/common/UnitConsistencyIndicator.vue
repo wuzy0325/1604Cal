@@ -1,13 +1,23 @@
 <template>
   <Transition name="slide-fade">
-    <div v-if="showWarning" class="unit-consistency-indicator">
+    <div
+      v-if="showWarning"
+      class="unit-consistency-indicator"
+    >
       <div class="indicator-icon">
         <el-icon><Warning /></el-icon>
       </div>
       <div class="indicator-content">
-        <div class="indicator-title">单位不一致警告</div>
-        <div class="indicator-message">{{ consistency.message || '设备压力单位不一致，请检查并统一单位后再操作' }}</div>
-        <div v-if="detailMessage" class="indicator-detail">
+        <div class="indicator-title">
+          单位不一致警告
+        </div>
+        <div class="indicator-message">
+          {{ consistency.message || '设备压力单位不一致，请检查并统一单位后再操作' }}
+        </div>
+        <div
+          v-if="detailMessage"
+          class="indicator-detail"
+        >
           当前各设备单位: {{ detailMessage }}
         </div>
       </div>

@@ -1,5 +1,8 @@
 <template>
-  <div class="pressure-card" :class="state.status">
+  <div
+    class="pressure-card"
+    :class="state.status"
+  >
     <!-- 头部：设备名 + 状态 + 注销 -->
     <div class="card-head">
       <div class="head-info">
@@ -7,9 +10,17 @@
         <span class="device-model">{{ metadata?.model || '' }}</span>
       </div>
       <div class="head-actions">
-        <span class="status-dot" :class="state.status" />
+        <span
+          class="status-dot"
+          :class="state.status"
+        />
         <span class="status-label">{{ statusLabel }}</span>
-        <el-button size="small" type="danger" plain @click="$emit('unregister', state.deviceId)">
+        <el-button
+          size="small"
+          type="danger"
+          plain
+          @click="$emit('unregister', state.deviceId)"
+        >
           注销
         </el-button>
       </div>
@@ -19,7 +30,11 @@
     <div class="pressure-display">
       <span class="pressure-value">{{ pressureDisplay }}</span>
       <span class="pressure-unit">{{ state.unit || 'kPa' }}</span>
-      <span v-if="state.status === 'pressurizing'" class="stable-indicator" :class="{ stable: state.stable }">
+      <span
+        v-if="state.status === 'pressurizing'"
+        class="stable-indicator"
+        :class="{ stable: state.stable }"
+      >
         {{ state.stable ? '已稳定' : '稳定中...' }}
       </span>
     </div>
@@ -35,16 +50,48 @@
         controls-position="right"
         class="target-input"
       />
-      <el-select v-model="unitSelect" size="small" class="unit-select" @change="handleUnitChange">
-        <el-option label="kPa (千帕)" value="kPa" />
-        <el-option label="MPa (兆帕)" value="MPa" />
-        <el-option label="Pa (帕)" value="Pa" />
-        <el-option label="bar (巴)" value="bar" />
-        <el-option label="mbar (毫巴)" value="mbar" />
-        <el-option label="psi (磅/平方英寸)" value="psi" />
-        <el-option label="kgf/cm²" value="kgf/cm2" />
-        <el-option label="mmHg (毫米汞柱)" value="mmHg" />
-        <el-option label="atm (标准大气压)" value="atm" />
+      <el-select
+        v-model="unitSelect"
+        size="small"
+        class="unit-select"
+        @change="handleUnitChange"
+      >
+        <el-option
+          label="kPa (千帕)"
+          value="kPa"
+        />
+        <el-option
+          label="MPa (兆帕)"
+          value="MPa"
+        />
+        <el-option
+          label="Pa (帕)"
+          value="Pa"
+        />
+        <el-option
+          label="bar (巴)"
+          value="bar"
+        />
+        <el-option
+          label="mbar (毫巴)"
+          value="mbar"
+        />
+        <el-option
+          label="psi (磅/平方英寸)"
+          value="psi"
+        />
+        <el-option
+          label="kgf/cm²"
+          value="kgf/cm2"
+        />
+        <el-option
+          label="mmHg (毫米汞柱)"
+          value="mmHg"
+        />
+        <el-option
+          label="atm (标准大气压)"
+          value="atm"
+        />
       </el-select>
     </div>
 
@@ -58,19 +105,35 @@
       >
         开始打压
       </el-button>
-      <el-button size="small" type="danger" plain @click="$emit('stop', state.deviceId)">
+      <el-button
+        size="small"
+        type="danger"
+        plain
+        @click="$emit('stop', state.deviceId)"
+      >
         停止
       </el-button>
-      <el-button size="small" type="warning" plain @click="$emit('exhaust', state.deviceId)">
+      <el-button
+        size="small"
+        type="warning"
+        plain
+        @click="$emit('exhaust', state.deviceId)"
+      >
         排空
       </el-button>
     </div>
 
     <!-- 状态信息 -->
-    <div v-if="state.errorMessage" class="error-bar">
+    <div
+      v-if="state.errorMessage"
+      class="error-bar"
+    >
       {{ state.errorMessage }}
     </div>
-    <div v-if="state.status === 'exhausting'" class="info-bar">
+    <div
+      v-if="state.status === 'exhausting'"
+      class="info-bar"
+    >
       正在排空压力...
     </div>
   </div>

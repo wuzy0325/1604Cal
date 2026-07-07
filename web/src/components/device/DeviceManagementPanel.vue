@@ -31,9 +31,18 @@
     <section class="status-strip">
       <!-- 关键状态：异常与在线 -->
       <div class="status-highlight">
-        <div class="status-item" :class="{ 'has-error': errorCount > 0 }">
-          <span class="status-dot" :class="errorCount > 0 ? 'dot-danger' : 'dot-success'" />
-          <strong class="status-value" :class="errorCount > 0 ? 'danger' : 'success'">{{ errorCount }}</strong>
+        <div
+          class="status-item"
+          :class="{ 'has-error': errorCount > 0 }"
+        >
+          <span
+            class="status-dot"
+            :class="errorCount > 0 ? 'dot-danger' : 'dot-success'"
+          />
+          <strong
+            class="status-value"
+            :class="errorCount > 0 ? 'danger' : 'success'"
+          >{{ errorCount }}</strong>
           <span class="status-label">异常</span>
         </div>
         <div class="status-item">
@@ -42,7 +51,10 @@
           <span class="status-label">在线</span>
         </div>
         <div class="status-item">
-          <span class="status-dot" :class="unitConsistent ? 'dot-success' : 'dot-warning'" />
+          <span
+            class="status-dot"
+            :class="unitConsistent ? 'dot-success' : 'dot-warning'"
+          />
           <strong :class="['status-value', unitConsistent ? 'success' : 'warning']">{{ unitStatusText }}</strong>
           <span class="status-label">单位</span>
         </div>
@@ -230,8 +242,15 @@
       :close-on-press-escape="false"
     >
       <div style="text-align:center;padding:20px 0">
-        <el-icon style="font-size:36px;margin-bottom:12px" class="is-loading"><Loading /></el-icon>
-        <p style="margin:8px 0 0;color:#666;font-size:14px">{{ connectProgressMessage }}</p>
+        <el-icon
+          style="font-size:36px;margin-bottom:12px"
+          class="is-loading"
+        >
+          <Loading />
+        </el-icon>
+        <p style="margin:8px 0 0;color:#666;font-size:14px">
+          {{ connectProgressMessage }}
+        </p>
       </div>
     </el-dialog>
 
@@ -280,8 +299,15 @@
             v-model="form.model"
             data-test="form-model"
           >
-            <option value="" disabled>选择型号</option>
-            <option v-for="m in modelOptions" :key="m.value" :value="m.value">
+            <option
+              value=""
+              disabled
+            >选择型号</option>
+            <option
+              v-for="m in modelOptions"
+              :key="m.value"
+              :value="m.value"
+            >
               {{ m.label }}
             </option>
           </select>
@@ -316,7 +342,6 @@
             placeholder="留空自动选择 / 多网卡时指定"
           >
         </label>
-
       </div>
 
       <p

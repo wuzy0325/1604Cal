@@ -3,7 +3,11 @@
     <div class="config-row">
       <span class="config-label">启用报警</span>
       <label class="inline-check">
-        <input v-model="config.enabled" type="checkbox" @change="emitChange" />
+        <input
+          v-model="config.enabled"
+          type="checkbox"
+          @change="emitChange"
+        >
       </label>
     </div>
     <div class="config-row">
@@ -16,18 +20,26 @@
         :step="0.1"
         class="compact-input"
         @change="emitChange"
-      />
+      >
     </div>
     <div class="config-row">
       <span class="config-label">报警声音</span>
       <label class="inline-check">
-        <input v-model="config.soundEnabled" type="checkbox" @change="emitChange" />
+        <input
+          v-model="config.soundEnabled"
+          type="checkbox"
+          @change="emitChange"
+        >
       </label>
     </div>
     <div class="config-row">
       <span class="config-label">报警需确认</span>
       <label class="inline-check">
-        <input v-model="config.confirmOnAlarm" type="checkbox" @change="emitChange" />
+        <input
+          v-model="config.confirmOnAlarm"
+          type="checkbox"
+          @change="emitChange"
+        >
       </label>
     </div>
     <div class="config-row">
@@ -42,7 +54,7 @@
             :checked="config.enabledChannels.includes(ch)"
             type="checkbox"
             @change="toggleChannel(ch)"
-          />
+          >
           <span>{{ ch }}</span>
         </label>
       </div>

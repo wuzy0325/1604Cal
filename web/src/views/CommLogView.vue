@@ -1,7 +1,10 @@
 <template>
   <PageLayout>
     <div class="comm-log-page">
-      <PageHeader title="系统日志" subtitle="硬件通讯日志与系统错误日志" />
+      <PageHeader
+        title="系统日志"
+        subtitle="硬件通讯日志与系统错误日志"
+      />
       <CommLogPanel />
     </div>
   </PageLayout>

@@ -3,12 +3,17 @@
     <!-- ═══ 仪表盘头部 ═══ -->
     <header class="instrument-header">
       <div class="header-nav">
-        <button class="back-btn" @click="goBack">
+        <button
+          class="back-btn"
+          @click="goBack"
+        >
           <el-icon><ArrowLeft /></el-icon>
         </button>
       </div>
       <div class="header-identity">
-        <h1 class="header-title">多设备打压控制</h1>
+        <h1 class="header-title">
+          多设备打压控制
+        </h1>
         <span class="header-sub">并发控制多台打压设备</span>
       </div>
       <div class="header-actions">
@@ -24,15 +29,27 @@
 
     <!-- 统计栏 -->
     <div class="stats-bar">
-      <StatCard label="注册设备" :value="store.registeredCount" />
-      <StatCard label="打压中" :value="store.pressurizingCount" color="#f59e0b" />
+      <StatCard
+        label="注册设备"
+        :value="store.registeredCount"
+      />
+      <StatCard
+        label="打压中"
+        :value="store.pressurizingCount"
+        color="#f59e0b"
+      />
     </div>
 
     <!-- ═══ 内容区域 ═══ -->
     <div class="content-scroll">
       <!-- 未注册打压设备 -->
-      <section v-if="store.availableDevices.length > 0" class="content-section">
-        <h3 class="section-title">可用打压设备</h3>
+      <section
+        v-if="store.availableDevices.length > 0"
+        class="content-section"
+      >
+        <h3 class="section-title">
+          可用打压设备
+        </h3>
         <div class="available-grid">
           <div
             v-for="dev in store.availableDevices"
@@ -43,14 +60,24 @@
               <span class="available-name">{{ dev.name }}</span>
               <span class="available-detail">{{ dev.host }}:{{ dev.port }}</span>
             </div>
-            <button class="reg-btn" @click="handleRegister(dev.id)">注册</button>
+            <button
+              class="reg-btn"
+              @click="handleRegister(dev.id)"
+            >
+              注册
+            </button>
           </div>
         </div>
       </section>
 
       <!-- 已注册设备卡片网格 -->
-      <section v-if="store.registeredDevices.length > 0" class="content-section">
-        <h3 class="section-title">已注册设备</h3>
+      <section
+        v-if="store.registeredDevices.length > 0"
+        class="content-section"
+      >
+        <h3 class="section-title">
+          已注册设备
+        </h3>
         <div class="registered-grid">
           <PressureControlCard
             v-for="devState in store.registeredDevices"
@@ -67,8 +94,13 @@
       </section>
 
       <!-- 空状态 -->
-      <section v-if="store.registeredDevices.length === 0 && store.availableDevices.length === 0" class="empty-state">
-        <p class="empty-text">暂无打压设备</p>
+      <section
+        v-if="store.registeredDevices.length === 0 && store.availableDevices.length === 0"
+        class="empty-state"
+      >
+        <p class="empty-text">
+          暂无打压设备
+        </p>
       </section>
     </div>
   </PageLayout>

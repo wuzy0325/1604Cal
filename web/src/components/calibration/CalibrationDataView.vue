@@ -54,8 +54,11 @@
                 :step="0.1"
                 class="target-pressure-input"
                 @change="(e: Event) => handleTargetPressureChange(row, (e.target as HTMLInputElement).value)"
-              />
-              <span v-else class="target-pressure-text">{{ row.targetValue.toFixed(2) }}</span>
+              >
+              <span
+                v-else
+                class="target-pressure-text"
+              >{{ row.targetValue.toFixed(2) }}</span>
             </template>
           </el-table-column>
           <el-table-column
@@ -65,7 +68,7 @@
           >
             <template #default="{ row }">
               <div class="row-actions">
-              <el-button
+                <el-button
                   v-if="row.status === 'pending' && !manualModeWithoutPressDevice"
                   type="primary"
                   size="small"
@@ -167,12 +170,12 @@
             </template>
           </el-table-column>
         </el-table>
-          <div class="channel-legend">
-            <span class="legend-label">通道偏差：</span>
-            <span class="legend-item legend-good">≤ 0.1</span>
-            <span class="legend-item legend-warning">≤ 0.5</span>
-            <span class="legend-item legend-error">&gt; 0.5</span>
-          </div>
+        <div class="channel-legend">
+          <span class="legend-label">通道偏差：</span>
+          <span class="legend-item legend-good">≤ 0.1</span>
+          <span class="legend-item legend-warning">≤ 0.5</span>
+          <span class="legend-item legend-error">&gt; 0.5</span>
+        </div>
 
         <div
           v-if="calibrationStore.pressurePoints.length === 0"
@@ -197,9 +200,6 @@ import {
 } from '@element-plus/icons-vue'
 import { useCalibrationStore } from '@/stores/calibration'
 import { type SessionState, ControlMode } from '@/types/calibration'
-
-defineEmits<{
-}>()
 
 const calibrationStore = useCalibrationStore()
 
@@ -281,12 +281,6 @@ const manualModeWithoutPressDevice = computed(() =>
 
 const canPressurize = (status: string) =>
   canOperatePointActions.value && status === 'pending' && !manualModeWithoutPressDevice.value
-
-const canConfirm = (status: string) =>
-  canOperatePointActions.value && (
-    (calibrationStore.controlMode === ControlMode.Manual && status === 'stabilizing') ||
-    (calibrationStore.controlMode === ControlMode.Manual && status === 'pending')
-  )
 
 const canCollect = (status: string) =>
   canOperatePointActions.value && (

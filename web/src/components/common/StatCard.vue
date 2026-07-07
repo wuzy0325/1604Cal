@@ -1,8 +1,18 @@
 <template>
-  <div class="stat-chip" :class="{ highlighted: !!color }">
-    <span v-if="color" class="chip-dot" :style="{ background: color }" />
+  <div
+    class="stat-chip"
+    :class="{ highlighted: !!color }"
+  >
+    <span
+      v-if="color"
+      class="chip-dot"
+      :style="{ background: color }"
+    />
     <span class="chip-label">{{ label }}</span>
-    <strong class="chip-value" :style="color ? { color } : {}">{{ value }}</strong>
+    <strong
+      class="chip-value"
+      :style="color ? { color } : {}"
+    >{{ value }}</strong>
   </div>
 </template>
 

@@ -51,9 +51,24 @@
           启动条件
         </h3>
         <div class="prerequisites-list">
-          <div v-for="(item, index) in prerequisites" :key="index" class="prereq-item" :class="{ satisfied: item.satisfied, unsatisfied: !item.satisfied }">
-            <el-icon v-if="item.satisfied" class="icon-satisfied"><CircleCheckFilled /></el-icon>
-            <el-icon v-else class="icon-unsatisfied"><CircleCloseFilled /></el-icon>
+          <div
+            v-for="(item, index) in prerequisites"
+            :key="index"
+            class="prereq-item"
+            :class="{ satisfied: item.satisfied, unsatisfied: !item.satisfied }"
+          >
+            <el-icon
+              v-if="item.satisfied"
+              class="icon-satisfied"
+            >
+              <CircleCheckFilled />
+            </el-icon>
+            <el-icon
+              v-else
+              class="icon-unsatisfied"
+            >
+              <CircleCloseFilled />
+            </el-icon>
             <span class="prereq-label">{{ item.label }}</span>
             <span class="prereq-status">{{ item.satisfied ? '已满足' : '未满足' }}</span>
           </div>

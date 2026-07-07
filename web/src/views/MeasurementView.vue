@@ -4,14 +4,22 @@
 
     <header class="instrument-header">
       <div class="header-nav">
-        <button class="back-btn" @click="goBack">
+        <button
+          class="back-btn"
+          @click="goBack"
+        >
           <el-icon><ArrowLeft /></el-icon>
         </button>
       </div>
 
       <div class="header-identity">
-        <h1 class="header-title">计量工作台</h1>
-        <span class="state-chip" :class="stateClass">{{ stateLabel }}</span>
+        <h1 class="header-title">
+          计量工作台
+        </h1>
+        <span
+          class="state-chip"
+          :class="stateClass"
+        >{{ stateLabel }}</span>
       </div>
 
       <div class="header-telemetry">
@@ -23,7 +31,10 @@
         <span class="telem-divider" />
         <div class="telem-cell">
           <span class="telem-label">稳定性</span>
-          <span class="telem-indicator" :class="measurementStore.isStable ? 'on' : 'off'">
+          <span
+            class="telem-indicator"
+            :class="measurementStore.isStable ? 'on' : 'off'"
+          >
             <span class="telem-dot" />
             {{ measurementStore.isStable ? '已稳定' : '稳定中' }}
           </span>
@@ -37,7 +48,10 @@
     </header>
 
     <!-- ═══ 工作台主体 ═══ -->
-    <div class="workbench" :class="{ 'sidebar-collapsed': sidebarCollapsed }">
+    <div
+      class="workbench"
+      :class="{ 'sidebar-collapsed': sidebarCollapsed }"
+    >
       <MeasurementSidebar
         ref="sidebarRef"
         :collapsed="sidebarCollapsed"

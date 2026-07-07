@@ -74,11 +74,36 @@ function colorToBg(color: string): string {
         <div class="identity-content">
           <div class="brand">
             <div class="brand-icon">
-              <svg viewBox="0 0 32 32" fill="none">
-                <path d="M16 3L3 10L16 17L29 10L16 3Z" fill="currentColor" fill-opacity="0.15"/>
-                <path d="M3 22L16 29L29 22" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                <path d="M3 16L16 23L29 16" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                <circle cx="16" cy="10" r="3" fill="currentColor" fill-opacity="0.3"/>
+              <svg
+                viewBox="0 0 32 32"
+                fill="none"
+              >
+                <path
+                  d="M16 3L3 10L16 17L29 10L16 3Z"
+                  fill="currentColor"
+                  fill-opacity="0.15"
+                />
+                <path
+                  d="M3 22L16 29L29 22"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                />
+                <path
+                  d="M3 16L16 23L29 16"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                />
+                <circle
+                  cx="16"
+                  cy="10"
+                  r="3"
+                  fill="currentColor"
+                  fill-opacity="0.3"
+                />
               </svg>
             </div>
             <div class="brand-text">
@@ -93,7 +118,10 @@ function colorToBg(color: string): string {
       <!-- Bento 布局 -->
       <section class="hub-content">
         <div class="bento-grid">
-          <template v-for="(card, i) in featureCards" :key="card.path">
+          <template
+            v-for="(card, i) in featureCards"
+            :key="card.path"
+          >
             <!-- 主入口：标定/计量 -->
             <button
               v-if="card.variant === 'primary'"
@@ -101,7 +129,10 @@ function colorToBg(color: string): string {
               :style="{ '--accent': card.color, '--i': i }"
               @click="navigateTo(card.path)"
             >
-              <div class="primary-icon" :style="{ color: card.color, background: colorToBg(card.color) }">
+              <div
+                class="primary-icon"
+                :style="{ color: card.color, background: colorToBg(card.color) }"
+              >
                 <el-icon><component :is="card.icon" /></el-icon>
               </div>
               <div class="primary-body">
@@ -109,7 +140,10 @@ function colorToBg(color: string): string {
                 <h2>{{ card.title }}</h2>
                 <p>{{ card.description }}</p>
               </div>
-              <span class="primary-arrow" aria-hidden="true">
+              <span
+                class="primary-arrow"
+                aria-hidden="true"
+              >
                 <el-icon><ArrowRight /></el-icon>
               </span>
             </button>
@@ -121,14 +155,20 @@ function colorToBg(color: string): string {
               :style="{ '--accent': card.color, '--i': i }"
               @click="navigateTo(card.path)"
             >
-              <div class="secondary-icon" :style="{ color: card.color, background: colorToBg(card.color) }">
+              <div
+                class="secondary-icon"
+                :style="{ color: card.color, background: colorToBg(card.color) }"
+              >
                 <el-icon><component :is="card.icon" /></el-icon>
               </div>
               <div class="secondary-body">
                 <h3>{{ card.title }}</h3>
                 <span class="secondary-tag">{{ card.tag }}</span>
               </div>
-              <span class="secondary-arrow" aria-hidden="true">
+              <span
+                class="secondary-arrow"
+                aria-hidden="true"
+              >
                 <el-icon><ArrowRight /></el-icon>
               </span>
             </button>

@@ -3,14 +3,22 @@
     <!-- ═══ 仪表盘头部 ═══ -->
     <header class="instrument-header">
       <div class="header-nav">
-        <button class="back-btn" @click="goBack">
+        <button
+          class="back-btn"
+          @click="goBack"
+        >
           <el-icon><ArrowLeft /></el-icon>
         </button>
       </div>
 
       <div class="header-identity">
-        <h1 class="header-title">标定工作台</h1>
-        <span class="state-chip" :class="stateClass">
+        <h1 class="header-title">
+          标定工作台
+        </h1>
+        <span
+          class="state-chip"
+          :class="stateClass"
+        >
           <span class="chip-dot" />
           {{ stateLabel }}
         </span>
@@ -25,7 +33,10 @@
         <span class="telem-divider" />
         <div class="telem-cell">
           <span class="telem-label">稳定性</span>
-          <span class="telem-indicator" :class="stabilityStatus?.isStable ? 'on' : 'off'">
+          <span
+            class="telem-indicator"
+            :class="stabilityStatus?.isStable ? 'on' : 'off'"
+          >
             <span class="telem-dot" />
             {{ stabilityStatus?.isStable ? '已稳定' : '稳定中' }}
           </span>
@@ -38,17 +49,29 @@
         <span class="telem-divider" />
         <div class="telem-cell">
           <span class="telem-label">偏差</span>
-          <span class="telem-value mono" :class="deviationClass">{{ deviationDisplay }}</span>
+          <span
+            class="telem-value mono"
+            :class="deviationClass"
+          >{{ deviationDisplay }}</span>
         </div>
       </div>
     </header>
 
     <!-- ═══ 工作台 ═══ -->
-    <div class="workbench" :class="{ 'sidebar-collapsed': sidebarCollapsed }">
-      <CalibrationSidebar :collapsed="sidebarCollapsed" @toggle="sidebarCollapsed = !sidebarCollapsed" />
+    <div
+      class="workbench"
+      :class="{ 'sidebar-collapsed': sidebarCollapsed }"
+    >
+      <CalibrationSidebar
+        :collapsed="sidebarCollapsed"
+        @toggle="sidebarCollapsed = !sidebarCollapsed"
+      />
 
       <main class="workbench-main">
-        <div v-if="alarmEvent" class="alarm-banner">
+        <div
+          v-if="alarmEvent"
+          class="alarm-banner"
+        >
           <span class="alarm-dot" />
           <span>通道 {{ alarmEvent.overLimitChannels?.join(', ') }} 超限报警</span>
         </div>
@@ -69,9 +92,16 @@
             <div class="card-accent" />
             <CalibrationDataView />
             <div class="template-bar">
-              <el-icon v-if="dialogsRef?.templateFilename"><DocumentChecked /></el-icon>
+              <el-icon v-if="dialogsRef?.templateFilename">
+                <DocumentChecked />
+              </el-icon>
               <span v-if="dialogsRef?.templateFilename">当前报告模板：{{ dialogsRef.templateFilename }}</span>
-              <button type="button" class="export-btn" :disabled="isExporting" @click="handleExport">
+              <button
+                type="button"
+                class="export-btn"
+                :disabled="isExporting"
+                @click="handleExport"
+              >
                 <el-icon><Download /></el-icon>
                 {{ isExporting ? '导出中...' : '导出报告' }}
               </button>
