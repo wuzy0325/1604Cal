@@ -34,87 +34,21 @@
       </div>
     </header>
 
-    <div class="metrics-bar">
-      <div class="metric-item pressure-current">
-        <span class="metric-label">当前压力</span>
-        <span class="metric-value">{{ formatPressure(currentPressure) }}</span>
-        <span class="metric-unit">kPa</span>
-        <div
-          class="mini-bar"
-          role="progressbar"
-          :aria-valuenow="currentPressure"
-          aria-valuemin="0"
-          :aria-valuemax="targetPressureForMath"
-        >
-          <div
-            class="mini-bar-fill"
-            :style="{ transform: 'scaleX(' + pressurePercentage / 100 + ')' }"
-            :class="pressureBarClass"
-          />
-        </div>
-      </div>
+    <!-- 紧凑指标栏 -->
+    <RealtimeMetricsBar
+      :current-pressure="currentPressure"
+      :target-pressure="effectiveTargetPressure"
+      :is-stable="isStable"
+      :stable-duration="stableDuration"
+      :stability-threshold="stabilityThreshold"
+    />
 
-      <div class="metric-separator" />
-
-      <div class="metric-item pressure-target">
-        <span class="metric-label">目标压力</span>
-        <span class="metric-value">{{ formatPressure(targetPressure) }}</span>
-        <span class="metric-unit">kPa</span>
-        <span
-          class="target-diff"
-          :class="targetDiffClass"
-        >
-          {{ targetDiffText }}
-        </span>
-      </div>
-
-      <div class="metric-separator" />
-
-      <div class="metric-item stability">
-        <span class="metric-label">稳定状态</span>
-        <span
-          class="status-indicator"
-          :class="stabilityClass"
-        />
-        <span
-          class="status-text"
-          :class="stabilityClass"
-        >{{ stabilityText }}</span>
-        <span class="stability-meta">{{ stableDuration }}s / ±{{ stabilityThreshold }}kPa</span>
-      </div>
-    </div>
-
-    <!-- 通道数据表格 -->
-    <div class="channels-section">
-      <div class="section-header">
-        <div class="section-title">
-          <el-icon><Grid /></el-icon>
-          <h3>通道读数</h3>
-        </div>
-        <span class="channel-count">{{ activeChannels }}/{{ totalChannels }} 通道活跃</span>
-      </div>
-      <div class="channels-grid">
-        <div
-          v-for="(channel, index) in channelData"
-          :key="index"
-          class="channel-item"
-          :class="{ 'channel-active': channel.isActive }"
-        >
-          <div class="channel-header">
-            <span class="channel-name">CH{{ index + 1 }}</span>
-            <span
-              class="channel-status"
-              :class="channel.status"
-            >
-              {{ channelStatusText(channel.status) }}
-            </span>
-          </div>
-          <div class="channel-value">
-            {{ formatChannelValue(channel.value) }}
-          </div>
-        </div>
-      </div>
-    </div>
+    <!-- 通道数据网格 -->
+    <RealtimeChannelGrid
+      :channel-data="channelData"
+      :active-channels="activeChannels"
+      :total-channels="totalChannels"
+    />
 
     <!-- 采集进度 -->
     <div
@@ -150,12 +84,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from 'vue'
-import {
-  DataLine,
-  Refresh,
-  Grid,
-  Histogram
-} from '@element-plus/icons-vue'
+import { DataLine, Refresh, Histogram } from '@element-plus/icons-vue'
 import { createEventStream } from "@/api/client"
 import { fetchDevices } from "@/api/device"
 import {
@@ -166,11 +95,18 @@ import {
 import type { StreamEventPayload } from "@/types/api"
 import { useDeviceStore } from '@/stores/deviceStore'
 
+import RealtimeMetricsBar from './RealtimeMetricsBar.vue'
+import RealtimeChannelGrid from './RealtimeChannelGrid.vue'
+
+// ---- 通道数据类型 ----
+
 interface ChannelInfo {
   value: number | null
   status: 'ok' | 'warning' | 'error' | 'idle'
   isActive: boolean
 }
+
+// ---- Props ----
 
 const props = withDefaults(defineProps<{
   targetPressure?: number | null
@@ -182,7 +118,8 @@ const props = withDefaults(defineProps<{
   totalPoints: 0
 })
 
-// 响应式数据
+// ---- 响应式数据 ----
+
 const currentPressure = ref(0)
 const eventTargetPressure = ref<number | null>(null)
 const isStable = ref(false)
@@ -196,21 +133,21 @@ const pressureDeviceStatus = ref<'connected' | 'disconnected' | 'not_selected'>(
 const channelData = ref<ChannelInfo[]>(
   Array.from({ length: 16 }, () => ({
     value: null,
-    status: 'idle',
+    status: 'idle' as ChannelInfo['status'],
     isActive: false
   }))
 )
 
 const deviceStore = useDeviceStore()
 
+// ---- 计算属性 ----
+
 const totalPoints = computed(() => Math.max(0, Math.round(props.totalPoints)))
+const totalChannels = computed(() => 16)
 
 const completedPoints = computed(() => {
   const raw = Math.max(0, Math.round(props.completedPoints))
-  if (totalPoints.value === 0) {
-    return 0
-  }
-
+  if (totalPoints.value === 0) return 0
   return Math.min(totalPoints.value, raw)
 })
 
@@ -218,14 +155,20 @@ const showProgress = computed(() => totalPoints.value > 0)
 
 const estimatedTime = computed(() => {
   const remaining = totalPoints.value - completedPoints.value
-  if (remaining <= 0) {
-    return '00:00'
-  }
-
+  if (remaining <= 0) return '00:00'
   return '--'
 })
 
-// 计算属性
+const effectiveTargetPressure = computed(() => {
+  if (typeof props.targetPressure === 'number' && Number.isFinite(props.targetPressure)) {
+    return props.targetPressure
+  }
+  if (typeof eventTargetPressure.value === 'number' && Number.isFinite(eventTargetPressure.value)) {
+    return eventTargetPressure.value
+  }
+  return null
+})
+
 const measureDeviceStatusText = computed(() => {
   switch (measureDeviceStatus.value) {
     case 'connected': return '已连接'
@@ -254,112 +197,17 @@ const pressureDeviceStatusClass = computed(() => ({
   'status-not-selected': pressureDeviceStatus.value === 'not_selected'
 }))
 
-const targetPressure = computed<number | null>(() => {
-  if (typeof props.targetPressure === 'number' && Number.isFinite(props.targetPressure)) {
-    return props.targetPressure
-  }
-
-  if (typeof eventTargetPressure.value === 'number' && Number.isFinite(eventTargetPressure.value)) {
-    return eventTargetPressure.value
-  }
-
-  return null
-})
-
-const targetPressureForMath = computed(() => {
-  if (typeof targetPressure.value === 'number' && targetPressure.value > 0) {
-    return targetPressure.value
-  }
-
-  return 0
-})
-
-const pressurePercentage = computed(() => {
-  if (targetPressureForMath.value <= 0) return 0
-  const percent = (currentPressure.value / targetPressureForMath.value) * 100
-  return Math.min(Math.max(percent, 0), 100)
-})
-
-const pressureBarClass = computed(() => {
-  if (targetPressure.value === null) return 'bar-normal'
-  if (isStable.value) return 'bar-stable'
-  if (Math.abs(currentPressure.value - targetPressure.value) <= stabilityThreshold.value) {
-    return 'bar-approaching'
-  }
-  return 'bar-normal'
-})
-
-const stabilityClass = computed(() => ({
-  'indicator-stable': isStable.value,
-  'indicator-unstable': !isStable.value
-}))
-
-const stabilityText = computed(() =>
-  isStable.value ? '已稳定' : '未稳定'
-)
-
-const targetDiff = computed<number | null>(() => {
-  if (targetPressure.value === null) {
-    return null
-  }
-
-  return currentPressure.value - targetPressure.value
-})
-
-const targetDiffClass = computed(() => {
-  if (targetDiff.value === null) return 'diff-unknown'
-  const diff = Math.abs(targetDiff.value)
-  if (diff <= stabilityThreshold.value) return 'diff-ok'
-  if (diff <= stabilityThreshold.value * 3) return 'diff-warning'
-  return 'diff-error'
-})
-
-const targetDiffText = computed(() => {
-  if (targetDiff.value === null) {
-    return '--'
-  }
-
-  const diff = targetDiff.value
-  const sign = diff > 0 ? '+' : ''
-  return `${sign}${formatPressure(diff)} kPa`
-})
-
 const activeChannels = computed(() =>
   channelData.value.filter(ch => ch.isActive).length
 )
 
-const totalChannels = computed(() => 16)
-
 const progressPercent = computed(() => {
-  if (totalPoints.value <= 0) {
-    return 0
-  }
-
+  if (totalPoints.value <= 0) return 0
   return Math.round((completedPoints.value / totalPoints.value) * 100)
 })
 
-// 方法
-function formatPressure(value: number | null): string {
-  if (value === null) return '--.--'
-  return value.toFixed(2)
-}
+// ---- SSE 事件订阅 ----
 
-function formatChannelValue(value: number | null): string {
-  if (value === null) return '---'
-  return value.toFixed(3)
-}
-
-function channelStatusText(status: string): string {
-  const map: Record<string, string> = {
-    ok: '正常',
-    warning: '警告',
-    error: '异常',
-    idle: '空闲'
-  }
-  return map[status] || status
-}
-
-// SSE 事件订阅
 let eventSource: EventSource | null = null
 let pollInterval: ReturnType<typeof setInterval> | null = null
 
@@ -370,25 +218,18 @@ function setupSSE() {
       lastUpdateTime.value = now.toLocaleTimeString('zh-CN')
 
       if (payload.type === 'device.status.changed') {
-        // 设备状态变化时，重新同步连接状态
         void syncConnectionFromDevices()
       }
 
       if (payload.type === 'pressure.applied') {
         const data = payload.data as { actualPressure?: number; targetPressure?: number }
-        if (data?.actualPressure !== undefined) {
-          currentPressure.value = data.actualPressure
-        }
-        if (data?.targetPressure !== undefined) {
-          eventTargetPressure.value = data.targetPressure
-        }
+        if (data?.actualPressure !== undefined) currentPressure.value = data.actualPressure
+        if (data?.targetPressure !== undefined) eventTargetPressure.value = data.targetPressure
       }
 
       if (payload.type === 'data.collected') {
         const data = payload.data as { data?: number[]; channels?: number[] }
-        if (data?.data && data?.channels) {
-          updateChannelData(data.data, data.channels)
-        }
+        if (data?.data && data?.channels) updateChannelData(data.data, data.channels)
       }
     },
     onError: (error) => {
@@ -408,7 +249,7 @@ function updateChannelData(values: number[], channels: number[]) {
     if (ch >= 1 && ch <= 16 && idx < values.length) {
       const chIdx = ch - 1
       const currentValue = values[idx]
-      const compareTarget = targetPressure.value ?? currentValue
+      const compareTarget = effectiveTargetPressure.value ?? currentValue
       newChannelData[chIdx] = {
         value: currentValue,
         status: Math.abs(currentValue - compareTarget) > stabilityThreshold.value * 3 ? 'warning' : 'ok',
@@ -420,7 +261,8 @@ function updateChannelData(values: number[], channels: number[]) {
   channelData.value = newChannelData
 }
 
-// 轮询实时数据（作为SSE的补充）
+// ---- 轮询 ----
+
 async function pollRealtimeData() {
   try {
     const pressure = await readPressure()
@@ -454,14 +296,12 @@ async function pollRealtimeData() {
 }
 
 function reconnect() {
-  if (eventSource) {
-    eventSource.close()
-  }
+  if (eventSource) eventSource.close()
   setupSSE()
   syncConnectionFromDevices()
 }
 
-/** 从后端设备列表同步连接状态，解决进入页面时设备已连接但未触发 SSE 的问题。 */
+/** 从后端设备列表同步连接状态 */
 async function syncConnectionFromDevices() {
   try {
     const devices = await fetchDevices()
@@ -469,11 +309,9 @@ async function syncConnectionFromDevices() {
     const pressureId = selection.pressureDeviceId
     const measureId = selection.measureDeviceId
 
-    // 检查两个设备是否都已连接
     const pressureDevice = devices.find(d => d.id === pressureId)
     const measureDevice = devices.find(d => d.id === measureId)
 
-    // 更新各设备状态
     measureDeviceStatus.value = measureId
       ? (measureDevice?.status === 'connected' ? 'connected' : 'disconnected')
       : 'not_selected'
@@ -481,23 +319,20 @@ async function syncConnectionFromDevices() {
       ? (pressureDevice?.status === 'connected' ? 'connected' : 'disconnected')
       : 'not_selected'
 
-    // 只有当两个设备都已选择且都已连接时，才认为已连接
     const pressureConnected = pressureId && pressureDevice?.status === 'connected'
     const measureConnected = measureId && measureDevice?.status === 'connected'
-
     isConnected.value = !!(pressureConnected && measureConnected)
   } catch {
     // 查询失败时保持当前状态
   }
 }
 
-// 生命周期
+// ---- 生命周期 ----
+
 onMounted(() => {
   setupSSE()
   syncConnectionFromDevices()
-  // 每2秒轮询一次实时数据
   pollInterval = setInterval(pollRealtimeData, 2000)
-  // 立即执行一次
   pollRealtimeData()
 })
 
@@ -632,229 +467,7 @@ onUnmounted(() => {
   }
 }
 
-/* ===== 紧凑指标栏 ===== */
-.metrics-bar {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-md);
-  background: var(--bg-tertiary);
-  border: 1px solid var(--border-color);
-  border-radius: 3px;
-  padding: var(--spacing-xs) var(--spacing-md);
-}
-
-.metric-item {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-xs);
-  white-space: nowrap;
-}
-
-.metric-label {
-  font-size: 11px;
-  font-weight: 500;
-  color: var(--text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-}
-
-.metric-value {
-  font-family: Consolas, monospace;
-  font-size: 16px;
-  font-weight: 600;
-  color: var(--text-primary);
-  line-height: 1;
-}
-
-.metric-unit {
-  font-size: 11px;
-  color: var(--text-muted);
-  font-weight: 500;
-}
-
-.metric-separator {
-  width: 1px;
-  height: 20px;
-  background: var(--border-color-strong);
-  flex-shrink: 0;
-}
-
-/* 迷你压力条 */
-.mini-bar {
-  width: 60px;
-  height: 4px;
-  background: var(--bg-primary);
-  border-radius: 2px;
-  overflow: hidden;
-  margin-left: var(--spacing-xs);
-}
-
-.mini-bar-fill {
-  height: 100%;
-  border-radius: 2px;
-  width: 100%;
-  transform-origin: left;
-  transition: transform 0.3s ease, background-color 0.3s ease;
-}
-
-.bar-normal { background: var(--status-info); }
-.bar-approaching { background: var(--status-warning); }
-.bar-stable { background: var(--status-success); }
-
-/* 目标差值 */
-.target-diff {
-  font-size: 11px;
-  font-weight: 500;
-  padding: 1px 5px;
-  border-radius: 2px;
-  font-family: Consolas, monospace;
-}
-
-.diff-ok { background: var(--status-success-bg); color: var(--status-success); }
-.diff-warning { background: var(--status-warning-bg); color: var(--status-warning); }
-.diff-error { background: var(--status-error-bg); color: var(--status-error); }
-.diff-unknown { background: var(--bg-quaternary); color: var(--text-muted); }
-
-/* 稳定状态 */
-.status-indicator {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  transition: background-color 0.3s ease;
-}
-
-.indicator-stable {
-  background: var(--status-success);
-  box-shadow: 0 0 0 2px var(--status-success-bg);
-}
-
-.indicator-unstable {
-  background: var(--status-warning);
-}
-
-.status-text {
-  font-size: 12px;
-  font-weight: 600;
-}
-
-.status-text.indicator-stable { color: var(--status-success); }
-.status-text.indicator-unstable { color: var(--status-warning); }
-
-.stability-meta {
-  font-size: 10px;
-  color: var(--text-muted);
-  font-family: Consolas, monospace;
-}
-
-.channels-section {
-  margin-bottom: 0;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-}
-
-.section-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: var(--spacing-sm);
-}
-
-.section-title {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-sm);
-
-  .el-icon {
-    font-size: 16px;
-    color: var(--accent-primary);
-  }
-}
-
-.section-header h3 {
-  margin: 0;
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--text-primary);
-}
-
-.channel-count {
-  font-size: 11px;
-  color: var(--text-secondary);
-  background: var(--bg-tertiary);
-  padding: 2px 6px;
-  border-radius: 3px;
-}
-
-.channels-grid {
-  display: grid;
-  grid-template-columns: repeat(8, 1fr);
-  gap: var(--spacing-xs);
-  min-height: 0;
-  overflow: auto;
-  align-content: start;
-  padding-right: 2px;
-}
-
-.channel-item {
-  background: var(--bg-tertiary);
-  border: 1px solid var(--border-color);
-  border-radius: 2px;
-  padding: 4px;
-  text-align: center;
-}
-
-.channel-item.channel-active {
-  border-color: var(--accent-primary);
-  background: rgba(255, 215, 0, 0.06);
-}
-
-.channel-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 2px;
-}
-
-.channel-name {
-  font-size: 10px;
-  font-weight: 600;
-  color: var(--text-muted);
-}
-
-.channel-status {
-  font-size: 9px;
-  padding: 1px 3px;
-  border-radius: 2px;
-  font-weight: 500;
-}
-
-.channel-status.ok {
-  background: var(--status-success-bg);
-  color: var(--status-success);
-}
-
-.channel-status.warning {
-  background: var(--status-warning-bg);
-  color: var(--status-warning);
-}
-
-.channel-status.error {
-  background: var(--status-error-bg);
-  color: var(--status-error);
-}
-
-.channel-status.idle {
-  background: var(--bg-secondary);
-  color: var(--text-muted);
-}
-
-.channel-value {
-  font-family: Consolas, monospace;
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--text-primary);
-}
+// ---- 采集进度 ----
 
 .progress-section {
   background: var(--bg-tertiary);
@@ -913,25 +526,9 @@ onUnmounted(() => {
   color: var(--text-secondary);
 }
 
-@media (max-width: 1200px) {
-  .channels-grid {
-    grid-template-columns: repeat(4, 1fr);
-  }
-}
+// ---- 响应式 ----
 
 @media (max-width: 768px) {
-  .metrics-bar {
-    flex-wrap: wrap;
-  }
-
-  .metric-separator {
-    display: none;
-  }
-
-  .channels-grid {
-    grid-template-columns: repeat(2, 1fr);
-  }
-
   .panel-header {
     flex-direction: column;
     align-items: flex-start;
