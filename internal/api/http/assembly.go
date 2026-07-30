@@ -3,6 +3,7 @@ package http
 import (
 	"io/fs"
 
+	"cal1604/internal/application/batch"
 	"cal1604/internal/application/calibration"
 	"cal1604/internal/application/deviceconnect"
 	"cal1604/internal/application/measurement"
@@ -29,6 +30,7 @@ type Dependencies struct {
 	SessionService     *session.Service
 	MeasurementService *measurement.Service
 	ReportService      *report.Service
+	BatchService       *batch.Service
 	ConfigPath         string
 	AppConfig          *config.AppConfig
 }
@@ -168,6 +170,9 @@ func newDependencies(
 	}
 	reportSvc := report.NewService(templateDir, embedFS)
 
+	// 分批计量服务（纯内存状态，不持久化）
+	batchSvc := batch.NewService()
+
 	return &Dependencies{
 		DeviceManager:      deviceManager,
 		WorkflowCoordinator: coordinator,
@@ -178,6 +183,7 @@ func newDependencies(
 		SessionService:     sessionSvc,
 		MeasurementService: measurementSvc,
 		ReportService:      reportSvc,
+		BatchService:       batchSvc,
 		ConfigPath:         configPath,
 		AppConfig:          appCfg,
 	}

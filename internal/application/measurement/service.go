@@ -26,6 +26,12 @@ var ErrRecollectPoint = errors.New("point recollect requested by user")
 // allChannels 全部16个通道，用于始终读取全部通道数据。
 var allChannels = []int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16}
 
+// maxCollectedRows 限制 s.rows 的最大保留行数，与前端 MEASUREMENT_MAX_ROWS 对齐。
+// 超出时从头部丢弃最旧数据，防止长时间连续采集导致后端内存与前端 DOM 无限增长。
+// 注意：startCollectLoop 当前未被生产 HTTP 路径调用（生产走 StartWorkflow+StartAutoCollect），
+// 此上限为防御性约束，避免该路径被重新启用时成为内存炸弹。
+const maxCollectedRows = 2000
+
 // CollectedRow 单次采集的数据行。
 type CollectedRow struct {
 	Timestamp string             `json:"timestamp"`
@@ -60,9 +66,6 @@ type Service struct {
 
 	channels []int
 	rows     []CollectedRow
-
-	measureDeviceID  string
-	pressureDeviceID string
 
 	alarmConfig  domain.AlarmConfig
 	alarmPending bool
@@ -467,6 +470,12 @@ func (s *Service) startCollectLoop(_ context.Context) {
 
 				s.mu.Lock()
 				s.rows = append(s.rows, row)
+				// 超出上限时保留最近 maxCollectedRows 行：copy 将尾部覆盖到头部再截断长度，
+				// 避免单纯 reslice 导致底层数组仍引用已丢弃的旧数据而无法被 GC 回收。
+				if len(s.rows) > maxCollectedRows {
+					copy(s.rows, s.rows[len(s.rows)-maxCollectedRows:])
+					s.rows = s.rows[:maxCollectedRows]
+				}
 				s.mu.Unlock()
 
 				s.publish(events.EventMeasurementDataUpdated, map[string]any{

@@ -15,12 +15,6 @@ type ConST811ADriver struct {
 	constBaseDriver
 }
 
-func newConST811ADriver(host string, port int) *ConST811ADriver {
-	return &ConST811ADriver{
-		constBaseDriver: constBaseDriver{base: newTCPConnectionDriver("ConST 811A", host, port)},
-	}
-}
-
 func newConST811ADriverWithLocalAddr(host string, port int, localAddr string) *ConST811ADriver {
 	return &ConST811ADriver{
 		constBaseDriver: constBaseDriver{base: newTCPConnectionDriverWithLocalAddr("ConST 811A", host, port, localAddr)},

@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strings"
 
+	"cal1604/internal/application/batch"
 	"cal1604/internal/application/calibration"
 	"cal1604/internal/application/deviceconnect"
 	"cal1604/internal/application/measurement"
@@ -43,6 +44,7 @@ type apiServer struct {
 	sessionService     *session.Service
 	measurementService *measurement.Service
 	reportService      *report.Service
+	batchService       *batch.Service
 	configPath         string
 	appConfig          *config.AppConfig
 }

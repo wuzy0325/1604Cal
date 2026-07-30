@@ -16,10 +16,6 @@ type SPC4000Driver struct {
 	base *tcpConnectionDriver
 }
 
-func newSPC4000Driver(host string, port int) *SPC4000Driver {
-	return &SPC4000Driver{base: newTCPConnectionDriver("SPC4000", host, port)}
-}
-
 func newSPC4000DriverWithLocalAddr(host string, port int, localAddr string) *SPC4000Driver {
 	return &SPC4000Driver{base: newTCPConnectionDriverWithLocalAddr("SPC4000", host, port, localAddr)}
 }

@@ -2,6 +2,36 @@
   <section class="control-card">
     <!-- 第一排：模式与进度 -->
     <div class="control-row-top">
+      <!-- 工作台级开关：分批模式 + 采集通道入口。
+           原独立 mode-toolbar 占整行浪费垂直空间，合并到控制卡片首行左侧。
+           分批模式开关放最左，与模式/打压分段控件视觉同级。 -->
+      <button
+        type="button"
+        class="batch-mode-switch"
+        :class="{ active: batchMode }"
+        :aria-pressed="batchMode"
+        @click="$emit('toggle-batch')"
+      >
+        <span class="switch-track">
+          <span class="switch-thumb" />
+        </span>
+        <span class="switch-label">分批</span>
+      </button>
+
+      <button
+        type="button"
+        class="channel-select-btn"
+        @click="$emit('open-channel-dialog')"
+      >
+        <el-icon><Grid /></el-icon>
+        <span>通道 {{ channelCount }}/16</span>
+      </button>
+
+      <span
+        class="toolbar-divider"
+        aria-hidden="true"
+      />
+
       <div class="mode-group">
         <div class="mode-item">
           <span class="mode-label">模式</span>
@@ -141,76 +171,19 @@
           >
             重置
           </button>
-          <button
-            v-if="measurementStore.hasCompletedPoints"
-            type="button"
-            class="ctrl-btn btn-export"
-            :disabled="exporting"
-            @click="$emit('export')"
-          >
-            <el-icon><Download /></el-icon>
-            {{ exporting ? '导出中...' : '导出报告' }}
-          </button>
+          <!-- 导出按钮已移到数据区底部 template-bar（P1-5），与标定模块入口统一 -->
         </template>
       </div>
     </div>
-
-    <!-- 第二排：通道与报警 -->
-    <div class="control-row-bottom">
-      <div class="left-controls">
-        <div class="channel-item">
-          <span class="mode-label">采集通道</span>
-          <button
-            class="channel-select-btn"
-            @click="channelDialogVisible = true"
-          >
-            <el-icon><Grid /></el-icon>
-            <span>{{ measurementStore.channels.length }}/16</span>
-          </button>
-        </div>
-
-        <div class="alarm-item">
-          <span class="mode-label">报警设置</span>
-          <label class="inline-check">
-            <input
-              v-model="measurementStore.alarmConfig.enabled"
-              type="checkbox"
-            >
-            <span>启用</span>
-          </label>
-          <label class="inline-check">
-            <input
-              v-model="measurementStore.alarmConfig.soundEnabled"
-              type="checkbox"
-            >
-            <span>声音</span>
-          </label>
-          <label class="inline-check">
-            <input
-              v-model="measurementStore.alarmConfig.confirmOnAlarm"
-              type="checkbox"
-            >
-            <span>报警确认</span>
-          </label>
-        </div>
-      </div>
-    </div>
-
-    <ChannelSelectDialog
-      v-model:visible="channelDialogVisible"
-      :selected-channels="measurementStore.channels"
-      @confirm="handleChannelConfirm"
-    />
   </section>
 </template>
 
 <script setup lang="ts">
-import { computed, ref, type PropType } from 'vue'
-import { VideoPlay, VideoPause, CloseBold, Download, Grid, Refresh } from '@element-plus/icons-vue'
+import { computed, type PropType } from 'vue'
+import { VideoPlay, VideoPause, CloseBold, Download, Refresh, Grid } from '@element-plus/icons-vue'
 import { ElMessageBox } from 'element-plus'
 import { useMeasurementStore } from '@/stores/measurement'
 import type { SecondaryAction } from '@/stores/measurement/types'
-import ChannelSelectDialog from '@/components/common/ChannelSelectDialog.vue'
 import { ControlMode, PressureMode } from '@/types/calibration'
 
 const props = defineProps({
@@ -241,6 +214,16 @@ const props = defineProps({
   exporting: {
     type: Boolean,
     default: false
+  },
+  // 分批模式开关状态：合并自原 mode-toolbar
+  batchMode: {
+    type: Boolean,
+    default: false
+  },
+  // 采集通道数量：合并自原 mode-toolbar
+  channelCount: {
+    type: Number,
+    default: 0
   }
 })
 
@@ -256,6 +239,9 @@ const emit = defineEmits<{
   'view-error': []
   'manual-start': []
   'manual-pressurize': []
+  // 工作台级开关事件：合并自原 mode-toolbar
+  'toggle-batch': []
+  'open-channel-dialog': []
 }>()
 
 const iconMap: Record<string, unknown> = {
@@ -266,12 +252,6 @@ const iconMap: Record<string, unknown> = {
 }
 
 const measurementStore = useMeasurementStore()
-
-const channelDialogVisible = ref(false)
-
-const handleChannelConfirm = (channels: number[]) => {
-  measurementStore.channels = channels
-}
 
 const completedCount = computed(() =>
   measurementStore.points.filter(p => p.status === 'completed').length
@@ -347,13 +327,13 @@ async function dispatchSecondary(action: SecondaryAction) {
 <style scoped lang="scss">
 .control-card {
   background: #ffffff;
-  border-radius: 12px;
+  border-radius: 10px;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
   border: 1px solid $slate-200;
-  padding: 16px;
+  padding: 10px 12px;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 8px;
   font-family: $font-sans;
   transition: box-shadow 0.2s ease, border-color 0.2s ease;
 
@@ -366,19 +346,112 @@ async function dispatchSecondary(action: SecondaryAction) {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 16px 24px;
+  gap: 8px 12px;
+}
+
+/* 工具条内分隔线：弱化，避免与外部分隔线同级 */
+.toolbar-divider {
+  width: 1px;
+  height: 18px;
+  background: $slate-200;
+}
+
+/* 分批模式开关：紧凑版 toggle，移到控制卡片首行左侧 */
+.batch-mode-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px 4px 6px;
+  border: 1px solid $slate-200;
+  border-radius: 999px;
+  background: $slate-50;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  color: $slate-700;
+  transition: all 0.15s ease;
+  font-family: $font-sans;
+
+  &:hover {
+    border-color: $slate-300;
+    background: #fff;
+  }
+
+  &.active {
+    border-color: $mint;
+    background: rgba(16, 185, 129, 0.08);
+    color: $mint-dark;
+  }
+}
+
+.batch-mode-switch .switch-track {
+  position: relative;
+  width: 24px;
+  height: 14px;
+  border-radius: 999px;
+  background: $slate-200;
+  transition: background 0.15s ease;
+  flex-shrink: 0;
+}
+
+.batch-mode-switch .switch-thumb {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+  transition: left 0.15s ease;
+}
+
+.batch-mode-switch.active .switch-track {
+  background: $mint;
+}
+
+.batch-mode-switch.active .switch-thumb {
+  left: 12px;
+}
+
+/* 采集通道入口：紧凑按钮 */
+.channel-select-btn {
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid $slate-200;
+  border-radius: 6px;
+  background: $slate-50;
+  color: $blue;
+  font-size: 12px;
+  font-family: $font-mono;
+  font-weight: 500;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  transition: all 0.15s ease;
+
+  &:hover {
+    background: $slate-100;
+    border-color: $slate-300;
+  }
+
+  .el-icon {
+    font-size: 12px;
+    color: $slate-400;
+  }
 }
 
 .mode-group {
   display: flex;
   align-items: center;
-  gap: 20px;
+  gap: 12px;
 }
 
 .mode-item {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
 }
 
 /* Label 规范：500, 12px, 1.5, 0.05em */
@@ -395,19 +468,19 @@ async function dispatchSecondary(action: SecondaryAction) {
   display: flex;
   padding: 2px;
   background: $slate-100;
-  border-radius: 8px;
+  border-radius: 6px;
   border: 1px solid $slate-200;
 }
 
 .segment-btn {
-  padding: 4px 14px;
+  padding: 3px 10px;
   font-size: 12px;
   font-weight: 500;
   border: none;
   background: transparent;
   color: $slate-500;
   cursor: pointer;
-  border-radius: 6px;
+  border-radius: 4px;
   transition: all 0.15s ease;
   font-family: $font-sans;
 
@@ -459,7 +532,7 @@ async function dispatchSecondary(action: SecondaryAction) {
 
 .progress-track {
   width: 100%;
-  height: 6px;
+  height: 4px;
   background: $slate-100;
   border-radius: 999px;
   overflow: hidden;
@@ -476,20 +549,20 @@ async function dispatchSecondary(action: SecondaryAction) {
 .control-buttons {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   flex-wrap: wrap;
   margin-left: auto;
 }
 
 /* 按钮基础：8px radius，规范过渡 */
 .ctrl-btn {
-  padding: 8px 16px;
-  border-radius: 8px;
+  padding: 6px 12px;
+  border-radius: 6px;
   border: none;
   cursor: pointer;
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
   font-size: 12px;
   font-weight: 600;
   transition: all 0.15s ease;
@@ -507,7 +580,7 @@ async function dispatchSecondary(action: SecondaryAction) {
 
 /* 主按钮：默认较宽，视觉层级最高 */
 .ctrl-btn-primary {
-  min-width: 120px;
+  min-width: 96px;
   justify-content: center;
 }
 
@@ -579,92 +652,6 @@ async function dispatchSecondary(action: SecondaryAction) {
   }
 }
 
-.control-row-bottom {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 16px;
-  padding-top: 12px;
-  border-top: 1px solid $slate-100;
-}
-
-.left-controls {
-  display: flex;
-  align-items: center;
-  gap: 20px;
-  flex-wrap: wrap;
-}
-
-.channel-item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.alarm-item {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  flex-wrap: wrap;
-}
-
-.inline-check {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  color: $slate-600;
-  font-size: 12px;
-  cursor: pointer;
-  white-space: nowrap;
-  font-family: $font-sans;
-
-  input[type="checkbox"] {
-    width: 14px;
-    height: 14px;
-    accent-color: $mint;
-    border: 1px solid $slate-300;
-    border-radius: 3px;
-    cursor: pointer;
-  }
-
-  &:hover span {
-    color: $slate-800;
-  }
-}
-
-.channel-select-btn {
-  height: 28px;
-  padding: 0 10px;
-  border: 1px solid $slate-200;
-  border-radius: 8px;
-  background: $slate-50;
-  color: $blue;
-  font-size: 12px;
-  font-family: $font-mono;
-  font-weight: 500;
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  transition: all 0.15s ease;
-
-  &:hover {
-    background: $slate-100;
-    border-color: $slate-300;
-  }
-
-  .el-icon {
-    font-size: 12px;
-    color: $slate-400;
-  }
-}
-
-.channel-count {
-  margin-left: 2px;
-  color: $slate-400;
-  font-size: 11px;
-}
-
 @media (max-width: 900px) {
   .control-row-top {
     flex-direction: column;
@@ -678,11 +665,6 @@ async function dispatchSecondary(action: SecondaryAction) {
   .control-buttons {
     width: 100%;
     margin-left: 0;
-  }
-
-  .control-row-bottom {
-    flex-direction: column;
-    align-items: flex-start;
   }
 }
 </style>

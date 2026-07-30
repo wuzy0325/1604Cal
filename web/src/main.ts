@@ -17,6 +17,11 @@ import { useHardwareLogStore } from './stores/hardwareLog'
 import { useGatesStore } from './stores/app/gates'
 import type { StreamEventPayload } from './types/api'
 import './styles/global.scss'
+// P2-3：全局补齐自定义 button / input / [tabindex] 的 focus ring，
+// 提升键盘用户可见性（Element Plus 组件自身 focus 样式不受影响）。
+// 注意：从 TS 引入 SCSS partial（_focus-ring.scss）需带下划线前缀，
+// Vite/Rollup 不会自动应用 SCSS partial 名称解析规则。
+import './styles/_focus-ring.scss'
 
 async function bootstrap() {
   // 在桌面模式下，初始化 API 基础路径指向内嵌 HTTP 服务器。

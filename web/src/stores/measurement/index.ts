@@ -44,6 +44,13 @@ import { useGatesStore } from '@/stores/app/gates'
 
 export type { MeasurementState, CollectedRow, StabilityUpdate }
 
+/**
+ * 实时采样行最大保留条数，与后端 measurement.maxCollectedRows 对齐。
+ * 超出时丢弃最旧行，防止长时间采集导致响应式 store 与 DOM 无限增长。
+ * SSE 追加路径（useMeasurementSync）与全量拉取路径（refreshData）共用此上限。
+ */
+export const MEASUREMENT_MAX_ROWS = 2000
+
 export const useMeasurementStore = defineStore('measurement', () => {
   // ── 状态 ──
   const state = ref<MeasurementState>('idle')
@@ -329,7 +336,11 @@ export const useMeasurementStore = defineStore('measurement', () => {
   const refreshData = async () => {
     try {
       const resp = await fetchMeasurementData()
-      rows.value = resp.rows
+      // 后端已限制 s.rows 上限，此处再兜底截断：保留最近 MEASUREMENT_MAX_ROWS 行，
+      // 确保任何异常返回都不会撑爆前端响应式 store 与表格 DOM。
+      rows.value = resp.rows.length > MEASUREMENT_MAX_ROWS
+        ? resp.rows.slice(-MEASUREMENT_MAX_ROWS)
+        : resp.rows
     } catch { /* 静默 */ }
   }
 

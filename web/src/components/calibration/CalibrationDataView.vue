@@ -100,15 +100,13 @@
           </el-table-column>
         </el-table>
 
-        <div
+        <!-- 空状态统一用 el-empty（P2-2），与计量模块视觉一致 -->
+        <el-empty
           v-if="calibrationStore.pressurePoints.length === 0"
-          class="empty-state"
-        >
-          <el-icon class="empty-icon">
-            <SetUp />
-          </el-icon>
-          <p>配置标定参数后开始标定流程</p>
-        </div>
+          description="配置标定参数后开始标定流程"
+          :image-size="80"
+          class="table-empty"
+        />
       </div>
     </div>
 
@@ -177,15 +175,12 @@
           <span class="legend-item legend-error">&gt; 0.5</span>
         </div>
 
-        <div
+        <el-empty
           v-if="calibrationStore.pressurePoints.length === 0"
-          class="empty-state"
-        >
-          <el-icon class="empty-icon">
-            <SetUp />
-          </el-icon>
-          <p>暂无采集数据</p>
-        </div>
+          description="暂无采集数据"
+          :image-size="80"
+          class="table-empty"
+        />
       </div>
     </div>
   </section>
@@ -194,10 +189,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { ElMessage } from 'element-plus'
-import {
-  Operation,
-  SetUp
-} from '@element-plus/icons-vue'
+import { Operation } from '@element-plus/icons-vue'
 import { useCalibrationStore } from '@/stores/calibration'
 import { type SessionState, ControlMode } from '@/types/calibration'
 
@@ -518,21 +510,14 @@ const handleTargetPressureChange = async (row: TableRow, val: string) => {
 
 .idle-text { color: $slate-400; font-size: 12px; }
 
-.empty-state {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  padding: 40px 0;
-  color: $slate-400;
+/* el-empty 空状态：与计量模块保持视觉一致（P2-2） */
+.table-empty {
+  padding: 32px 0;
 
-  .empty-icon {
-    font-size: 48px;
-    color: $slate-200;
+  :deep(.el-empty__description) {
+    font-size: 13px;
+    color: $slate-400;
+    font-family: $font-sans;
   }
-
-  p { font-size: 13px; margin: 0; font-family: $font-sans; }
 }
 </style>

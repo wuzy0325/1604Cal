@@ -29,3 +29,19 @@ export interface CalibrationParams {
   precisionLevel: string
   pressureMode: PressureMode
 }
+
+/** 主按钮动作定义：随会话状态自动切换文案/图标/色阶 */
+export interface PrimaryAction {
+  key: string
+  label: string
+  icon: string
+  variant: 'mint' | 'slate' | 'blue' | 'amber'
+}
+
+/** 副按钮动作定义：仅在该状态确实可用时才出现 */
+export interface SecondaryAction {
+  key: string
+  label: string
+  variant: 'slate' | 'red' | 'blue' | 'amber'
+  confirm?: string
+}

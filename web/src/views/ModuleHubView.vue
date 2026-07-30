@@ -5,6 +5,8 @@ import PageLayout from '@/components/common/PageLayout.vue'
 
 const router = useRouter()
 
+// 功能卡片定义：4 个入口在导航层面同等重要，统一尺寸与结构，
+// 通过主题色与 tag 文案区分功能边界，避免主次卡片大小失衡。
 interface FeatureCard {
   title: string
   description: string
@@ -12,7 +14,6 @@ interface FeatureCard {
   path: string
   tag: string
   color: string
-  variant: 'primary' | 'secondary'
 }
 
 const featureCards: FeatureCard[] = [
@@ -22,8 +23,7 @@ const featureCards: FeatureCard[] = [
     icon: SetUp,
     path: '/calibration',
     tag: '流程控制',
-    color: '#f59e0b',
-    variant: 'primary'
+    color: '#f59e0b'
   },
   {
     title: '计量工作台',
@@ -31,8 +31,7 @@ const featureCards: FeatureCard[] = [
     icon: DataLine,
     path: '/measurement',
     tag: '数据采集',
-    color: '#10b981',
-    variant: 'primary'
+    color: '#10b981'
   },
   {
     title: '设备管理',
@@ -40,8 +39,7 @@ const featureCards: FeatureCard[] = [
     icon: Tools,
     path: '/device-management',
     tag: '统一台账',
-    color: '#3b82f6',
-    variant: 'secondary'
+    color: '#3b82f6'
   },
   {
     title: '多设备打压',
@@ -49,8 +47,7 @@ const featureCards: FeatureCard[] = [
     icon: Odometer,
     path: '/multi-pressure',
     tag: '并发控制',
-    color: '#8b5cf6',
-    variant: 'secondary'
+    color: '#8b5cf6'
   }
 ]
 
@@ -58,6 +55,7 @@ function navigateTo(path: string): void {
   router.push(path)
 }
 
+// 将十六进制色值转换为带透明度的背景色，用于图标底色与 hover 态呼应
 function colorToBg(color: string): string {
   const r = parseInt(color.slice(1, 3), 16)
   const g = parseInt(color.slice(3, 5), 16)
@@ -115,64 +113,34 @@ function colorToBg(color: string): string {
         </div>
       </header>
 
-      <!-- Bento 布局 -->
+      <!-- Bento 布局：4 个统一尺寸的功能入口 -->
       <section class="hub-content">
         <div class="bento-grid">
-          <template
+          <button
             v-for="(card, i) in featureCards"
             :key="card.path"
+            class="entry-card"
+            :style="{ '--accent': card.color, '--i': i }"
+            @click="navigateTo(card.path)"
           >
-            <!-- 主入口：标定/计量 -->
-            <button
-              v-if="card.variant === 'primary'"
-              class="entry-primary"
-              :style="{ '--accent': card.color, '--i': i }"
-              @click="navigateTo(card.path)"
+            <div
+              class="entry-icon"
+              :style="{ color: card.color, background: colorToBg(card.color) }"
             >
-              <div
-                class="primary-icon"
-                :style="{ color: card.color, background: colorToBg(card.color) }"
-              >
-                <el-icon><component :is="card.icon" /></el-icon>
-              </div>
-              <div class="primary-body">
-                <span class="primary-tag">{{ card.tag }}</span>
-                <h2>{{ card.title }}</h2>
-                <p>{{ card.description }}</p>
-              </div>
-              <span
-                class="primary-arrow"
-                aria-hidden="true"
-              >
-                <el-icon><ArrowRight /></el-icon>
-              </span>
-            </button>
-
-            <!-- 辅助入口：设备管理/多设备打压 -->
-            <button
-              v-else
-              class="entry-secondary"
-              :style="{ '--accent': card.color, '--i': i }"
-              @click="navigateTo(card.path)"
+              <el-icon><component :is="card.icon" /></el-icon>
+            </div>
+            <div class="entry-body">
+              <span class="entry-tag">{{ card.tag }}</span>
+              <h2>{{ card.title }}</h2>
+              <p>{{ card.description }}</p>
+            </div>
+            <span
+              class="entry-arrow"
+              aria-hidden="true"
             >
-              <div
-                class="secondary-icon"
-                :style="{ color: card.color, background: colorToBg(card.color) }"
-              >
-                <el-icon><component :is="card.icon" /></el-icon>
-              </div>
-              <div class="secondary-body">
-                <h3>{{ card.title }}</h3>
-                <span class="secondary-tag">{{ card.tag }}</span>
-              </div>
-              <span
-                class="secondary-arrow"
-                aria-hidden="true"
-              >
-                <el-icon><ArrowRight /></el-icon>
-              </span>
-            </button>
-          </template>
+              <el-icon><ArrowRight /></el-icon>
+            </span>
+          </button>
         </div>
       </section>
     </div>
@@ -270,13 +238,13 @@ $mint: #10b981;
 }
 
 /* ════════════════════════════════════════
-   Bento 布局
+   Bento 布局：2×2 等大网格
    ════════════════════════════════════════ */
 .hub-content {
   flex: 1;
   display: flex;
   flex-direction: column;
-  padding: 24px 32px 32px;
+  padding: 28px 32px 36px;
   overflow-y: auto;
   position: relative;
 
@@ -296,64 +264,65 @@ $mint: #10b981;
 .bento-grid {
   flex: 1;
   display: grid;
-  /* 两行布局：上行两个主入口各占1列，下行两个辅助入口各占1列 */
+  /* 2 列 2 行等大布局，4 个卡片完全统一 */
   grid-template-columns: 1fr 1fr;
   grid-template-rows: auto auto;
-  gap: 16px;
+  gap: 20px;
   align-content: center;
   position: relative;
   z-index: 1;
-  max-width: 800px;
   width: 100%;
+  /* 大屏铺满：从 800px 扩到 1200px，减少两侧空旷留白 */
+  max-width: 1200px;
   margin: 0 auto;
 }
 
-/* ── 主入口：标定/计量 ── */
-.entry-primary {
+/* ── 统一功能入口卡片 ── */
+.entry-card {
   background: #ffffff;
   border: 1px solid $slate-200;
-  border-radius: 12px;
-  padding: 28px 24px;
+  border-radius: 14px;
+  padding: 30px 26px;
   cursor: pointer;
   display: flex;
   align-items: center;
-  gap: 18px;
+  gap: 20px;
   text-align: left;
   font-family: $font-sans;
   position: relative;
   overflow: hidden;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
-  transition: border-color 0.2s ease, box-shadow 0.25s ease;
+  transition: border-color 0.2s ease, box-shadow 0.25s ease, transform 0.2s ease;
   animation: card-rise 0.4s cubic-bezier(0.25, 1, 0.5, 1) both;
   animation-delay: calc(var(--i) * 80ms + 50ms);
 
   &:hover {
     border-color: var(--accent);
-    box-shadow: 0 8px 16px -4px rgba(0, 0, 0, 0.08), 0 0 0 1px var(--accent);
+    box-shadow: 0 12px 24px -8px rgba(0, 0, 0, 0.1), 0 0 0 1px var(--accent);
 
-    .primary-arrow { color: var(--accent); transform: translateX(3px); }
+    .entry-arrow { color: var(--accent); transform: translateX(3px); }
   }
 
   &:active { transform: scale(0.995); }
 }
 
-.primary-icon {
-  width: 48px;
-  height: 48px;
+.entry-icon {
+  width: 52px;
+  height: 52px;
   border-radius: 12px;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 22px;
+  font-size: 24px;
   flex-shrink: 0;
 }
 
-.primary-body {
+.entry-body {
   flex: 1;
   min-width: 0;
 }
 
-.primary-tag {
+.entry-tag {
   font-size: 11px;
   font-weight: 600;
   color: var(--accent);
@@ -363,7 +332,7 @@ $mint: #10b981;
   margin-bottom: 6px;
 }
 
-.primary-body h2 {
+.entry-body h2 {
   font-size: 20px;
   font-weight: 700;
   color: $slate-800;
@@ -371,81 +340,18 @@ $mint: #10b981;
   line-height: 1.2;
 }
 
-.primary-body p {
+.entry-body p {
   font-size: 13px;
   color: $slate-500;
   line-height: 1.5;
   margin: 0;
 }
 
-.primary-arrow {
+.entry-arrow {
   color: $slate-300;
   font-size: 18px;
   flex-shrink: 0;
   margin-top: 4px;
-  transition: color 0.2s ease, transform 0.2s ease;
-}
-
-/* ── 辅助入口：设备管理/多设备打压 ── */
-.entry-secondary {
-  background: $slate-50;
-  border: 1px solid $slate-200;
-  border-radius: 10px;
-  padding: 14px 18px;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  text-align: left;
-  font-family: $font-sans;
-  transition: border-color 0.2s ease, background 0.2s ease;
-  animation: card-rise 0.4s cubic-bezier(0.25, 1, 0.5, 1) both;
-  animation-delay: calc(var(--i) * 80ms + 50ms);
-
-  &:hover {
-    background: #ffffff;
-    border-color: var(--accent);
-
-    .secondary-arrow { color: var(--accent); transform: translateX(2px); }
-  }
-
-  &:active { transform: scale(0.995); }
-}
-
-.secondary-icon {
-  width: 32px;
-  height: 32px;
-  border-radius: 8px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 16px;
-  flex-shrink: 0;
-}
-
-.secondary-body {
-  flex: 1;
-  min-width: 0;
-}
-
-.secondary-body h3 {
-  font-size: 14px;
-  font-weight: 600;
-  color: $slate-800;
-  margin: 0;
-  line-height: 1.3;
-}
-
-.secondary-tag {
-  font-size: 11px;
-  color: $slate-400;
-  font-weight: 500;
-}
-
-.secondary-arrow {
-  color: $slate-300;
-  font-size: 14px;
-  flex-shrink: 0;
   transition: color 0.2s ease, transform 0.2s ease;
 }
 
@@ -474,8 +380,8 @@ $mint: #10b981;
     max-width: none;
   }
 
-  .entry-primary { padding: 20px 18px; }
-  .primary-icon { width: 40px; height: 40px; font-size: 18px; }
-  .primary-body h2 { font-size: 17px; }
+  .entry-card { padding: 22px 20px; gap: 16px; }
+  .entry-icon { width: 44px; height: 44px; font-size: 20px; }
+  .entry-body h2 { font-size: 17px; }
 }
 </style>

@@ -119,6 +119,7 @@ func newRouterWithServer(
 		sessionService:     deps.SessionService,
 		measurementService: deps.MeasurementService,
 		reportService:      deps.ReportService,
+		batchService:       deps.BatchService,
 		configPath:         deps.ConfigPath,
 		appConfig:          deps.AppConfig,
 	}
@@ -227,6 +228,16 @@ func newRouterWithServer(
 	mux.HandleFunc("GET /api/v1/reports/templates/select", server.reportTemplateSelectHandler)
 	mux.HandleFunc("POST /api/v1/reports/export", server.exportReportHandler)
 	mux.HandleFunc("GET /api/v1/reports/templates", server.listTemplatesHandler)
+
+	// 分批计量（多量程压力传感器）
+	mux.HandleFunc("POST /api/v1/batch/sessions", server.batchCreateSessionHandler)
+	mux.HandleFunc("GET /api/v1/batch/sessions/{sessionId}", server.batchGetSessionHandler)
+	mux.HandleFunc("DELETE /api/v1/batch/sessions/{sessionId}", server.batchDeleteSessionHandler)
+	mux.HandleFunc("POST /api/v1/batch/sessions/{sessionId}/batches/{batchId}/verify", server.batchVerifyHandler)
+	mux.HandleFunc("POST /api/v1/batch/sessions/{sessionId}/batches/{batchId}/start", server.batchStartHandler)
+	mux.HandleFunc("POST /api/v1/batch/sessions/{sessionId}/batches/{batchId}/complete", server.batchCompleteHandler)
+	mux.HandleFunc("POST /api/v1/batch/sessions/{sessionId}/batches/{batchId}/reset", server.batchResetHandler)
+	mux.HandleFunc("POST /api/v1/batch/report", server.batchReportHandler)
 
 	return corsMiddleware(mux), server
 }

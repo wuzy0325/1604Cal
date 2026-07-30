@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
-	"time"
 
 	"cal1604/internal/api/dto"
 	"cal1604/internal/application/deviceconnect"
@@ -15,16 +14,6 @@ import (
 
 type measurementStateResponse struct {
 	State string `json:"state"`
-}
-
-type measurementDataResponse struct {
-	Rows  []measurementRow `json:"rows"`
-	Total int              `json:"total"`
-}
-
-type measurementRow struct {
-	Timestamp string             `json:"timestamp"`
-	Channels  map[string]float64 `json:"channels"`
 }
 
 type measurementPointResponse struct {
@@ -246,24 +235,6 @@ func TestMeasurementGeneratePointsRejectsInvalidConfig(t *testing.T) {
 	}
 }
 
-func waitForMeasurementData(t *testing.T, router http.Handler, minRows int, timeout time.Duration) measurementDataResponse {
-	t.Helper()
-
-	deadline := time.Now().Add(timeout)
-	for {
-		resp := callMeasurementDataEndpoint(t, router)
-		if resp.Total >= minRows {
-			return resp
-		}
-
-		if time.Now().After(deadline) {
-			t.Fatalf("timeout waiting measurement data rows >= %d, latest=%d", minRows, resp.Total)
-		}
-
-		time.Sleep(120 * time.Millisecond)
-	}
-}
-
 func callMeasurementStateEndpoint(t *testing.T, router http.Handler, method, path, body string) string {
 	t.Helper()
 
@@ -291,23 +262,4 @@ func callMeasurementStateEndpoint(t *testing.T, router http.Handler, method, pat
 	}
 
 	return resp.Data.State
-}
-
-func callMeasurementDataEndpoint(t *testing.T, router http.Handler) measurementDataResponse {
-	t.Helper()
-
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/measurement/data", nil)
-	rec := httptest.NewRecorder()
-	router.ServeHTTP(rec, req)
-
-	if rec.Code != http.StatusOK {
-		t.Fatalf("request GET /api/v1/measurement/data failed with status %d", rec.Code)
-	}
-
-	var resp dto.Response[measurementDataResponse]
-	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
-		t.Fatalf("decode measurement data response: %v", err)
-	}
-
-	return resp.Data
 }

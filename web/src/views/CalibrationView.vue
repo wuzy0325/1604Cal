@@ -1,10 +1,18 @@
 <template>
   <PageLayout>
     <!-- ═══ 仪表盘头部 ═══ -->
-    <header class="instrument-header">
+    <!-- P2-5/P2-11：role=banner 标识页面横幅；header-telemetry 内按语义拆成
+         "压力读数" 与 "稳定性状态" 两组，role=group + aria-label 让屏幕阅读器
+         能识别分组结构，避免连续读出 4 个无关联的 telem-cell。 -->
+    <header
+      class="instrument-header"
+      role="banner"
+    >
       <div class="header-nav">
         <button
           class="back-btn"
+          type="button"
+          aria-label="返回首页"
           @click="goBack"
         >
           <el-icon><ArrowLeft /></el-icon>
@@ -15,44 +23,81 @@
         <h1 class="header-title">
           标定工作台
         </h1>
+        <!-- 状态芯片：role=status + aria-live=polite，状态变化时由屏幕阅读器播报 -->
         <span
           class="state-chip"
           :class="stateClass"
+          role="status"
+          aria-live="polite"
+          :aria-label="`会话状态：${stateLabel}`"
         >
-          <span class="chip-dot" />
+          <span
+            class="chip-dot"
+            aria-hidden="true"
+          />
           {{ stateLabel }}
         </span>
       </div>
 
       <div class="header-telemetry">
-        <div class="telem-cell">
-          <span class="telem-label">当前压力</span>
-          <span class="telem-value mono">{{ displayPressure }}</span>
-          <span class="telem-unit">{{ unitLabel }}</span>
+        <div
+          class="telem-group"
+          role="group"
+          aria-label="压力读数"
+        >
+          <div class="telem-cell">
+            <span class="telem-label">当前压力</span>
+            <span class="telem-value mono">{{ displayPressure }}</span>
+            <span class="telem-unit">{{ unitLabel }}</span>
+          </div>
         </div>
-        <span class="telem-divider" />
-        <div class="telem-cell">
-          <span class="telem-label">稳定性</span>
+        <span
+          class="telem-divider"
+          aria-hidden="true"
+        />
+        <div
+          class="telem-group"
+          role="group"
+          aria-label="稳定性状态"
+        >
+          <div class="telem-cell">
+            <span class="telem-label">稳定性</span>
+            <span
+              class="telem-indicator"
+              :class="stabilityStatus?.isStable ? 'on' : 'off'"
+              :aria-label="stabilityStatus?.isStable ? '压力已稳定' : '压力稳定中'"
+            >
+              <span
+                class="telem-dot"
+                aria-hidden="true"
+              />
+              {{ stabilityStatus?.isStable ? '已稳定' : '稳定中' }}
+            </span>
+          </div>
           <span
-            class="telem-indicator"
-            :class="stabilityStatus?.isStable ? 'on' : 'off'"
-          >
-            <span class="telem-dot" />
-            {{ stabilityStatus?.isStable ? '已稳定' : '稳定中' }}
-          </span>
-        </div>
-        <span class="telem-divider" />
-        <div class="telem-cell">
-          <span class="telem-label">稳定计时</span>
-          <span class="telem-value mono">{{ stableSeconds }}<small>s</small></span>
-        </div>
-        <span class="telem-divider" />
-        <div class="telem-cell">
-          <span class="telem-label">偏差</span>
+            class="telem-divider telem-divider--inner"
+            aria-hidden="true"
+          />
+          <div class="telem-cell">
+            <span class="telem-label">稳定计时</span>
+            <!-- 稳定等待时数字脉冲（P2-1），让用户感知系统正在等待压力稳定 -->
+            <span
+              class="telem-value mono"
+              :class="{ 'pulsing': !stabilityStatus?.isStable }"
+              :aria-label="`稳定计时 ${stableSeconds} 秒`"
+            >{{ stableSeconds }}<small>s</small></span>
+          </div>
           <span
-            class="telem-value mono"
-            :class="deviationClass"
-          >{{ deviationDisplay }}</span>
+            class="telem-divider telem-divider--inner"
+            aria-hidden="true"
+          />
+          <div class="telem-cell">
+            <span class="telem-label">偏差</span>
+            <span
+              class="telem-value mono"
+              :class="deviationClass"
+            >{{ deviationDisplay }}</span>
+          </div>
         </div>
       </div>
     </header>
@@ -79,14 +124,11 @@
         <div class="scroll-container">
           <ProgressIndicator :current-step="calibrationStore.currentStep" />
 
-          <section class="card-block card-block-control">
-            <div class="card-accent" />
-            <CalibrationParams />
-            <div class="control-divider" />
-            <CalibrationControl />
-          </section>
+          <!-- 拆解卡片嵌套：Params 与 Control 各自承载卡片视觉，外层不再包裹 card-block。
+               scroll-container 自带 gap: 8px，无需额外的 section-gap 分隔元素 -->
+          <CalibrationParams />
 
-          <div class="section-gap" />
+          <CalibrationControl />
 
           <section class="card-block card-block-data">
             <div class="card-accent" />
@@ -124,6 +166,8 @@ import { ElMessage } from 'element-plus'
 import { useCalibrationStore } from '@/stores/calibration'
 import { useCalibrationSync, stabilityStatusKey } from '@/composables/useCalibrationSync'
 import { useConfigPersistence } from '@/composables/useConfigPersistence'
+import { useWorkbenchShortcuts } from '@/composables/useWorkbenchShortcuts'
+import { useCalibrationUI } from '@/composables/useCalibrationUI'
 import { showSaveDialog } from '@/composables/useFileSaveDialog'
 import { exportCalibrationReport } from '@/api/calibration'
 import PageLayout from '@/components/common/PageLayout.vue'
@@ -136,6 +180,7 @@ import ProgressIndicator from '@/components/calibration/ProgressIndicator.vue'
 
 const router = useRouter()
 const calibrationStore = useCalibrationStore()
+const calibrationUI = useCalibrationUI()
 const sidebarCollapsed = ref(false)
 const dialogsRef = ref<InstanceType<typeof CalibrationDialogs>>()
 const isExporting = ref(false)
@@ -143,6 +188,24 @@ const isExporting = ref(false)
 const { stabilityStatus, alarmEvent } = useCalibrationSync()
 provide(stabilityStatusKey, stabilityStatus)
 useConfigPersistence()
+
+// 快捷键（P1-8）：Space 开始/暂停、Esc 停止、Ctrl+E 导出、Ctrl+S 阻止默认保存
+useWorkbenchShortcuts({
+  onSpace: () => {
+    const state = calibrationStore.sessionState
+    if (['idle', 'ready', 'stopped', 'paused'].includes(state)) {
+      void calibrationUI.startCalibration()
+    } else if (['pressurizing', 'stabilizing', 'collecting', 'point_done'].includes(state)) {
+      void calibrationUI.pauseCalibration()
+    }
+  },
+  onEscape: () => {
+    void calibrationUI.stopCalibration()
+  },
+  onExport: () => {
+    void handleExport()
+  }
+})
 
 function goBack(): void {
   router.push('/')
@@ -314,6 +377,14 @@ $amber: #f59e0b;
   margin-left: auto;
 }
 
+/* P2-5：telem-group 把语义相关的 telem-cell 聚成一束，组内 gap 收紧到 8px
+   让"压力读数""稳定性状态"在视觉上明显分成两块，便于用户快速扫描。 */
+.telem-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .telem-cell {
   display: flex;
   align-items: center;
@@ -350,6 +421,12 @@ $amber: #f59e0b;
   background: $slate-200;
 }
 
+/* P2-5：组内分隔线更弱，避免与组间分隔线视觉同级 */
+.telem-divider--inner {
+  height: 16px;
+  background: $slate-100;
+}
+
 .telem-indicator {
   display: flex;
   align-items: center;
@@ -373,6 +450,16 @@ $amber: #f59e0b;
 @keyframes pulse-dot {
   0%, 100% { opacity: 1; transform: scale(1); }
   50% { opacity: 0.5; transform: scale(0.85); }
+}
+
+/* 稳定等待时计时数字脉冲（P2-1） */
+@keyframes pulse-value {
+  0%, 100% { color: $slate-800; }
+  50% { color: $amber; }
+}
+
+.pulsing {
+  animation: pulse-value 1.2s ease-in-out infinite;
 }
 
 /* ── 状态芯片 ── */
@@ -454,11 +541,6 @@ $amber: #f59e0b;
   &::-webkit-scrollbar-track { background: transparent; }
 }
 
-.section-gap {
-  flex-shrink: 0;
-  height: 8px;
-}
-
 /* ── 卡片区块 ── */
 .card-block {
   background: #ffffff;
@@ -482,16 +564,6 @@ $amber: #f59e0b;
 @keyframes card-enter {
   from { opacity: 0; transform: translateY(8px); }
   to { opacity: 1; transform: translateY(0); }
-}
-
-.card-block-control {
-  padding: 0 16px;
-}
-
-.control-divider {
-  height: 1px;
-  background: $slate-200;
-  margin: 0 -16px;
 }
 
 .template-bar {

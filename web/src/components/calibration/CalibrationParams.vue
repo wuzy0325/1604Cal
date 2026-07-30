@@ -172,9 +172,25 @@ $slate-700: #374151;
 $slate-800: #1f2937;
 $blue: #3b82f6;
 
+/* 自给自足的卡片样式：背景/圆角/阴影/padding 都由本组件承担，
+   避免外层再包裹 card-block 造成卡片嵌套（DESIGN.md 禁止） */
 .params-card {
-  padding: 12px 0;
+  position: relative;
+  background: #ffffff;
+  border-radius: 12px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.04);
+  padding: 12px 16px;
   font-family: $font-sans;
+  overflow: hidden;
+}
+
+/* 顶部 1px mint 强调线，与 CalibrationControl 卡片保持视觉一致 */
+.params-card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 1px;
+  background: $mint;
 }
 
 .params-grid {

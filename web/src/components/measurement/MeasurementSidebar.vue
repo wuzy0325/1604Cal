@@ -75,6 +75,34 @@
         </div>
       </div>
     </div>
+    <!-- 折叠态：垂直 icon-only 状态指示器列，点击任意 icon 展开侧栏 -->
+    <div
+      v-if="collapsed"
+      class="sidebar-collapsed-icons"
+    >
+      <el-icon
+        class="collapsed-icon"
+        :class="{ 'is-connected': hasConnectedMeasureDevice }"
+        role="button"
+        tabindex="0"
+        :aria-label="`1604 计量设备：${hasConnectedMeasureDevice ? '已连接' : '未连接'}，点击展开`"
+        @click="emit('toggle')"
+        @keydown.enter="emit('toggle')"
+      >
+        <Monitor />
+      </el-icon>
+      <el-icon
+        class="collapsed-icon"
+        :class="{ 'is-connected': hasConnectedPressureDevice }"
+        role="button"
+        tabindex="0"
+        :aria-label="`打压设备：${hasConnectedPressureDevice ? '已连接' : '未连接'}，点击展开`"
+        @click="emit('toggle')"
+        @keydown.enter="emit('toggle')"
+      >
+        <FirstAidKit />
+      </el-icon>
+    </div>
   </aside>
 </template>
 
@@ -110,6 +138,11 @@ const unitConflicts = ref<string[]>([])
 
 const hasConnectedPressureDevice = computed(() =>
   deviceStore.pressureDevices.some(d => d.status === 'connected')
+)
+
+// 计量设备是否已连接（用于折叠态状态指示，与打压设备判断方式保持对称）
+const hasConnectedMeasureDevice = computed(() =>
+  deviceStore.measureDevices.some(d => d.status === 'connected')
 )
 
 const showUnitCheck = computed(() =>
@@ -314,7 +347,7 @@ defineExpose({ checkUnitConsistency })
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
-  &.collapsed { width: 32px; }
+  &.collapsed { width: 48px; }
 }
 .sidebar-toggle {
   position: absolute;
@@ -346,6 +379,61 @@ defineExpose({ checkUnitConsistency })
   &::-webkit-scrollbar { width: 4px; }
   &::-webkit-scrollbar-thumb { background: $slate-300; border-radius: 4px; }
   &::-webkit-scrollbar-track { background: transparent; }
+}
+
+/* 折叠态：垂直 icon-only 状态指示器列 */
+.sidebar-collapsed-icons {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 0;
+
+  .collapsed-icon {
+    width: 24px;
+    height: 24px;
+    font-size: 20px;
+    color: $slate-300;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    transition: color 0.2s ease;
+    border-radius: 6px;
+
+    /* 已连接：图标点亮为绿色 */
+    &.is-connected {
+      color: $green;
+    }
+
+    &:hover {
+      color: $mint;
+    }
+
+    &:focus-visible {
+      outline: 2px solid $mint;
+      outline-offset: 2px;
+    }
+
+    /* 状态点：右下角小圆点，强化连接状态指示 */
+    &::after {
+      content: '';
+      position: absolute;
+      right: -2px;
+      bottom: -2px;
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: $slate-300;
+      border: 1.5px solid #f6f7f6;
+      transition: background 0.2s ease;
+    }
+
+    &.is-connected::after {
+      background: $green;
+    }
+  }
 }
 
 /* Section 卡片：白色背景 + 圆角 + 阴影 + 边框 */
@@ -453,5 +541,6 @@ defineExpose({ checkUnitConsistency })
 @media (max-width: 900px) {
   .sidebar { width: 100% !important; border-right: none; border-bottom: 1px solid $slate-200; .sidebar-toggle { display: none; } }
   .sidebar.collapsed { width: 100% !important; }
+  .sidebar-collapsed-icons { display: none; }
 }
 </style>

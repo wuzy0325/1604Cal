@@ -17,11 +17,6 @@ import (
 	"cal1604/internal/events"
 )
 
-// contextKeyPoll 已上移到 device 包（ports 层）。
-// 保留此处变量作为转发，driver 内部代码可继续使用 driver.contextKeyPoll，
-// 实际指向 device.ContextKeyPoll，保持 context 跨层传递一致性。
-var contextKeyPoll = device.ContextKeyPoll
-
 const defaultTCPDialTimeout = 3 * time.Second
 
 // tcpConnectionDriver 负责维护 TCP 级别连接与命令交互。

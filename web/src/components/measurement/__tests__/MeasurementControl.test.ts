@@ -57,12 +57,11 @@ describe('MeasurementControl', () => {
     expect(primary?.attributes('disabled')).toBeUndefined()
   })
 
-  it('renders mode toggles and channel selector', () => {
+  it('renders mode toggles and progress', () => {
     const wrapper = mountControl()
 
-    expect(wrapper.text()).toContain('采集通道')
     expect(wrapper.text()).toContain('模式')
-    expect(wrapper.text()).toContain('报警设置')
+    expect(wrapper.text()).toContain('打压')
     expect(wrapper.text()).toContain('任务进度')
   })
 })

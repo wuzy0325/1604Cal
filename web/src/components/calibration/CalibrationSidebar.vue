@@ -77,6 +77,34 @@
         </div>
       </div>
     </div>
+    <!-- 折叠态：垂直 icon-only 状态指示器列，点击任意 icon 展开侧栏 -->
+    <div
+      v-if="collapsed"
+      class="sidebar-collapsed-icons"
+    >
+      <el-icon
+        class="collapsed-icon"
+        :class="{ 'is-connected': calibrationStore.device1604Connected }"
+        role="button"
+        tabindex="0"
+        :aria-label="`1604 计量设备：${calibrationStore.device1604Connected ? '已连接' : '未连接'}，点击展开`"
+        @click="$emit('toggle')"
+        @keydown.enter="$emit('toggle')"
+      >
+        <Monitor />
+      </el-icon>
+      <el-icon
+        class="collapsed-icon"
+        :class="{ 'is-connected': calibrationStore.pressDeviceConnected }"
+        role="button"
+        tabindex="0"
+        :aria-label="`打压设备：${calibrationStore.pressDeviceConnected ? '已连接' : '未连接'}，点击展开`"
+        @click="$emit('toggle')"
+        @keydown.enter="$emit('toggle')"
+      >
+        <FirstAidKit />
+      </el-icon>
+    </div>
   </aside>
 </template>
 
@@ -182,7 +210,7 @@ const prerequisites = computed(() => {
   flex-direction: column;
 
   &.collapsed {
-    width: 32px;
+    width: 48px;
   }
 }
 
@@ -228,6 +256,61 @@ const prerequisites = computed(() => {
   &::-webkit-scrollbar { width: 4px; }
   &::-webkit-scrollbar-thumb { background: $slate-300; border-radius: 4px; }
   &::-webkit-scrollbar-track { background: transparent; }
+}
+
+/* 折叠态：垂直 icon-only 状态指示器列 */
+.sidebar-collapsed-icons {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 0;
+
+  .collapsed-icon {
+    width: 24px;
+    height: 24px;
+    font-size: 20px;
+    color: $slate-300;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    transition: color 0.2s ease;
+    border-radius: 6px;
+
+    /* 已连接：图标点亮为绿色 */
+    &.is-connected {
+      color: $green;
+    }
+
+    &:hover {
+      color: $mint;
+    }
+
+    &:focus-visible {
+      outline: 2px solid $mint;
+      outline-offset: 2px;
+    }
+
+    /* 状态点：右下角小圆点，强化连接状态指示 */
+    &::after {
+      content: '';
+      position: absolute;
+      right: -2px;
+      bottom: -2px;
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: $slate-300;
+      border: 1.5px solid #f6f7f6;
+      transition: background 0.2s ease;
+    }
+
+    &.is-connected::after {
+      background: $green;
+    }
+  }
 }
 
 /* Section 卡片：白色背景 + 圆角 + 阴影 + 边框 */
@@ -356,6 +439,10 @@ const prerequisites = computed(() => {
   .sidebar-content {
     padding: 16px;
     gap: 16px;
+  }
+
+  .sidebar-collapsed-icons {
+    display: none;
   }
 }
 </style>

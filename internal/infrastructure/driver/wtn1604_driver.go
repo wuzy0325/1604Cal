@@ -18,10 +18,6 @@ type WTN1604Driver struct {
 	base *tcpConnectionDriver
 }
 
-func newWTN1604Driver(host string, port int) *WTN1604Driver {
-	return &WTN1604Driver{base: newTCPConnectionDriver("WTN1604", host, port)}
-}
-
 func newWTN1604DriverWithLocalAddr(host string, port int, localAddr string) *WTN1604Driver {
 	return &WTN1604Driver{base: newTCPConnectionDriverWithLocalAddr("WTN1604", host, port, localAddr)}
 }

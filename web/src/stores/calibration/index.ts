@@ -17,10 +17,11 @@ import { useGatesStore } from '@/stores/app/gates'
 import { sessionStateToStep, isSessionRunning } from '@/composables/useCalibrationFlow'
 import { useCalibrationConfig } from '@/composables/useCalibrationConfig'
 import { CalibrationStep } from './types'
+import type { PrimaryAction, SecondaryAction } from './types'
 import { fetchUnitConsistency } from '@/api/device'
 
 export { CalibrationStep } from './types'
-export type { PressurePoint, CalibrationParams } from './types'
+export type { PressurePoint, CalibrationParams, PrimaryAction, SecondaryAction } from './types'
 
 export const useCalibrationStore = defineStore('calibration', () => {
   const deviceStore = useDeviceInventoryStore()
@@ -62,6 +63,75 @@ export const useCalibrationStore = defineStore('calibration', () => {
     device1604Connected.value && channelsSelected.value && (!enforceValveCalibrationGate.value || valveReady.value)
   )
   const isRunning = computed(() => isSessionRunning(sessionState.value))
+
+  /* ── 动态状态机：主按钮随会话状态切换文案/图标/色阶 ──
+     设计意图：让用户视线焦点稳定在主按钮位置，避免静态罗列 6 个按钮
+     造成"哪个能用"的认知负担。副按钮仅在状态确实需要时才出现。 */
+  const primaryAction = computed<PrimaryAction>(() => {
+    switch (sessionState.value) {
+      case 'idle':
+      case 'ready':
+      case 'stopped':
+        return { key: 'start', label: '开始标定', icon: 'VideoPlay', variant: 'mint' }
+      case 'pressurizing':
+      case 'stabilizing':
+      case 'collecting':
+      case 'point_done':
+      case 'await_manual_collect':
+      case 'recovering':
+        return { key: 'pause', label: '暂停', icon: 'VideoPause', variant: 'slate' }
+      case 'paused':
+        return { key: 'resume', label: '继续标定', icon: 'RefreshRight', variant: 'mint' }
+      case 'await_alarm_resolution':
+        // 报警态主按钮：最常见的"确认继续"，副按钮提供跳过/重采/停止
+        return { key: 'alarm-continue', label: '确认继续', icon: 'CircleCheck', variant: 'amber' }
+      case 'fitting':
+        // 拟合进行中：主按钮显示状态，禁用点击
+        return { key: 'fitting', label: '拟合中...', icon: 'DataAnalysis', variant: 'slate' }
+      case 'completed':
+        // 已完成：主按钮是结束标定（清理会话），重新拟合作为副按钮
+        return { key: 'end', label: '结束标定', icon: 'CircleClose', variant: 'mint' }
+      case 'error':
+        return { key: 'stop', label: '停止', icon: 'CloseBold', variant: 'amber' }
+      default:
+        return { key: 'start', label: '开始标定', icon: 'VideoPlay', variant: 'mint' }
+    }
+  })
+
+  const secondaryActions = computed<SecondaryAction[]>(() => {
+    const out: SecondaryAction[] = []
+    switch (sessionState.value) {
+      case 'pressurizing':
+      case 'stabilizing':
+      case 'collecting':
+      case 'point_done':
+      case 'await_manual_collect':
+      case 'recovering':
+      case 'paused':
+        out.push({ key: 'stop', label: '停止', variant: 'red', confirm: '确认终止标定？已采集数据将保留。' })
+        break
+      case 'await_alarm_resolution':
+        // 报警态副按钮：跳过此点 / 重新采集 / 停止标定
+        out.push({ key: 'alarm-skip', label: '跳过此点', variant: 'blue' })
+        out.push({ key: 'alarm-recollect', label: '重新采集', variant: 'slate' })
+        out.push({ key: 'alarm-stop', label: '停止标定', variant: 'red', confirm: '确认终止标定？已采集数据将保留。' })
+        break
+      case 'completed':
+        // 已完成态副按钮：重新拟合 / 重新开始
+        if (hasCollectedData.value) {
+          out.push({ key: 'fit', label: '重新拟合', variant: 'blue' })
+        }
+        out.push({ key: 'reset', label: '重新开始', variant: 'slate', confirm: '将清空当前结果，重新开始标定？' })
+        break
+      case 'stopped':
+        out.push({ key: 'reset', label: '清空数据', variant: 'slate', confirm: '将永久删除当前标定结果？' })
+        break
+      case 'error':
+        out.push({ key: 'stop', label: '停止', variant: 'red', confirm: '确认终止当前会话？' })
+        break
+    }
+    return out
+  })
 
   // Actions
   const setStep = (step: CalibrationStep) => { currentStep.value = step }
@@ -343,6 +413,8 @@ export const useCalibrationStore = defineStore('calibration', () => {
     valveReady,
     canStartCalibration,
     isRunning,
+    primaryAction,
+    secondaryActions,
     // Actions
     setStep,
     syncSessionState,

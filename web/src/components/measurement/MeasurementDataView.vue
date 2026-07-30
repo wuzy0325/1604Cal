@@ -24,106 +24,115 @@
           </span>
         </div>
       </div>
-      <div class="table-scroll custom-scroll">
-        <table class="data-table">
-          <thead>
-            <tr>
-              <th class="col-index">
-                序号
-              </th>
-              <th class="col-status">
-                状态
-              </th>
-              <th class="col-target">
-                目标值
-              </th>
-              <th
-                v-for="ch in channelCount"
-                :key="ch"
-                class="col-channel"
-              >
-                {{ ch }}
-              </th>
-              <th class="col-time">
-                采集时间
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr
-              v-for="pt in points"
-              :key="pt.id"
-              :class="getRowClass(pt)"
-              class="data-row"
-            >
-              <td class="cell-index">
-                <div class="index-cell-wrap">
-                  <span>{{ pt.index }}</span>
-                  <span
-                    v-if="isRoundTrip"
-                    :class="['trip-badge', pt.direction === 'forward' ? 'forward' : 'backward']"
-                  >
-                    {{ pt.direction === 'forward' ? '正' : '回' }}
-                  </span>
-                </div>
-              </td>
-              <td class="cell-status">
-                <button
-                  v-if="controlMode === ControlMode.Manual"
-                  type="button"
-                  class="row-collect-btn"
-                  @click="$emit('collect-point', pt.index)"
-                >
-                  采集
-                </button>
+      <div class="table-body">
+        <!-- 改用 el-table 与标定模块统一表格实现（共用 calibration-table mixin）。
+             超限高亮策略保持计量模块原有红色背景方案，与标定的文字颜色方案有意区分。 -->
+        <el-table
+          :data="points"
+          border
+          stripe
+          :row-class-name="pointRowClassName"
+          class="data-el-table"
+        >
+          <el-table-column
+            label="序号"
+            width="80"
+          >
+            <template #default="{ row }">
+              <div class="index-cell-wrap">
+                <span>{{ row.index }}</span>
                 <span
-                  v-else
-                  :class="['status-tag', getStatusType(pt.status)]"
+                  v-if="isRoundTrip"
+                  :class="['trip-badge', row.direction === 'forward' ? 'forward' : 'backward']"
                 >
-                  <span :class="['status-dot', getStatusType(pt.status)]" />
-                  {{ getStatusText(pt.status) }}
+                  {{ row.direction === 'forward' ? '正' : '回' }}
                 </span>
-              </td>
-              <td class="cell-target">
-                <input
-                  :value="pt.targetPressure"
-                  type="number"
-                  class="target-input"
-                  :step="precisionStep"
-                  @change="onTargetChange(pt.id, ($event.target as HTMLInputElement).valueAsNumber)"
-                >
-              </td>
-              <td
-                v-for="ch in channelCount"
-                :key="ch"
-                class="cell-channel"
+              </div>
+            </template>
+          </el-table-column>
+          <el-table-column
+            label="状态"
+            width="110"
+          >
+            <template #default="{ row }">
+              <button
+                v-if="controlMode === ControlMode.Manual"
+                type="button"
+                class="row-collect-btn"
+                @click="$emit('collect-point', row.index)"
               >
-                <div
-                  v-if="pt.collectedData && pt.collectedData[ch - 1] !== undefined"
-                  :class="['channel-value', { 'channel-over-limit': isChannelOverLimit(pt, ch) }]"
-                >
-                  {{ pt.collectedData[ch - 1].toFixed(precisionForDisplay) }}
-                </div>
-                <div
-                  v-else
-                  class="channel-value empty"
-                >
-                  --
-                </div>
-              </td>
-              <td class="cell-time">
-                <span
-                  v-if="pt.collectTime"
-                  class="time-display"
-                >{{ formatTime(pt.collectTime) }}</span>
-                <span
-                  v-else
-                  class="time-display empty"
-                >--:--:--</span>
-              </td>
-            </tr>
-          </tbody>
-        </table>
+                采集
+              </button>
+              <span
+                v-else
+                :class="['status-tag', getStatusType(row.status)]"
+              >
+                <span :class="['status-dot', getStatusType(row.status)]" />
+                {{ getStatusText(row.status) }}
+              </span>
+            </template>
+          </el-table-column>
+          <el-table-column
+            label="目标值"
+            width="90"
+            class-name="col-target"
+          >
+            <template #default="{ row }">
+              <!-- 手动模式：逐点采集时需要调整目标，保持可编辑 input；
+                   自动模式：目标由程序生成，显示为纯文本以减少边框视觉干扰 -->
+              <input
+                v-if="controlMode === ControlMode.Manual"
+                :value="row.targetPressure"
+                type="number"
+                class="target-input"
+                :step="precisionStep"
+                @change="onTargetChange(row.id, ($event.target as HTMLInputElement).valueAsNumber)"
+              >
+              <span
+                v-else
+                class="target-text"
+              >{{ row.targetPressure.toFixed(precisionForDisplay) }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column
+            v-for="ch in channelCount"
+            :key="ch"
+            :label="`${ch}`"
+            width="60"
+            class-name="col-channel"
+          >
+            <template #default="{ row }">
+              <div
+                v-if="row.collectedData && row.collectedData[ch - 1] !== undefined"
+                :class="['channel-value', { 'channel-over-limit': isChannelOverLimit(row, ch) }]"
+              >
+                {{ row.collectedData[ch - 1].toFixed(precisionForDisplay) }}
+              </div>
+              <div
+                v-else
+                class="channel-value empty"
+              >
+                --
+              </div>
+            </template>
+          </el-table-column>
+          <el-table-column
+            label="采集时间"
+            width="100"
+            class-name="col-time"
+          >
+            <template #default="{ row }">
+              <span
+                v-if="row.collectTime"
+                class="time-display"
+              >{{ formatTime(row.collectTime) }}</span>
+              <span
+                v-else
+                class="time-display empty"
+              >--:--:--</span>
+            </template>
+          </el-table-column>
+        </el-table>
       </div>
     </div>
 
@@ -156,55 +165,50 @@
         </div>
         <div class="toolbar-actions" />
       </div>
-      <div class="table-scroll custom-scroll">
-        <table class="data-table">
-          <thead>
-            <tr>
-              <th class="col-index">
-                序号
-              </th>
-              <th class="col-pressure">
-                平均压力
-              </th>
-              <th
-                v-for="ch in visibleChannels"
-                :key="ch"
-                class="col-channel"
-              >
-                CH{{ ch }}
-              </th>
-              <th class="col-time">
-                时间
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr
-              v-for="row in tableRows"
-              :key="row.index"
-              class="data-row"
-            >
-              <td class="cell-index">
-                {{ row.index }}
-              </td>
-              <td class="cell-pressure">
-                {{ row.actualPressure }}
-              </td>
-              <td
-                v-for="ch in visibleChannels"
-                :key="`${row.index}-${ch}`"
-                class="cell-channel"
-              >
-                <div :class="['channel-value', { 'channel-over-limit': isSampleOverLimit(row, ch) }]">
-                  {{ row.channelValues[ch] ?? '--' }}
-                </div>
-              </td>
-              <td class="cell-time">
-                {{ row.collectTime }}
-              </td>
-            </tr>
-          </tbody>
-        </table>
+      <div class="table-body">
+        <el-table
+          :data="tableRows"
+          border
+          stripe
+          class="data-el-table"
+        >
+          <el-table-column
+            prop="index"
+            label="序号"
+            width="70"
+          />
+          <el-table-column
+            label="平均压力"
+            width="100"
+            class-name="col-pressure"
+          >
+            <template #default="{ row }">
+              {{ row.actualPressure }}
+            </template>
+          </el-table-column>
+          <el-table-column
+            v-for="ch in visibleChannels"
+            :key="ch"
+            :label="`CH${ch}`"
+            width="65"
+            class-name="col-channel"
+          >
+            <template #default="{ row }">
+              <div :class="['channel-value', { 'channel-over-limit': isSampleOverLimit(row, ch) }]">
+                {{ row.channelValues[ch] ?? '--' }}
+              </div>
+            </template>
+          </el-table-column>
+          <el-table-column
+            label="时间"
+            width="100"
+            class-name="col-time"
+          >
+            <template #default="{ row }">
+              {{ row.collectTime }}
+            </template>
+          </el-table-column>
+        </el-table>
       </div>
     </div>
   </div>
@@ -292,10 +296,11 @@ const currentTargetPressure = computed(() => {
   return measurementStore.points[idx - 1]?.targetPressure
 })
 
-function getRowClass(pt: MeasurementPoint): string {
+// el-table 行 class：completed 行轻微高亮，current 行更强高亮 + 左边框
+function pointRowClassName(row: MeasurementPoint): string {
   const classes: string[] = []
-  if (pt.status === 'completed') classes.push('row-completed')
-  if (currentPointIndex.value === pt.index) classes.push('row-current')
+  if (row.status === 'completed') classes.push('row-completed')
+  if (currentPointIndex.value === row.index) classes.push('row-current')
   return classes.join(' ')
 }
 
@@ -346,7 +351,7 @@ function estimateActualPressure(row: CollectedRow | undefined): string {
     .filter((value): value is number => typeof value === 'number' && Number.isFinite(value))
   if (values.length === 0) return '--'
   const average = values.reduce((sum, val) => sum + val, 0) / values.length
-  return average.toFixed(3)
+  return average.toFixed(1)
 }
 
 const visibleChannels = computed(() => {
@@ -386,6 +391,26 @@ const tableRows = computed<DisplayRow[]>(() => {
 </script>
 
 <style scoped lang="scss">
+@use "@/styles/calibration-table" as *;
+
+$font-sans: 'DM Sans', 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+$font-mono: 'JetBrains Mono', 'Fira Code', 'SF Mono', Consolas, monospace;
+$mint: #10b981;
+$mint-light: #34d399;
+$mint-dark: #059669;
+$slate-50: #f9fafb;
+$slate-100: #f3f4f6;
+$slate-200: #e5e7eb;
+$slate-300: #d1d5db;
+$slate-400: #9ca3af;
+$slate-500: #6b7280;
+$slate-600: #4b5563;
+$slate-700: #374151;
+$slate-800: #1f2937;
+$red: #ef4444;
+$blue: #3b82f6;
+$amber: #f59e0b;
+
 .data-table-wrapper {
   flex: 1;
   min-height: 0;
@@ -414,11 +439,7 @@ const tableRows = computed<DisplayRow[]>(() => {
   }
 }
 
-.points-section {
-  flex: 1;
-  min-height: 0;
-}
-
+.points-section,
 .sample-section {
   flex: 1;
   min-height: 0;
@@ -495,159 +516,59 @@ const tableRows = computed<DisplayRow[]>(() => {
   gap: 8px;
 }
 
-.action-btn {
-  height: 28px;
-  padding: 0 12px;
-  border-radius: 8px;
-  border: 1px solid $slate-200;
-  background: #fff;
-  color: $slate-600;
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 12px;
-  font-weight: 500;
-  transition: all 0.15s ease;
-  font-family: $font-sans;
-
-  &:disabled {
-    opacity: 0.45;
-    cursor: not-allowed;
-  }
-
-  &:hover:not(:disabled) {
-    background: $slate-50;
-    border-color: $slate-300;
-  }
-}
-
-.table-scroll {
-  overflow-x: auto;
-  overflow-y: auto;
+/* 表格主体：让 el-table 撑满剩余空间 */
+.table-body {
   flex: 1;
+  min-height: 0;
+  overflow: hidden;
 }
 
-.custom-scroll::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
-}
-
-.custom-scroll::-webkit-scrollbar-track {
-  background: $slate-100;
-}
-
-.custom-scroll::-webkit-scrollbar-thumb {
-  background: $slate-300;
-  border-radius: 10px;
-}
-
-.data-table {
+/* 共享 el-table 深度样式（与标定模块共用 _calibration-table.scss mixin） */
+.data-el-table {
   width: 100%;
-  border-collapse: collapse;
-  font-size: 12px;
-  white-space: nowrap;
-
-  thead {
-    position: sticky;
-    top: 0;
-    z-index: 10;
-    background: #fff;
-    border-bottom: 1px solid $slate-200;
-    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
-    color: $slate-400;
-    text-transform: uppercase;
-  }
-
-  th {
-    padding: 8px 12px;
-    text-align: center;
-    font-weight: 600;
-    font-size: 12px;
-    letter-spacing: 0.05em;
-    font-family: $font-sans;
-  }
-
-  td {
-    padding: 6px 12px;
-    text-align: center;
-    color: $slate-600;
-  }
-
-  tbody {
-    color: $slate-600;
-  }
+  height: 100%;
+  @include calibration-table-deep-styles;
 }
 
-.data-row {
-  height: 40px;
-  transition: background 0.15s ease;
-  border-bottom: 1px solid $slate-50;
-
-  &:hover {
-    background: $slate-50;
-  }
+/* 行高亮：completed 轻微高亮，current 更强高亮 + 左边框 */
+:deep(.el-table__row.row-completed td.el-table__cell) {
+  background: rgba(16, 185, 129, 0.04) !important;
 }
 
-.col-index {
-  width: 72px;
-  min-width: 72px;
-  text-align: left;
+:deep(.el-table__row.row-current td.el-table__cell) {
+  background: rgba(16, 185, 129, 0.06) !important;
+  border-left: 2px solid $mint;
 }
 
-.col-status {
-  width: 100px;
-  min-width: 100px;
-  text-align: left;
-}
-
-.col-target {
-  width: 80px;
-  min-width: 80px;
-}
-
-.col-channel {
-  min-width: 52px;
+/* 通道列：等宽 mono 字体，便于数值对齐 */
+:deep(.col-channel .cell) {
+  font-family: $font-mono;
+  font-size: 11px;
   text-align: center;
-  font-family: $font-mono;
-  font-size: 11px;
+  padding: 0 4px;
 }
 
-.col-time {
-  text-align: right;
-  padding-right: 24px;
-}
-
-.cell-index {
-  color: $slate-400;
-  font-weight: 600;
-  text-align: left;
-  font-family: $font-mono;
-}
-
-.cell-status {
-  text-align: left;
-}
-
-.cell-target {
-  font-family: $font-mono;
-  font-size: 13px;
-  font-weight: 700;
-  color: $slate-700;
-}
-
-.cell-time {
-  text-align: right;
-  padding-right: 24px;
+/* 时间列：右对齐 mono 字体 */
+:deep(.col-time .cell) {
   font-family: $font-mono;
   font-size: 11px;
   color: $slate-400;
+  text-align: right;
+}
+
+/* 平均压力列：mono 字体 */
+:deep(.col-pressure .cell) {
+  font-family: $font-mono;
+  font-variant-numeric: tabular-nums;
 }
 
 .index-cell-wrap {
   display: inline-flex;
   align-items: center;
   gap: 4px;
+  font-family: $font-mono;
+  color: $slate-400;
+  font-weight: 600;
 }
 
 /* 正/回标签 */
@@ -748,7 +669,7 @@ const tableRows = computed<DisplayRow[]>(() => {
 }
 
 .target-input {
-  width: 52px;
+  width: 60px;
   text-align: center;
   border: 1px solid $slate-200;
   border-radius: 8px;
@@ -776,6 +697,14 @@ const tableRows = computed<DisplayRow[]>(() => {
   }
 }
 
+/* 自动模式目标值：纯文本展示，减少 input 边框的视觉干扰 */
+.target-text {
+  font-family: $font-mono;
+  font-size: 13px;
+  color: $slate-700;
+}
+
+/* 通道值：mono 字体，超限时红色背景高亮（计量模块策略，与标定文字颜色方案有意区分） */
 .channel-value {
   font-variant-numeric: tabular-nums;
   font-family: $font-mono;
@@ -783,6 +712,9 @@ const tableRows = computed<DisplayRow[]>(() => {
   padding: 2px 6px;
   border-radius: 4px;
   border: 1px solid transparent;
+  display: inline-block;
+  min-width: 36px;
+  text-align: center;
 
   &.empty {
     color: $slate-300;
@@ -799,19 +731,11 @@ const tableRows = computed<DisplayRow[]>(() => {
 .time-display {
   font-size: 11px;
   color: $slate-400;
+  font-family: $font-mono;
 
   &.empty {
     color: $slate-300;
   }
-}
-
-.row-completed {
-  background: rgba(16, 185, 129, 0.04);
-}
-
-.row-current {
-  background: rgba(16, 185, 129, 0.06);
-  border-left: 1px solid $mint;
 }
 
 .empty-table-state {
@@ -827,16 +751,6 @@ const tableRows = computed<DisplayRow[]>(() => {
   color: $slate-400;
   margin-top: 8px;
   font-family: $font-sans;
-}
-
-.cell-pressure {
-  font-variant-numeric: tabular-nums;
-  font-family: $font-mono;
-}
-
-.col-pressure {
-  width: 80px;
-  min-width: 80px;
 }
 
 @media (max-width: 768px) {

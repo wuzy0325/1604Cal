@@ -1,6 +1,6 @@
 import { onMounted, onUnmounted } from 'vue'
 import { useEventHub } from '@/composables/useEventHub'
-import { useMeasurementStore } from '@/stores/measurement'
+import { useMeasurementStore, MEASUREMENT_MAX_ROWS } from '@/stores/measurement'
 import { useDeviceInventoryStore } from '@/stores/device/inventoryStore'
 import type { MeasurementState, StabilityUpdate, AlarmData } from '@/stores/measurement/types'
 import type { MeasurementPoint } from '@/api/measurement'
@@ -47,9 +47,8 @@ export function useMeasurementSync() {
 
     unsubs.push(subscribe(EVENT_MEASUREMENT_DATA_UPDATED, (payload) => {
       const data = payload.data as { timestamp: string; channels: Record<string, number> }
-      const MAX_ROWS = 2000
       store.rows.push({ timestamp: data.timestamp, channels: data.channels })
-      if (store.rows.length > MAX_ROWS) store.rows.splice(0, store.rows.length - MAX_ROWS)
+      if (store.rows.length > MEASUREMENT_MAX_ROWS) store.rows.splice(0, store.rows.length - MEASUREMENT_MAX_ROWS)
     }))
 
     unsubs.push(subscribe(EVENT_MEASUREMENT_STABILITY_UPDATE, (payload) => {
