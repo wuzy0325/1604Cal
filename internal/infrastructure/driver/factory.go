@@ -32,6 +32,8 @@ func (f *Factory) Create(dev domain.Device) (device.ConnectionDriver, error) {
 	switch model {
 	case "WTN1604":
 		return newWTN1604DriverWithLocalAddr(dev.Host, dev.Port, dev.LocalAddr), nil
+	case "DAQ-P-1603", "P1603":
+		return NewP1603Driver(dev), nil
 	case "CONST811A", "811A":
 		return newConST811ADriverWithLocalAddr(dev.Host, dev.Port, dev.LocalAddr), nil
 	case "CONST820", "820":
@@ -63,6 +65,8 @@ func (f *Factory) CreateMeasureDriver(dev domain.Device) (device.MeasureDriver, 
 	switch model {
 	case "WTN1604":
 		return newWTN1604DriverWithLocalAddr(dev.Host, dev.Port, dev.LocalAddr), nil
+	case "DAQ-P-1603", "P1603":
+		return NewP1603Driver(dev), nil
 	case "SIMULATED", "GENERIC_SIMULATOR", "SIMULATOR":
 		return NewSimulatedMeasureDriver(), nil
 	default:

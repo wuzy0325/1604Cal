@@ -13,12 +13,12 @@ import (
 	"cal1604/internal/application/multipress"
 	"cal1604/internal/application/session"
 	"cal1604/internal/config"
-	"cal1604/internal/events"
 	"cal1604/internal/domain"
-	"fmt"
 	apperrors "cal1604/internal/errors"
+	"cal1604/internal/events"
 	"cal1604/internal/report"
 	"cal1604/internal/workflow"
+	"fmt"
 )
 
 // deviceManager 定义 apiServer 对设备管理器的依赖接口。
@@ -60,16 +60,17 @@ type deviceConnector interface {
 }
 
 type upsertDeviceRequest struct {
-	ID          string `json:"id"`
-	Name        string `json:"name"`
-	Type        string `json:"type"`
-	Model       string `json:"model"`
-	Host        string `json:"host"`
-	Port        int    `json:"port"`
-	Unit        string `json:"unit"`
-	LocalAddr   string `json:"localAddr"`
-	Status      string `json:"status"`
-	IsSimulated bool   `json:"isSimulated"`
+	ID          string                 `json:"id"`
+	Name        string                 `json:"name"`
+	Type        string                 `json:"type"`
+	Model       string                 `json:"model"`
+	Host        string                 `json:"host"`
+	Port        int                    `json:"port"`
+	Unit        string                 `json:"unit"`
+	LocalAddr   string                 `json:"localAddr"`
+	Status      string                 `json:"status"`
+	IsSimulated bool                   `json:"isSimulated"`
+	Channels    []domain.ChannelConfig `json:"channels"`
 }
 
 type setDeviceStatusRequest struct {
@@ -209,6 +210,7 @@ func (s *apiServer) handleUpsertDevice(w http.ResponseWriter, r *http.Request) {
 		LocalAddr:   strings.TrimSpace(req.LocalAddr),
 		Status:      status,
 		IsSimulated: req.IsSimulated,
+		Channels:    req.Channels,
 	}
 
 	if err := dev.Validate(); err != nil {
@@ -223,6 +225,9 @@ func (s *apiServer) handleUpsertDevice(w http.ResponseWriter, r *http.Request) {
 		if old.Status == domain.DeviceStatusConnected && old.Unit != "" {
 			dev.Unit = old.Unit
 		}
+		// 校零偏移保护：前端 DTO 的通道无 tareOffset 字段，保存时若为 0
+		// 且旧配置有非零偏移，则保留旧偏移，避免编辑配置把校零数据清空。
+		mergeTareOffsets(&dev, old)
 	}
 
 	s.deviceManager.Upsert(dev)
@@ -244,6 +249,25 @@ func (s *apiServer) publishDeviceStatusChanged(dev domain.Device) {
 	}
 
 	publishEvent(events.EventDeviceStatusChanged, payload)
+}
+
+// mergeTareOffsets 合并校零偏移：前端 DTO 通道无 tareOffset 字段，保存时
+// 通道偏移为 0 但旧配置有非零偏移，则保留旧偏移，避免编辑配置清空校零数据。
+func mergeTareOffsets(dev *domain.Device, old domain.Device) {
+	if len(dev.Channels) == 0 || len(old.Channels) == 0 {
+		return
+	}
+	oldByIndex := make(map[int]float64, len(old.Channels))
+	for _, ch := range old.Channels {
+		oldByIndex[ch.Index] = ch.TareOffset
+	}
+	for i := range dev.Channels {
+		if dev.Channels[i].TareOffset == 0 {
+			if off, ok := oldByIndex[dev.Channels[i].Index]; ok {
+				dev.Channels[i].TareOffset = off
+			}
+		}
+	}
 }
 
 func (s *apiServer) unitConsistencyHandler(w http.ResponseWriter, _ *http.Request) {

@@ -91,6 +91,73 @@
       </label>
     </div>
 
+    <!-- DAQ-P-1603：每通道量程/单位配置（4-20mA 电流环必须配量程才能输出正确工程量） -->
+    <div
+      v-if="isP1603Model"
+      class="channel-config"
+    >
+      <div class="channel-config-header">
+        <span>通道量程配置（4mA → rangeMin，20mA → rangeMax）</span>
+      </div>
+      <div class="channel-config-body">
+        <table class="channel-table">
+          <thead>
+            <tr>
+              <th>通道</th>
+              <th>启用</th>
+              <th>单位</th>
+              <th>量程下限</th>
+              <th>量程上限</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr
+              v-for="ch in form.channels"
+              :key="ch.index"
+            >
+              <td>{{ ch.name }}</td>
+              <td>
+                <input
+                  v-model="ch.enabled"
+                  type="checkbox"
+                >
+              </td>
+              <td>
+                <select
+                  v-model="ch.unit"
+                  data-test="ch-unit"
+                >
+                  <option
+                    v-for="u in p1603UnitOptions"
+                    :key="u"
+                    :value="u"
+                  >
+                    {{ u }}
+                  </option>
+                </select>
+              </td>
+              <td>
+                <input
+                  v-model.number="ch.rangeMin"
+                  data-test="ch-rangeMin"
+                  type="number"
+                  step="any"
+                >
+              </td>
+              <td>
+                <input
+                  v-model.number="ch.rangeMax"
+                  data-test="ch-rangeMax"
+                  type="number"
+                  step="any"
+                >
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
     <p
       v-if="errorMessage"
       class="form-error"
@@ -118,7 +185,7 @@
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from 'vue'
 import { Warning, Check } from '@element-plus/icons-vue'
-import type { DeviceDTO } from '@/types/device'
+import type { ChannelConfigDTO, DeviceDTO } from '@/types/device'
 
 // ---- Props & Emits ----
 
@@ -152,6 +219,8 @@ type DeviceFormState = {
   port: number
   localAddr: string
   status: DeviceDTO['status']
+  /** 每通道采集配置（P1603 使用，需配置量程才能输出正确工程量） */
+  channels: ChannelConfigDTO[]
 }
 
 const form = reactive<DeviceFormState>({
@@ -162,15 +231,41 @@ const form = reactive<DeviceFormState>({
   host: '',
   port: 9000,
   localAddr: '',
-  status: 'disconnected'
+  status: 'disconnected',
+  channels: []
 })
 
 const errorMessage = ref('')
 
+// P1603 通道单位选项（与设备面板单位下拉一致；4-20mA 传感器工程量单位）
+const p1603UnitOptions = ['Pa', 'kPa', 'MPa', 'psi', 'kgf/cm2', 'bar', 'mbar']
+
+// P1603 固定 16 通道，型号归一化与后端 factory normalizeModel 语义一致
+const isP1603Model = computed(() => {
+  const model = (form.model || '').replace(/\s+/g, '').toLowerCase()
+  return model === 'daq-p-1603' || model === 'p1603'
+})
+
+// 生成长度 16 的默认通道配置（对齐后端 domain.DefaultP1603Channels）
+function defaultP1603Channels(): ChannelConfigDTO[] {
+  return Array.from({ length: 16 }, (_, i) => ({
+    index: i + 1,
+    name: `CH${i + 1}`,
+    enabled: true,
+    unit: 'Pa',
+    rangeMin: -5000,
+    rangeMax: 5000,
+    precision: 3
+  }))
+}
+
 // 设备型号选项，与设备类型联动
 const modelOptions = computed(() => {
   if (form.type === 'measure') {
-    return [{ value: 'WTN1604', label: 'WTN1604' }]
+    return [
+      { value: 'WTN1604', label: 'WTN1604' },
+      { value: 'DAQ-P-1603', label: 'DAQ-P-1603' }
+    ]
   }
   return [
     { value: 'ConST811A', label: 'ConST811A' },
@@ -188,6 +283,16 @@ watch(() => form.type, () => {
     } else {
       form.model = ''
     }
+  }
+})
+
+// 创建模式下选择 P1603 时初始化 16 通道默认量程配置（用户需按传感器量程修改）
+watch(() => form.model, (model) => {
+  if (props.mode !== 'create' || !model) return
+  const isP = (model || '').replace(/\s+/g, '').toLowerCase() === 'daq-p-1603' ||
+    model.toLowerCase() === 'p1603'
+  if (isP && form.channels.length === 0) {
+    form.channels = defaultP1603Channels()
   }
 })
 
@@ -212,6 +317,7 @@ function initCreate() {
   form.port = 9000
   form.localAddr = ''
   form.status = 'disconnected'
+  form.channels = []
   errorMessage.value = ''
 }
 
@@ -225,6 +331,10 @@ function initEdit(device: DeviceDTO) {
   form.port = device.port
   form.localAddr = device.localAddr ?? ''
   form.status = device.status
+  // 编辑模式：历史配置无 channels 时，P1603 回退默认（避免空表）
+  form.channels = device.channels?.length
+    ? device.channels.map(c => ({ ...c }))
+    : (isP1603Model.value ? defaultP1603Channels() : [])
   errorMessage.value = ''
 }
 
@@ -283,7 +393,8 @@ function handleSubmit() {
     host: form.host,
     port: form.port,
     localAddr: form.localAddr || undefined,
-    status: 'disconnected'
+    status: 'disconnected',
+    channels: isP1603Model.value ? form.channels : undefined
   })
 }
 
@@ -340,6 +451,61 @@ function handleClosed() {
 
   .el-icon {
     font-size: 14px;
+  }
+}
+
+/* ---- P1603 通道量程配置表 ---- */
+.channel-config {
+  margin-top: 12px;
+  border: 1px solid $slate-300;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.channel-config-header {
+  background: #f8fafc;
+  border-bottom: 1px solid $slate-300;
+  padding: 6px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  color: $slate-600;
+}
+
+.channel-config-body {
+  max-height: 260px;
+  overflow-y: auto;
+}
+
+.channel-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+
+  th,
+  td {
+    padding: 4px 6px;
+    text-align: center;
+    border-bottom: 1px solid #f1f5f9;
+  }
+
+  th {
+    color: $slate-500;
+    font-weight: 500;
+    background: #fbfdfd;
+    position: sticky;
+    top: 0;
+  }
+
+  input[type='number'],
+  select {
+    width: 100%;
+    min-width: 64px;
+    box-sizing: border-box;
+    background: #fff;
+    border: 1px solid $slate-300;
+    border-radius: 4px;
+    padding: 3px 4px;
+    font-size: 12px;
   }
 }
 

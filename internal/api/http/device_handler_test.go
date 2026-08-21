@@ -419,3 +419,36 @@ func (f *handlerFakeDriverFactory) Create(dev domain.Device) (device.ConnectionD
 	}
 	return drv, nil
 }
+
+// TestMergeTareOffsets 验证编辑设备配置时不会把校零偏移清空。
+func TestMergeTareOffsets(t *testing.T) {
+	old := domain.Device{
+		ID: "m1",
+		Channels: []domain.ChannelConfig{
+			{Index: 1, TareOffset: 1.5}, // 已校零
+			{Index: 2, TareOffset: 0},   // 未校零
+			{Index: 3, TareOffset: -2.0},
+		},
+	}
+	// 模拟前端 DTO 保存：通道无 tareOffset（全 0）。
+	newDev := domain.Device{
+		ID: "m1",
+		Channels: []domain.ChannelConfig{
+			{Index: 1, TareOffset: 0},
+			{Index: 2, TareOffset: 0},
+			{Index: 3, TareOffset: 0},
+		},
+	}
+
+	mergeTareOffsets(&newDev, old)
+
+	if newDev.Channels[0].TareOffset != 1.5 {
+		t.Fatalf("expected ch1 offset kept 1.5, got %v", newDev.Channels[0].TareOffset)
+	}
+	if newDev.Channels[1].TareOffset != 0 {
+		t.Fatalf("expected ch2 offset 0, got %v", newDev.Channels[1].TareOffset)
+	}
+	if newDev.Channels[2].TareOffset != -2.0 {
+		t.Fatalf("expected ch3 offset kept -2.0, got %v", newDev.Channels[2].TareOffset)
+	}
+}

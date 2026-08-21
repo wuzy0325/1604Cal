@@ -1,15 +1,21 @@
 module cal1604
 
-go 1.24.0
+go 1.25.0
 
 require (
 	github.com/wailsapp/wails/v2 v2.12.0
 	github.com/xuri/excelize/v2 v2.10.1
+	shared.local/device-sdk/go v0.0.0-00010101000000-000000000000
 )
+
+// 1604Pre 二进制帧协议复用工作区共享协议库，避免与 windlabx4 双源维护。
+// 与 wista 相同的 replace 模式：不加入 go.work，构建时必须 GOWORK=off。
+replace shared.local/device-sdk/go => ../../shared/device-sdk/go
 
 require (
 	git.sr.ht/~jackmordaunt/go-toast/v2 v2.0.3 // indirect
 	github.com/bep/debounce v1.2.1 // indirect
+	github.com/creack/goselect v0.1.2 // indirect
 	github.com/go-ole/go-ole v1.3.0 // indirect
 	github.com/godbus/dbus/v5 v5.1.0 // indirect
 	github.com/google/uuid v1.6.0 // indirect
@@ -37,8 +43,9 @@ require (
 	github.com/wailsapp/mimetype v1.4.1 // indirect
 	github.com/xuri/efp v0.0.1 // indirect
 	github.com/xuri/nfp v0.0.2-0.20250530014748-2ddeb826f9a9 // indirect
+	go.bug.st/serial v1.6.2 // indirect
 	golang.org/x/crypto v0.48.0 // indirect
 	golang.org/x/net v0.50.0 // indirect
-	golang.org/x/sys v0.41.0 // indirect
+	golang.org/x/sys v0.43.0 // indirect
 	golang.org/x/text v0.34.0 // indirect
 )

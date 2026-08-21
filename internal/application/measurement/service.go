@@ -155,6 +155,13 @@ func (s *Service) Start(ctx context.Context, channels []int) error {
 		}
 	}
 
+	// 单位一致性门禁：已连接设备（计量与打压）压力单位必须一致，否则不允许开始计量。
+	// 在 coordinator.Begin 之前校验，避免占用工作流锁后因门禁失败回滚。
+	if consistent, conflicts := s.sess.CheckUnitConsistency(); !consistent {
+		return fmt.Errorf("%w: device pressure units inconsistent: %v",
+			apperrors.ErrPrerequisiteNotMet, conflicts)
+	}
+
 	// 单活工作流冲突校验
 	if err := s.coordinator.Begin(workflow.OwnerMeasurement); err != nil {
 		return err

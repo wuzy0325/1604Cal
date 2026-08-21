@@ -347,6 +347,12 @@ func (s *Service) SetUnit(ctx context.Context, deviceID string, unit string) err
 
 	entry.state.Unit = device.NormalizePressureUnit(unit)
 
+	// 同步单位到设备配置存储，保证单位一致性检查读取到最新设定值。
+	if s.deviceManager != nil {
+		s.deviceManager.UpdateUnit(deviceID, entry.state.Unit)
+		log.Printf("[multipress.SetUnit] %s: unit=%q synced to device store", deviceID, entry.state.Unit)
+	}
+
 	// 切换单位后立即重读压力，确保显示值与新单位匹配
 	if pressure, err := entry.driver.ReadCurrentPressure(ctx); err == nil {
 		entry.state.CurrentPressure = pressure

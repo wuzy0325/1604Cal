@@ -195,6 +195,15 @@ func (s *Service) Token() BindingToken {
 	return s.currentToken
 }
 
+// CheckUnitConsistency 检查所有已连接设备（计量与打压）的压力单位是否一致。
+// 返回是否一致以及单位不一致的设备 ID 列表。
+func (s *Service) CheckUnitConsistency() (bool, []string) {
+	if s.deviceManager == nil {
+		return true, nil
+	}
+	return s.deviceManager.CheckUnitConsistency()
+}
+
 // MeasureDeviceID 返回当前绑定的计量设备 ID。
 func (s *Service) MeasureDeviceID() string {
 	s.mu.Lock()
@@ -289,13 +298,15 @@ func (s *Service) SetValveStatus(ctx context.Context, token BindingToken, status
 	return drv.SetValveStatus(ctx, status)
 }
 
-// CalibrateZero 对指定通道执行调零校准。
+// CalibrateZero 对指定通道执行调零校准，并把各通道校零偏移持久化到设备配置，
+// 使设备重连后自动加载继续扣除，避免计量数据因零漂漂移。
 func (s *Service) CalibrateZero(ctx context.Context, token BindingToken, channels []int) ([]float64, error) {
 	if err := s.validateToken(token); err != nil {
 		return nil, err
 	}
 
 	s.mu.Lock()
+	devID := s.measureDevID
 	drv := s.measureDriver
 	s.mu.Unlock()
 
@@ -303,7 +314,36 @@ func (s *Service) CalibrateZero(ctx context.Context, token BindingToken, channel
 		return nil, ErrMeasureDeviceNotSet
 	}
 
-	return drv.CalibrateZero(ctx, channels)
+	results, err := drv.CalibrateZero(ctx, channels)
+	if err != nil {
+		return nil, err
+	}
+	s.persistTareOffsets(devID, channels, results)
+	return results, nil
+}
+
+// persistTareOffsets 把校零偏移写回设备配置并持久化（随 devices.json 落盘）。
+// channels 与 offsets 一一对应（1-based 通道号 → 校零偏移）。
+func (s *Service) persistTareOffsets(devID string, channels []int, offsets []float64) {
+	if devID == "" {
+		return
+	}
+	dev, ok := s.deviceManager.Get(devID)
+	if !ok {
+		return
+	}
+	idx := make(map[int]int, len(dev.Channels))
+	for i := range dev.Channels {
+		idx[dev.Channels[i].Index] = i
+	}
+	for i, ch := range channels {
+		pos, found := idx[ch]
+		if !found {
+			continue
+		}
+		dev.Channels[pos].TareOffset = offsets[i]
+	}
+	s.deviceManager.Upsert(dev)
 }
 
 // CalibrateFullScale 对指定通道执行满量程校准。
@@ -365,12 +405,22 @@ func (s *Service) SetMeasureUnit(ctx context.Context, token BindingToken, unit s
 
 	s.mu.Lock()
 	drv := s.measureDriver
+	devID := s.measureDevID
 	s.mu.Unlock()
 
 	if drv == nil {
 		return ErrMeasureDeviceNotSet
 	}
-	return drv.SetUnit(ctx, unit)
+	if err := drv.SetUnit(ctx, unit); err != nil {
+		return err
+	}
+
+	// 同步单位到设备配置存储，保证单位一致性检查读取到最新设定值。
+	if devID != "" {
+		s.deviceManager.UpdateUnit(devID, unit)
+		log.Printf("[1604单位设置] 计量设备 %s 单位同步为 %q", devID, unit)
+	}
+	return nil
 }
 
 // ReadDeviceInfo 读取计量设备信息。

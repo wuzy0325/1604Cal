@@ -63,3 +63,29 @@ func TestFactoryRejectsUnsupportedModel(t *testing.T) {
 		t.Fatal("expected unsupported model error, got nil")
 	}
 }
+
+// TestFactoryCreatesP1603 验证 DAQ-P-1603 型号注册（含大小写归一化）。
+func TestFactoryCreatesP1603(t *testing.T) {
+	factory := driver.NewFactory()
+
+	models := []string{"DAQ-P-1603", "daq-p-1603", "P1603"}
+	for _, model := range models {
+		dev := domain.Device{
+			ID:       "m-p1603",
+			Type:     domain.DeviceTypeMeasure,
+			Model:    model,
+			Host:     "192.168.1.50",
+			Port:     0, // P1603 端口无意义（DLL 自管）
+			Channels: domain.DefaultP1603Channels(),
+		}
+		t.Run(model, func(t *testing.T) {
+			drv, err := factory.CreateMeasureDriver(dev)
+			if err != nil {
+				t.Fatalf("expected model %q supported, got error: %v", model, err)
+			}
+			if drv == nil {
+				t.Fatal("expected non-nil measure driver")
+			}
+		})
+	}
+}

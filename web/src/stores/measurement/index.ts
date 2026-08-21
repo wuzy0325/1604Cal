@@ -41,6 +41,7 @@ import type { MeasurementState, CollectedRow, StabilityUpdate, AlarmData, Primar
 import { ControlMode, PressureMode } from '@/types/calibration'
 import { useMeasurementDeviceStore } from '@/stores/measurement/deviceStore'
 import { useGatesStore } from '@/stores/app/gates'
+import { fetchUnitConsistency } from '@/api/device'
 
 export type { MeasurementState, CollectedRow, StabilityUpdate }
 
@@ -66,6 +67,9 @@ export const useMeasurementStore = defineStore('measurement', () => {
   const valveStatus = ref('')
   const measureUnit = ref('')
   const deviceInfo = ref<Record<string, string>>({})
+  // 设备压力单位一致性（计量设备与打压设备需同单位才能开始计量）。
+  // 初始视为一致，避免首次进入未加载时误拦；连接/改单位/生成点位时会刷新。
+  const unitConsistent = ref(true)
 
   // 稳定性监控状态
   const stabilityState = ref<StabilityUpdate>({
@@ -126,7 +130,8 @@ export const useMeasurementStore = defineStore('measurement', () => {
   const valveReady = computed(() => valveStatus.value === 'calibration')
   const gatesStore = useGatesStore()
   const enforceValveCalibrationGate = computed(() => gatesStore.enforceValveCalibrationGate)
-  const canStart = computed(() => !enforceValveCalibrationGate.value || valveReady.value)
+  // 开始计量必须满足：阀门=校准（若启用门禁）且设备压力单位一致。
+  const canStart = computed(() => unitConsistent.value && (!enforceValveCalibrationGate.value || valveReady.value))
 
   // 主按钮：随会话状态自动切换文案、图标、色阶
   const primaryAction = computed<PrimaryAction>(() => {
@@ -183,11 +188,13 @@ export const useMeasurementStore = defineStore('measurement', () => {
     await apiBindDevices(measureDevId, pressureDevId, 'measurement')
     measureDeviceId.value = measureDevId
     pressureDeviceId.value = pressureDevId
+    await refreshUnitConsistency()
   }
 
   const bindMeasureDevice = async (measureDevId: string) => {
     await apiBindMeasureDevice(measureDevId, 'measurement')
     measureDeviceId.value = measureDevId
+    await refreshUnitConsistency()
   }
 
   const unbindMeasureDevice = () => {
@@ -256,6 +263,17 @@ export const useMeasurementStore = defineStore('measurement', () => {
   const setMeasureUnit = async (unit: string) => {
     await apiSetMeasureUnit(unit)
     measureUnit.value = unit
+    await refreshUnitConsistency()
+  }
+
+  // 刷新设备压力单位一致性状态，用于开始计量的门禁。
+  const refreshUnitConsistency = async () => {
+    try {
+      const check = await fetchUnitConsistency()
+      unitConsistent.value = check?.consistent !== false
+    } catch {
+      // 拉取失败时不改变现有状态，避免因一次网络抖动误拦启动。
+    }
   }
 
   const refreshDeviceInfo = async () => {
@@ -550,6 +568,7 @@ export const useMeasurementStore = defineStore('measurement', () => {
     valveStatus,
     measureUnit,
     deviceInfo,
+    unitConsistent,
     stabilityState,
     stabilityTimeoutPending,
     // 计算属性
@@ -579,6 +598,7 @@ export const useMeasurementStore = defineStore('measurement', () => {
     refreshMeasureUnit,
     setMeasureUnit,
     refreshDeviceInfo,
+    refreshUnitConsistency,
     resetDevice,
     // 采集工作流
     start,

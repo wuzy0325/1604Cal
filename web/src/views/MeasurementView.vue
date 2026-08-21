@@ -502,6 +502,7 @@ const startBlockedReason = computed<string>(() => {
   if (!deviceStore.pressureDevices.some(d => d.status === 'connected')) return '请先连接压力源设备'
   if (!measurementStore.deviceBound) return '请先绑定计量设备'
   if (measurementStore.points.length === 0) return '请先生成压力表'
+  if (!measurementStore.unitConsistent) return '设备压力单位不一致，请先统一设备单位'
   if (!measurementStore.canStart) return '请先将阀门切换到校准模式'
   // 安全网：理论上 canStart=true 时该 computed 不会被读到；
   // 兜底文案让逻辑回归时仍有一条可读提示。
@@ -562,6 +563,8 @@ function goBack() { router.push('/') }
 
 /* ── 采集控制 ── */
 async function handleStart() {
+  // 开始计量前刷新设备单位一致性，确保门禁基于最新单位状态。
+  await measurementStore.refreshUnitConsistency()
   if (!canStart.value) { ElMessage.warning(startBlockedReason.value); return }
   await measurementUI.start(measurementStore.channels)
 }

@@ -83,7 +83,14 @@ func newFakeStore(devs ...domain.Device) *fakeStore {
 
 func (s *fakeStore) Upsert(dev domain.Device)                      { s.devices[dev.ID] = dev }
 func (s *fakeStore) UpdateStatus(string, domain.DeviceStatus) bool { return true }
-func (s *fakeStore) UpdateUnit(string, string) bool                { return true }
+func (s *fakeStore) UpdateUnit(id, unit string) bool {
+	if d, ok := s.devices[id]; ok {
+		d.Unit = unit
+		s.devices[id] = d
+		return true
+	}
+	return false
+}
 func (s *fakeStore) Delete(string)                                 {}
 func (s *fakeStore) Get(id string) (domain.Device, bool)           { d, ok := s.devices[id]; return d, ok }
 func (s *fakeStore) List() []domain.Device                         { return nil }
@@ -247,6 +254,33 @@ func TestReadValveStatus(t *testing.T) {
 	}
 }
 
+func TestSetMeasureUnitSyncsDeviceStore(t *testing.T) {
+	store := newFakeStore(
+		domain.Device{ID: "m1", Type: domain.DeviceTypeMeasure, Model: "WTN1604", Host: "127.0.0.1", Port: 9000},
+	)
+	mDrv := &fakeMeasureDriver{collectData: []float64{1, 2, 3}, unit: "kPa"}
+	mp := &mapProvider{drivers: map[string]device.ConnectionDriver{"m1": embedMeasure{mDrv}}}
+	svc := session.NewService(store, driver.NewFactory(), func(string, any) {}, mp)
+
+	token, err := svc.BindMeasureDevice("m1", "test")
+	if err != nil {
+		t.Fatalf("bind measure device: %v", err)
+	}
+
+	// 初始单位为空；设置单位后应同步到设备存储，供单位一致性检查使用。
+	if err := svc.SetMeasureUnit(context.Background(), token, "kPa"); err != nil {
+		t.Fatalf("set measure unit: %v", err)
+	}
+
+	dev, ok := store.Get("m1")
+	if !ok {
+		t.Fatal("expected m1 device to exist")
+	}
+	if dev.Unit != "kPa" {
+		t.Fatalf("expected device unit synced to kPa, got %q", dev.Unit)
+	}
+}
+
 func TestReadMeasureUnit(t *testing.T) {
 	svc, mDrv, _, _ := setupService()
 	token, _ := svc.BindMeasureDevice("m1", "test")
@@ -283,6 +317,60 @@ func TestResetDevice(t *testing.T) {
 	if err := svc.ResetDevice(context.Background(), token); err == nil {
 		t.Fatal("expected reset error")
 	}
+}
+
+// TestCalibrateZeroPersistsTareOffsets 验证校零后各通道偏移写回设备配置并持久化，
+// 未校零的通道不被改动。
+func TestCalibrateZeroPersistsTareOffsets(t *testing.T) {
+	store := newFakeStore(
+		domain.Device{
+			ID: "m1", Type: domain.DeviceTypeMeasure, Model: "WTN1604",
+			Host: "127.0.0.1", Port: 9000,
+			Channels: []domain.ChannelConfig{
+				{Index: 1, Enabled: true, Unit: "kPa"},
+				{Index: 2, Enabled: true, Unit: "kPa"},
+			},
+		},
+	)
+	// 专用 driver：校零返回非零偏移（如 1.5），用于验证偏移被正确持久化。
+	mDrv := &calibrateZeroFakeDriver{fakeMeasureDriver: &fakeMeasureDriver{unit: "kPa"}, result: []float64{1.5}}
+	mp := &mapProvider{drivers: map[string]device.ConnectionDriver{"m1": embedMeasure{mDrv}}}
+	svc := session.NewService(store, driver.NewFactory(), func(string, any) {}, mp)
+
+	token, err := svc.BindMeasureDevice("m1", "test")
+	if err != nil {
+		t.Fatalf("bind measure device: %v", err)
+	}
+
+	if _, err := svc.CalibrateZero(context.Background(), token, []int{1}); err != nil {
+		t.Fatalf("calibrate zero: %v", err)
+	}
+
+	dev, ok := store.Get("m1")
+	if !ok {
+		t.Fatal("expected m1 device to exist")
+	}
+	if len(dev.Channels) != 2 {
+		t.Fatalf("expected 2 channels, got %d", len(dev.Channels))
+	}
+	// 校零的通道 1 偏移被持久化。
+	if dev.Channels[0].TareOffset != 1.5 {
+		t.Fatalf("expected channel1 tareOffset 1.5, got %v", dev.Channels[0].TareOffset)
+	}
+	// 未校零的通道 2 偏移保持为 0。
+	if dev.Channels[1].TareOffset != 0 {
+		t.Fatalf("expected channel2 tareOffset 0, got %v", dev.Channels[1].TareOffset)
+	}
+}
+
+// calibrateZeroFakeDriver 覆盖校零返回可配置偏移的驱动。
+type calibrateZeroFakeDriver struct {
+	*fakeMeasureDriver
+	result []float64
+}
+
+func (f *calibrateZeroFakeDriver) CalibrateZero(_ context.Context, _ []int) ([]float64, error) {
+	return append([]float64(nil), f.result...), nil
 }
 
 func TestBindDevicesOnlyMeasure(t *testing.T) {

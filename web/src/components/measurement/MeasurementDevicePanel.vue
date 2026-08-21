@@ -59,7 +59,22 @@
       v-if="isConnected"
       class="device-status"
     >
-      <div class="status-row">
+      <div
+        v-if="isValvelessDevice"
+        class="status-row"
+      >
+        <span class="label">阀门状态:</span>
+        <el-tag
+          type="info"
+          size="small"
+        >
+          无阀门设备
+        </el-tag>
+      </div>
+      <div
+        v-else
+        class="status-row"
+      >
         <span class="label">阀门状态:</span>
         <el-tag
           :type="valveTagType"
@@ -93,8 +108,27 @@
       </div>
     </div>
 
+    <!-- 1603 软件校零：偏移随设备配置持久化到本地，设备重连后自动应用 -->
     <div
-      v-if="isConnected"
+      v-if="isConnected && isValvelessDevice"
+      class="zero-calib-control"
+    >
+      <el-button
+        size="small"
+        type="primary"
+        plain
+        :loading="zeroCalibPending"
+        :disabled="zeroCalibPending"
+        @click="handleZeroCalibrate"
+      >
+        校零
+      </el-button>
+      <span class="zero-calib-hint">记录当前各通道读数作为零点偏移，保存到本地并自动扣除</span>
+    </div>
+
+    <!-- DAQ-P-1603 无阀门协议命令，隐藏阀门切换与复位控件（驱动层阀门桩恒放行门禁） -->
+    <div
+      v-if="isConnected && !isValvelessDevice"
       class="valve-control"
     >
       <el-button
@@ -130,10 +164,12 @@
 import { ref, computed, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 import { Cpu } from '@element-plus/icons-vue'
+import { ElMessage } from 'element-plus'
 import DeviceStatusBadge from '@/components/common/DeviceStatusBadge.vue'
 import { useDeviceInventoryStore } from '@/stores/device/inventoryStore'
 import { useMeasurementStore } from '@/stores/measurement'
 import { fetchDevices, upsertDevice } from '@/api/device'
+import { calibrateZero } from '@/api/session'
 import { useValveControl } from '@/composables/useValveControl'
 import {
   normalizeValveStatus as normalizeValveState,
@@ -154,6 +190,7 @@ const { measureDevices } = storeToRefs(deviceStore)
 
 const selectedDeviceId = ref('')
 const selectedMeasureUnit = ref('')
+const zeroCalibPending = ref(false)
 
 // 阀门切换交互（pending / 写后回读 / toast 四态反馈）统一由 composable 提供。
 const { valvePending, setValve: handleValveClick } = useValveControl(
@@ -176,6 +213,13 @@ const measureUnitOptions = [
 const device = computed(() =>
   measureDevices.value.find(d => d.id === selectedDeviceId.value)
 )
+
+// DAQ-P-1603 无阀门协议命令（DLL FFI 路径）：隐藏阀门控件。
+// 型号归一化与后端 factory normalizeModel 语义一致（去空格 + 大小写不敏感）。
+const isValvelessDevice = computed(() => {
+  const model = (device.value?.model || '').replace(/\s+/g, '').toLowerCase()
+  return model === 'daq-p-1603' || model === 'p1603'
+})
 
 const isConnected = computed(() => device.value?.status === 'connected')
 const isConnecting = computed(() => device.value?.status === 'connecting')
@@ -273,6 +317,41 @@ const handleMeasureUnitChange = async (unit: string) => {
     console.warn('同步计量设备单位到配置失败:', syncErr)
   }
   emit('unit-change', { deviceId: selectedDeviceId.value, unit })
+}
+
+// 1603 校零：对设备所有启用通道执行软件归零，偏移持久化到本地并自动扣除。
+const handleZeroCalibrate = async () => {
+  if (zeroCalibPending.value) return
+  if (!selectedDeviceId.value) return
+  // 从后端设备配置取启用通道（P1603 各通道带量程配置，启用通道才参与采集）。
+  let channels: number[] = []
+  try {
+    const devices = await fetchDevices()
+    const dto = devices.find(d => d.id === selectedDeviceId.value)
+    channels = (dto?.channels ?? [])
+      .filter(c => c.enabled)
+      .map(c => c.index)
+      .sort((a, b) => a - b)
+  } catch {
+    // 拉取配置失败时回退 1-16 全通道校零，避免阻塞操作。
+    channels = Array.from({ length: 16 }, (_, i) => i + 1)
+  }
+  if (channels.length === 0) {
+    ElMessage.warning('设备未配置启用通道，无法校零')
+    return
+  }
+  zeroCalibPending.value = true
+  try {
+    const offsets = await calibrateZero(channels)
+    const preview = channels
+      .map((ch, i) => `CH${ch}=${offsets[i] ?? 0}`)
+      .join('，')
+    ElMessage.success(`校零完成：${preview}`)
+  } catch (err: any) {
+    ElMessage.error(err?.message || '校零失败，请检查设备连接')
+  } finally {
+    zeroCalibPending.value = false
+  }
 }
 </script>
 
@@ -430,6 +509,23 @@ const handleMeasureUnitChange = async (unit: string) => {
         border-radius: 4px;
         padding: 2px 8px;
       }
+    }
+  }
+
+  /* 1603 校零区 */
+  .zero-calib-control {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+
+    .el-button {
+      flex-shrink: 0;
+    }
+
+    .zero-calib-hint {
+      color: $slate-400;
+      font-size: 12px;
+      line-height: 1.4;
     }
   }
 

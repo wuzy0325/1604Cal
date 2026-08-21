@@ -165,6 +165,8 @@ const checkUnitConsistency = async () => {
     const result = await fetchUnitConsistency()
     unitConsistent.value = result.consistent
     unitConflicts.value = result.conflicts ?? []
+    // 同步到计量 store，供"开始计量"门禁使用。
+    measurementStore.unitConsistent = result.consistent
     emitUnitCheck()
   } catch {
     // 静默失败：保留当前 UI 状态，不打断流程。

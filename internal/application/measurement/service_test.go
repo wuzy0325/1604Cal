@@ -554,6 +554,45 @@ func reachState(t *testing.T, svc *measurement.Service, target domain.SessionSta
 	}
 }
 
+// inconsistentStore 模拟设备单位不一致的存储，用于验证开始计量的单位一致性门禁。
+type inconsistentStore struct {
+	*fakeStore
+	conflicts []string
+}
+
+func (s *inconsistentStore) CheckUnitConsistency() (bool, []string) {
+	return len(s.conflicts) == 0, s.conflicts
+}
+
+func TestStartRejectedWhenUnitsInconsistent(t *testing.T) {
+	// 计量设备与打压设备单位不一致时，即使阀门满足校准状态，也必须拒绝开始计量。
+	mDrv := &fakeMeasureDriver{data: []float64{1.1, 2.2, 3.3}, valveStatus: "calibration"}
+	pDrv := &fakePressureDriver{stable: true}
+	store := &inconsistentStore{
+		fakeStore: &fakeStore{devices: map[string]domain.Device{
+			"m1": {ID: "m1", Type: domain.DeviceTypeMeasure, Model: "WTN1604", Host: "127.0.0.1", Port: 9000, Unit: "kPa"},
+			"p1": {ID: "p1", Type: domain.DeviceTypePressure, Model: "ConST811A", Host: "127.0.0.1", Port: 9001, Unit: "MPa"},
+		}},
+		conflicts: []string{"p1"},
+	}
+	sessSvc := session.NewService(store, driver.NewFactory(), func(string, any) {}, &mapProvider{
+		drivers: map[string]device.ConnectionDriver{
+			"m1": embedMD{mDrv},
+			"p1": embedPD{pDrv},
+		},
+	})
+	_, _ = sessSvc.BindDevices("m1", "p1", "test")
+	svc := measurement.NewService(sessSvc, func(string, any) {}, workflow.NewWorkflowCoordinator())
+	svc.SetStartPrerequisiteConfig(measurement.StartPrerequisiteConfig{EnforceValveCalibration: false})
+
+	if err := svc.Start(context.Background(), []int{1, 2, 3}); err == nil {
+		t.Fatal("expected error when device pressure units inconsistent")
+	}
+	if svc.State() != domain.SessionStateIdle {
+		t.Fatalf("expected state idle when start rejected, got %s", svc.State())
+	}
+}
+
 func TestStartTransition(t *testing.T) {
 	svc, _ := setupMeasurementService()
 	if err := svc.Start(context.Background(), []int{1, 2, 3}); err != nil {

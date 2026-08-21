@@ -54,6 +54,11 @@ export async function readDeviceInfo(): Promise<Record<string, string>> {
   return (await apiGet<{ info: Record<string, string> }>('/session/device-info')).info
 }
 
+/** 对指定通道执行校零，返回各通道校零偏移；偏移会持久化到本地并在重连后自动应用 */
+export async function calibrateZero(channels: number[]): Promise<number[]> {
+  return (await apiPost<{ data: number[] }>('/session/calibrate-zero', { channels })).data
+}
+
 /** 复位设备 */
 export async function resetDevice(): Promise<void> {
   await apiPost('/session/reset')

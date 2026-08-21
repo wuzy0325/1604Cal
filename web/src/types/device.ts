@@ -1,3 +1,13 @@
+export interface ChannelConfigDTO {
+  index: number      // 通道号（1-based）
+  name: string
+  enabled: boolean
+  unit: string
+  rangeMin: number   // 工程量下限（对应 4mA）
+  rangeMax: number   // 工程量上限（对应 20mA）
+  precision: number
+}
+
 export interface DeviceDTO {
   id: string
   name: string
@@ -10,6 +20,8 @@ export interface DeviceDTO {
   localAddr?: string
   lastErrorReason?: string
   lastErrorAt?: string
+  // 每通道采集配置（P1603 等需要按通道量程换算工程量的设备使用）
+  channels?: ChannelConfigDTO[]
 }
 
 export interface DeviceStatusChangedEventData {

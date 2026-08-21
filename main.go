@@ -8,6 +8,8 @@ import (
 	"github.com/wailsapp/wails/v2/pkg/options"
 	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
 	"github.com/wailsapp/wails/v2/pkg/options/windows"
+
+	"shared.local/device-sdk/go/ffi"
 )
 
 //go:embed all:web/dist
@@ -37,6 +39,11 @@ var templateAssets embed.FS
 
 func main() {
 	app := NewApp()
+
+	// 初始化 WTNDAQ16H DLL（DAQ-P-1603 16 通道 AI 采集设备所需）。
+	// 路径：环境变量 WTNDAQ16H_DLL_PATH 或可执行文件同目录（对齐 WindLabX4）。
+	// DLL 缺失/加载失败仅告警不阻塞启动——未配置 P1603 时应用应正常使用。
+	ffi.InitWTNDAQ16HFromEnv()
 
 	err := wails.Run(&options.App{
 		Title:             "Cal1604 校准系统",
