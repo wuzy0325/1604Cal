@@ -12,16 +12,28 @@ import (
 	"cal1604/internal/workflow"
 )
 
-// SetDevices 设置校准使用的设备。
+// SetDevices 设置校准使用的设备（单计量设备兼容入口）。
 // 委托给 session.Service 处理，同时保持本地驱动引用以供标定流程使用。
 func (s *Service) SetDevices(measureDevID, pressureDevID string) error {
+	return s.SetMeasureDevices([]string{measureDevID}, pressureDevID)
+}
+
+// SetMeasureDevices 设置校准使用的多台计量设备与单台打压设备。
+// 委托给 session.Service 处理，同时保持本地驱动引用以供标定流程使用。
+func (s *Service) SetMeasureDevices(measureDevIDs []string, pressureDevID string) error {
+	if len(measureDevIDs) == 0 {
+		return fmt.Errorf("measure device ids must not be empty")
+	}
+
 	if s.sessionService != nil {
-		if _, err := s.sessionService.BindDevices(measureDevID, pressureDevID, "calibration"); err != nil {
+		if _, err := s.sessionService.BindMeasureDevices(measureDevIDs, pressureDevID, "calibration"); err != nil {
 			return err
 		}
 		s.mu.Lock()
-		s.measureDevID = measureDevID
+		s.measureDevIDs = append([]string(nil), measureDevIDs...)
+		s.measureDevID = measureDevIDs[0]
 		s.pressureDevID = pressureDevID
+		s.skippedDevices = make(map[string]string)
 		s.mu.Unlock()
 		return nil
 	}
@@ -34,21 +46,28 @@ func (s *Service) SetDevices(measureDevID, pressureDevID string) error {
 		DriverProvider: s.driverProvider,
 		Factory:        s.factory,
 	}
-	mDrv, err := resolver.ResolveMeasureDriver(measureDevID)
-	if err != nil {
-		return err
+	drivers := make(map[string]device.MeasureDriver, len(measureDevIDs))
+	for _, id := range measureDevIDs {
+		mDrv, err := resolver.ResolveMeasureDriver(id)
+		if err != nil {
+			return err
+		}
+		drivers[id] = mDrv
 	}
 	var pDrv device.PressureDriver
 	if pressureDevID != "" {
+		var err error
 		pDrv, err = resolver.ResolvePressureDriver(pressureDevID)
 		if err != nil {
 			return err
 		}
 	}
-	s.measureDevID = measureDevID
+	s.measureDevIDs = append([]string(nil), measureDevIDs...)
+	s.measureDevID = measureDevIDs[0]
 	s.pressureDevID = pressureDevID
-	s.measureDriver = mDrv
+	s.measureDrivers = drivers
 	s.pressureDriver = pDrv
+	s.skippedDevices = make(map[string]string)
 	return nil
 }
 

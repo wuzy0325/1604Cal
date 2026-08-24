@@ -55,6 +55,7 @@ const (
 	EventPointSkipped   = "point.skipped"
 	EventPointStopped   = "point.stopped"
 	EventPointRetry     = "point.retry"
+	EventPointError     = "point.error"
 )
 
 // CalibrationData 标定数据事件

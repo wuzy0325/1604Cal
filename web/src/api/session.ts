@@ -9,6 +9,15 @@ export async function bindDevices(
   await apiPost('/session/devices', { measureDeviceId, pressureDeviceId, moduleName })
 }
 
+/** 绑定多台计量设备与打压设备到会话 */
+export async function bindMeasureDevices(
+  measureDeviceIds: string[],
+  pressureDeviceId: string,
+  moduleName = 'measurement'
+): Promise<void> {
+  await apiPost('/session/devices', { measureDeviceIds, pressureDeviceId, moduleName })
+}
+
 /** 仅绑定计量设备 */
 export async function bindMeasureDevice(measureDeviceId: string, moduleName = 'measurement'): Promise<void> {
   await apiPost('/session/measure-device', { measureDeviceId, moduleName })

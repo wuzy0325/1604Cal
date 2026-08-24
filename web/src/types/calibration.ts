@@ -50,7 +50,18 @@ export interface PressurePointDTO {
   status: string
   direction?: 'forward' | 'backward'
   collectedData?: number[]
+  collectedByDevice?: Record<string, DevicePointDataDTO>
   actualPressure?: number
+}
+
+/** 单台计量设备在某个压力点的采集结果与状态 */
+export interface DevicePointDataDTO {
+  deviceId: string
+  collected?: number[]
+  status: 'completed' | 'error' | 'skipped'
+  collectTime?: string
+  skipReason?: string
+  error?: string
 }
 
 export interface FittingResultDTO {

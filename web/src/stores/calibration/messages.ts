@@ -15,6 +15,7 @@ export const CalibrationMessages = {
   ALARM_SKIP: '已跳过当前测点',
   ALARM_RECOLLECT: '将重新采集当前点',
   ALARM_STOP: '已停止自动采集流程',
+  SKIP_DEVICE_OK: '已跳过该计量设备（剩余压力点不再采集）',
   AUTO_COLLECTION_DONE: '所有压力点采集完成，系统已自动排空',
   VALVE_CALIBRATION: '阀门已切换到校准模式',
   VALVE_MEASURE: '阀门已切换到测量模式',

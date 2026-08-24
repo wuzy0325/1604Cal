@@ -4,6 +4,7 @@ import type { ActionResult } from '@/types/api'
 import {
   bindMeasureDevice,
   bindDevices,
+  bindMeasureDevices,
   readPressure,
   readStability,
   readMeasureData,
@@ -160,6 +161,17 @@ export const useDeviceControlStore = defineStore('deviceControl', () => {
     }
   }
 
+  // 设置多台校准计量设备（选 1 台时行为与 setDevices 一致）
+  const setMeasureDevices = async (measureDeviceIds: string[], pressureDeviceId: string): Promise<ActionResult> => {
+    try {
+      await bindMeasureDevices(measureDeviceIds, pressureDeviceId)
+      return { ok: true }
+    } catch (error) {
+      console.error('绑定多设备会话失败:', error)
+      return { ok: false, error: 'BIND_FAILED', detail: '绑定多设备会话失败' }
+    }
+  }
+
   // 读取实时压力
   const refreshPressure = async () => {
     try {
@@ -307,6 +319,7 @@ export const useDeviceControlStore = defineStore('deviceControl', () => {
     connectPressDevice,
     disconnectPressDevice,
     setDevices,
+    setMeasureDevices,
     refreshPressure,
     refreshStability,
     refreshMeasureData,

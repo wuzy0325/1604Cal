@@ -4,6 +4,7 @@ import { useEventHub } from '@/composables/useEventHub'
 import { connectDevice } from '@/api/device'
 import { bindMeasureDevice } from '@/api/session'
 import type { SessionState } from '@/types/calibration'
+import type { DevicePointData } from '@/stores/calibration/types'
 import { useCalibrationStore } from '@/stores/calibration'
 import { useDeviceInventoryStore } from '@/stores/device/inventoryStore'
 import {
@@ -37,10 +38,15 @@ export interface AlarmEventData {
   overLimitChannels: number[]
   maxDeviation: number
   channelDetails: Record<string, number>
+  deviceId?: string
+  error?: string
 }
 
 // 稳定性状态的 provide/inject key，供 CalibrationControl 获取
 export const stabilityStatusKey: InjectionKey<Ref<StabilityEventData | null>> = Symbol('stabilityStatus')
+
+// 报警事件的 provide/inject key，供 CalibrationControl 获取当前报警对应的设备 ID
+export const alarmEventKey: InjectionKey<Ref<AlarmEventData | null>> = Symbol('alarmEvent')
 
 /**
  * Composable that manages SSE event stream and polling for calibration view.
@@ -138,12 +144,13 @@ export function useCalibrationSync() {
     }))
 
     unsubs.push(subscribe(EVENT_CALIBRATION_POINT_STATUS, (payload) => {
-      const data = payload.data as { index?: number; status?: string; collectedData?: number[]; actualPressure?: number }
+      const data = payload.data as { index?: number; status?: string; collectedData?: number[]; collectedByDevice?: Record<string, DevicePointData>; actualPressure?: number }
       if (typeof data?.index === 'number') {
         const point = calibrationStore.pressurePoints.find(p => p.index === data.index)
         if (point) {
           if (data.status) point.status = data.status as typeof point.status
           if (data.collectedData) point.collectedData = data.collectedData
+          if (data.collectedByDevice) point.collectedByDevice = data.collectedByDevice
           if (data.actualPressure !== undefined) point.actualPressure = data.actualPressure
         }
       }

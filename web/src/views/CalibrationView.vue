@@ -164,7 +164,7 @@ import { ArrowLeft, DocumentChecked, Download } from '@element-plus/icons-vue'
 import type { SessionState } from '@/types/calibration'
 import { ElMessage } from 'element-plus'
 import { useCalibrationStore } from '@/stores/calibration'
-import { useCalibrationSync, stabilityStatusKey } from '@/composables/useCalibrationSync'
+import { useCalibrationSync, stabilityStatusKey, alarmEventKey } from '@/composables/useCalibrationSync'
 import { useConfigPersistence } from '@/composables/useConfigPersistence'
 import { useWorkbenchShortcuts } from '@/composables/useWorkbenchShortcuts'
 import { useCalibrationUI } from '@/composables/useCalibrationUI'
@@ -187,6 +187,7 @@ const isExporting = ref(false)
 
 const { stabilityStatus, alarmEvent } = useCalibrationSync()
 provide(stabilityStatusKey, stabilityStatus)
+provide(alarmEventKey, alarmEvent)
 useConfigPersistence()
 
 // 快捷键（P1-8）：Space 开始/暂停、Esc 停止、Ctrl+E 导出、Ctrl+S 阻止默认保存

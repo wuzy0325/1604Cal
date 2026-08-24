@@ -3,6 +3,7 @@ package measurement
 import (
 	"fmt"
 	"math"
+	"sort"
 
 	"cal1604/internal/domain"
 	"cal1604/internal/events"
@@ -10,11 +11,13 @@ import (
 
 type Alarm struct {
 	PointID           string  `json:"pointId"`
+	DeviceID          string  `json:"deviceId,omitempty"`
 	TargetPressure    float64 `json:"targetPressure"`
 	ActualPressure    float64 `json:"actualPressure"`
 	Threshold         float64 `json:"threshold"`
 	MaxDeviation      float64 `json:"maxDeviation"`
 	OverLimitChannels []int   `json:"overLimitChannels"`
+	ErrorMessage      string  `json:"errorMessage,omitempty"`
 }
 
 func (s *Service) SetAlarmConfig(cfg domain.AlarmConfig) {
@@ -33,21 +36,12 @@ func (s *Service) CheckAlarm(point domain.PressurePoint) (*Alarm, error) {
 	s.mu.Lock()
 	cfg := s.alarmConfig
 	workCfg := s.config
+	// 深拷贝设备维度数据，避免与 ResolveSkipDevice 并发写 map 产生竞态。
+	collectedByDevice := snapshotDevicePointData(point.CollectedByDevice)
 	s.mu.Unlock()
 
 	if !cfg.Enabled {
 		return nil, nil
-	}
-
-	if len(point.CollectedData) == 0 {
-		return nil, nil
-	}
-
-	enabledCh := cfg.EnabledChannels
-	if len(enabledCh) == 0 {
-		for i := range point.CollectedData {
-			enabledCh = append(enabledCh, i+1)
-		}
 	}
 
 	// 量程引用误差：允许偏差 = 量程 x 准确度等级。
@@ -58,14 +52,95 @@ func (s *Service) CheckAlarm(point domain.PressurePoint) (*Alarm, error) {
 		allowance = math.Abs(point.TargetPressure) * workCfg.PrecisionLevel
 	}
 
+	// 单设备兼容：无设备维度数据时走旧字段。
+	if len(collectedByDevice) == 0 {
+		if len(point.CollectedData) == 0 {
+			return nil, nil
+		}
+		alarm := s.evaluatePointChannels(cfg, workCfg, point, point.CollectedData, allowance, span, "")
+		return s.resolveAlarm(alarm, point)
+	}
+
+	// 多设备场景：快照后逐设备评估，任一触发即返回（携带 deviceId）。
+	deviceIDs := make([]string, 0, len(collectedByDevice))
+	for devID := range collectedByDevice {
+		deviceIDs = append(deviceIDs, devID)
+	}
+	sort.Strings(deviceIDs)
+
+	// 第一遍：设备级采集失败优先报警（采集/超时/断开，Collected 为空且带错误状态）。
+	for _, devID := range deviceIDs {
+		d := collectedByDevice[devID]
+		if d.Status == domain.PointStatusError || d.Error != "" {
+			return s.resolveAlarm(s.deviceErrorAlarm(cfg, workCfg, point, devID, d.Error), point)
+		}
+	}
+
+	// 第二遍：逐设备评估通道超限。
+	for _, devID := range deviceIDs {
+		d := collectedByDevice[devID]
+		if len(d.Collected) == 0 {
+			continue
+		}
+		alarm := s.evaluatePointChannels(cfg, workCfg, point, d.Collected, allowance, span, devID)
+		if alarm == nil {
+			continue
+		}
+		return s.resolveAlarm(alarm, point)
+	}
+	return nil, nil
+}
+
+// snapshotDevicePointData 深拷贝设备维度数据 map，供锁外安全遍历。
+func snapshotDevicePointData(src map[string]domain.DevicePointData) map[string]domain.DevicePointData {
+	if len(src) == 0 {
+		return nil
+	}
+	snap := make(map[string]domain.DevicePointData, len(src))
+	for k, v := range src {
+		cloned := v
+		if v.Collected != nil {
+			cloned.Collected = append([]float64(nil), v.Collected...)
+		}
+		snap[k] = cloned
+	}
+	return snap
+}
+
+// deviceErrorAlarm 构造设备级采集失败的报警对象。
+func (s *Service) deviceErrorAlarm(cfg domain.AlarmConfig, workCfg domain.WorkflowConfig, point domain.PressurePoint, deviceID, errMsg string) *Alarm {
+	var actualPressure float64
+	if point.ActualPressure != nil {
+		actualPressure = *point.ActualPressure
+	}
+	return &Alarm{
+		PointID:        point.ID,
+		DeviceID:       deviceID,
+		TargetPressure: point.TargetPressure,
+		ActualPressure: actualPressure,
+		Threshold:      workCfg.PrecisionLevel,
+		MaxDeviation:   0,
+		ErrorMessage:   errMsg,
+	}
+}
+
+// evaluatePointChannels 对单个设备通道数据执行报警判定。
+func (s *Service) evaluatePointChannels(cfg domain.AlarmConfig, workCfg domain.WorkflowConfig, point domain.PressurePoint, data []float64, allowance, span float64, deviceID string) *Alarm {
+	enabledCh := cfg.EnabledChannels
+	if len(enabledCh) == 0 {
+		for i := range data {
+			enabledCh = append(enabledCh, i+1)
+		}
+	}
+
 	var overLimit []int
 	maxDev := 0.0
 
 	for _, ch := range enabledCh {
-		if ch < 1 || ch > len(point.CollectedData) {
+		if ch < 1 || ch > len(data) {
 			continue
 		}
-		collectedVal := point.CollectedData[ch-1]
+		collectedVal := data[ch-1]
 		dev := math.Abs(collectedVal - point.TargetPressure)
 
 		if dev > allowance {
@@ -77,7 +152,7 @@ func (s *Service) CheckAlarm(point domain.PressurePoint) (*Alarm, error) {
 	}
 
 	if len(overLimit) == 0 {
-		return nil, nil
+		return nil
 	}
 
 	// maxDeviation 表示最大偏差占量程的比值（FS 百分比小数形式）。
@@ -95,15 +170,19 @@ func (s *Service) CheckAlarm(point domain.PressurePoint) (*Alarm, error) {
 		actualPressure = *point.ActualPressure
 	}
 
-	alarm := &Alarm{
+	return &Alarm{
 		PointID:           point.ID,
+		DeviceID:          deviceID,
 		TargetPressure:    point.TargetPressure,
 		ActualPressure:    actualPressure,
 		Threshold:         workCfg.PrecisionLevel,
 		MaxDeviation:      maxDevRatio,
 		OverLimitChannels: overLimit,
 	}
+}
 
+// resolveAlarm 设置 pending 状态并发布报警事件。
+func (s *Service) resolveAlarm(alarm *Alarm, point domain.PressurePoint) (*Alarm, error) {
 	s.mu.Lock()
 	s.alarmPending = true
 	s.currentAlarm = alarm
@@ -154,4 +233,39 @@ func (s *Service) ResolveStabilityTimeout(decision string) {
 	case s.stabilityTimeoutCh <- decision:
 	default:
 	}
+}
+
+// ResolveSkipDevice 用户选择永久跳过指定计量设备。
+// 该设备从本批次剩余压力点中移除，已完成压力点数据保留并标记设备级 skipped + 原因。
+func (s *Service) ResolveSkipDevice(deviceID, reason string) error {
+	s.mu.Lock()
+	if _, already := s.skippedDevices[deviceID]; already {
+		s.mu.Unlock()
+		return fmt.Errorf("device %s already skipped", deviceID)
+	}
+	s.skippedDevices[deviceID] = reason
+	// 剩余压力点标记该设备 skipped + 原因；已完成点的数据保留。
+	// 收集被修改的压力点快照，逐点发布完整点状态，保证前端按 point.id 正常更新。
+	var updatedPoints []domain.PressurePoint
+	for i := range s.points {
+		p := &s.points[i]
+		if p.CollectedByDevice == nil {
+			p.CollectedByDevice = make(map[string]domain.DevicePointData)
+		}
+		if d, ok := p.CollectedByDevice[deviceID]; ok && d.Status == domain.PointStatusCompleted {
+			continue
+		}
+		p.CollectedByDevice[deviceID] = domain.DevicePointData{
+			DeviceID:   deviceID,
+			Status:     domain.PointStatusSkipped,
+			SkipReason: reason,
+		}
+		updatedPoints = append(updatedPoints, *p)
+	}
+	s.mu.Unlock()
+
+	for i := range updatedPoints {
+		s.publish(events.EventMeasurementPointStatus, updatedPoints[i])
+	}
+	return nil
 }

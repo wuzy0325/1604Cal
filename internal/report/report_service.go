@@ -74,12 +74,47 @@ func (s *Service) ResolveTemplatePath(points int, mode string) (string, error) {
 }
 
 // ExportReport 根据 CalibrationSession 生成校准报告并保存到 outputPath。
+// 多设备场景：为每台参与计量设备分别生成独立报告文件。
+//   - 单设备（或旧数据）：outputPath 作为报告文件路径。
+//   - 多设备：outputPath 作为基路径，在文件名中插入设备 ID，例如
+//     "报告.xlsx" → "报告_dev-a.xlsx"，避免静默把用户指定的文件路径改造成目录。
 // 优先使用模板文件填充数据，无模板时创建默认工作簿。
 func (s *Service) ExportReport(ctx context.Context, session *calibration.CalibrationSession, outputPath string) error {
 	if session == nil {
 		return fmt.Errorf("%w: calibration session is nil", apperrors.ErrNoActiveSession)
 	}
 
+	// 多设备：每台设备生成独立报告
+	devIDs := session.MeasureDeviceIDs
+	if len(devIDs) == 0 && session.MeasureDeviceID != "" {
+		devIDs = []string{session.MeasureDeviceID}
+	}
+	if len(devIDs) > 1 {
+		for _, devID := range devIDs {
+			devPath := perDeviceReportPath(outputPath, devID)
+			if err := s.exportReportForDevice(ctx, session, devID, devPath); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+	return s.exportReportForDevice(ctx, session, "", outputPath)
+}
+
+// perDeviceReportPath 为多设备场景生成单台设备的报告文件路径。
+// 在扩展名前插入设备 ID，保留原路径的目录与扩展名，不改变 outputPath 的文件语义。
+func perDeviceReportPath(outputPath, deviceID string) string {
+	ext := filepath.Ext(outputPath)
+	if ext == "" {
+		return filepath.Join(outputPath, deviceID+"_report.xlsx")
+	}
+	base := strings.TrimSuffix(outputPath, ext)
+	return base + "_" + deviceID + ext
+}
+
+// exportReportForDevice 为单台计量设备生成报告。
+// deviceID 为空时回退单设备字段（兼容旧数据）。
+func (s *Service) exportReportForDevice(ctx context.Context, session *calibration.CalibrationSession, deviceID, outputPath string) error {
 	// 收集标准压力值（仅正程）
 	standardValues := make([]float64, 0, len(session.Points))
 	for _, p := range session.Points {
@@ -89,7 +124,7 @@ func (s *Service) ExportReport(ctx context.Context, session *calibration.Calibra
 	}
 
 	// 收集通道数据
-	channels := collectChannelData(session)
+	channels := collectChannelData(session, deviceID)
 
 	// 确定压力单位
 	unit := "kPa"
@@ -100,7 +135,7 @@ func (s *Service) ExportReport(ctx context.Context, session *calibration.Calibra
 		string(session.Config.PressureMode),
 	)
 	if err == nil && templatePath != "" {
-		return s.exportWithTemplate(templatePath, outputPath, standardValues, channels, unit, session)
+		return s.exportWithTemplate(templatePath, outputPath, standardValues, channels, unit, session, deviceID)
 	}
 
 	// 无模板，创建默认工作簿
@@ -108,7 +143,7 @@ func (s *Service) ExportReport(ctx context.Context, session *calibration.Calibra
 }
 
 // exportWithTemplate 使用模板文件导出报告。
-func (s *Service) exportWithTemplate(templatePath, outputPath string, standardValues []float64, channels [][]float64, unit string, session *calibration.CalibrationSession) error {
+func (s *Service) exportWithTemplate(templatePath, outputPath string, standardValues []float64, channels [][]float64, unit string, session *calibration.CalibrationSession, deviceID ...string) error {
 	f, err := LoadTemplate(templatePath)
 	if err != nil {
 		return fmt.Errorf("%w: load template: %v", apperrors.ErrReportExport, err)
@@ -118,6 +153,11 @@ func (s *Service) exportWithTemplate(templatePath, outputPath string, standardVa
 	blocks, err := FindChannelBlocks(f)
 	if err != nil {
 		return fmt.Errorf("%w: find channel blocks: %v", apperrors.ErrReportExport, err)
+	}
+
+	targetDev := ""
+	if len(deviceID) > 0 {
+		targetDev = deviceID[0]
 	}
 
 	for i, block := range blocks {
@@ -140,7 +180,7 @@ func (s *Service) exportWithTemplate(templatePath, outputPath string, standardVa
 
 		// 回程模式：D 列填回程数据
 		if session.Config.PressureMode == domain.PressureModeRoundTrip {
-			backwardData := collectBackwardData(session, i)
+			backwardData := collectBackwardData(session, i, targetDev)
 			if len(backwardData) > 0 {
 				if err := FillRoundTripData(f, block, "D", channels[i], backwardData); err != nil {
 					return fmt.Errorf("%w: fill round-trip data block %d: %v", apperrors.ErrReportExport, i+1, err)
@@ -293,23 +333,57 @@ func parseTemplateFileName(filename string) (ReportTemplate, bool) {
 }
 
 // ExportMeasurementReport 根据计量采集数据生成报告并保存到 outputPath。
+// 多设备场景：为每台设备分别生成独立报告文件，outputPath 作为基路径，
+// 在文件名中插入设备 ID（如 "报告.xlsx" → "报告_dev-a.xlsx"）。
 func (s *Service) ExportMeasurementReport(ctx context.Context, points []domain.PressurePoint, config domain.WorkflowConfig, outputPath string) error {
 	if len(points) == 0 {
 		return fmt.Errorf("%w: no measurement points", apperrors.ErrNoActiveSession)
 	}
 
+	// 探测设备 ID 集合（多设备场景）
+	deviceIDs := detectDeviceIDs(points)
+	if len(deviceIDs) > 1 {
+		for _, devID := range deviceIDs {
+			devPath := perDeviceReportPath(outputPath, devID)
+			if err := s.exportMeasurementReportForDevice(ctx, points, config, devPath, devID); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+	return s.exportMeasurementReportForDevice(ctx, points, config, outputPath, "")
+}
+
+// detectDeviceIDs 从压力点的设备维度数据中探测参与计量设备 ID 集合。
+func detectDeviceIDs(points []domain.PressurePoint) []string {
+	seen := make(map[string]bool)
+	var ids []string
+	for _, p := range points {
+		for devID := range p.CollectedByDevice {
+			if !seen[devID] {
+				seen[devID] = true
+				ids = append(ids, devID)
+			}
+		}
+	}
+	return ids
+}
+
+// exportMeasurementReportForDevice 为单台计量设备生成计量报告。
+// deviceID 为空时回退单设备字段。
+func (s *Service) exportMeasurementReportForDevice(ctx context.Context, points []domain.PressurePoint, config domain.WorkflowConfig, outputPath, deviceID string) error {
 	// 始终输出全部16通道
 	numChannels := 16
 
 	// 提取正程标准压力值
-	standardValues := collectMeasurementStandardValues(points, "forward")
+	standardValues := collectMeasurementStandardValues(points, "forward", deviceID)
 	// 按通道聚合正程采集数据（从平铺数据计算每通道平均值）
-	forwardChannels := collectMeasurementChannelData(points, numChannels, config.AverageCount, "forward")
+	forwardChannels := collectMeasurementChannelData(points, numChannels, config.AverageCount, "forward", deviceID)
 	// 回程模式下额外按 targetPressure 索引聚合回程数据，避免回程点缺失时与正程错位；
 	// 单程模式 backwardByTarget 为空。
 	var backwardByTarget []map[float64]float64
 	if config.PressureMode == domain.PressureModeRoundTrip {
-		backwardByTarget = collectMeasurementChannelByTarget(points, numChannels, config.AverageCount, "backward")
+		backwardByTarget = collectMeasurementChannelByTarget(points, numChannels, config.AverageCount, "backward", deviceID)
 	}
 	unit := "kPa"
 
@@ -319,11 +393,11 @@ func (s *Service) ExportMeasurementReport(ctx context.Context, points []domain.P
 		string(config.PressureMode),
 	)
 	if err == nil && templatePath != "" {
-		return s.exportMeasurementWithTemplate(ctx, templatePath, outputPath, standardValues, forwardChannels, backwardByTarget, unit, points, config)
+		return s.exportMeasurementWithTemplate(ctx, templatePath, outputPath, standardValues, forwardChannels, backwardByTarget, unit, points, config, deviceID)
 	}
 
 	// 无模板，创建默认工作簿
-	return s.exportMeasurementFallback(outputPath, standardValues, forwardChannels, backwardByTarget, unit, points, config)
+	return s.exportMeasurementFallback(outputPath, standardValues, forwardChannels, backwardByTarget, unit, points, config, deviceID)
 }
 
 // exportMeasurementWithTemplate 使用模板文件导出计量报告。
@@ -332,7 +406,7 @@ func (s *Service) ExportMeasurementReport(ctx context.Context, points []domain.P
 //   回程模板 *m.xlsx：A=标准压力，B=正程显示值(Forward stroke)，C=回程显示值(Return stroke)，D=示值误差(公式)，E=回差(公式)
 // backwardByTarget 按 (通道, 标准压力) 索引，确保 C 列严格按 A 列标准值对齐，
 // 即便部分回程点未完成也不会发生静默错位。
-func (s *Service) exportMeasurementWithTemplate(ctx context.Context, templatePath, outputPath string, standardValues []float64, forwardChannels [][]float64, backwardByTarget []map[float64]float64, unit string, points []domain.PressurePoint, config domain.WorkflowConfig) error {
+func (s *Service) exportMeasurementWithTemplate(ctx context.Context, templatePath, outputPath string, standardValues []float64, forwardChannels [][]float64, backwardByTarget []map[float64]float64, unit string, points []domain.PressurePoint, config domain.WorkflowConfig, deviceID ...string) error {
 	f, err := LoadTemplate(templatePath)
 	if err != nil {
 		return fmt.Errorf("%w: load template: %v", apperrors.ErrReportExport, err)
@@ -399,7 +473,7 @@ func (s *Service) exportMeasurementWithTemplate(ctx context.Context, templatePat
 
 // exportMeasurementFallback 创建无模板的计量报告。
 // 回程模式下若 backwardByTarget 非空，会同时写入"回程值"列。
-func (s *Service) exportMeasurementFallback(outputPath string, standardValues []float64, forwardChannels [][]float64, backwardByTarget []map[float64]float64, unit string, points []domain.PressurePoint, config domain.WorkflowConfig) error {
+func (s *Service) exportMeasurementFallback(outputPath string, standardValues []float64, forwardChannels [][]float64, backwardByTarget []map[float64]float64, unit string, points []domain.PressurePoint, config domain.WorkflowConfig, deviceID ...string) error {
 	f := CreateMeasurementFallbackWorkbook(standardValues, forwardChannels, backwardByTarget, unit, points, config)
 	defer f.Close()
 
@@ -505,10 +579,18 @@ func matchDirection(pointDirection, direction string) bool {
 
 // collectMeasurementStandardValues 从计量压力点中提取指定方向已完成的标准值。
 // 过滤条件与 collectMeasurementChannelData 保持一致，确保标准值和通道数据一一对应。
-func collectMeasurementStandardValues(points []domain.PressurePoint, direction string) []float64 {
+func collectMeasurementStandardValues(points []domain.PressurePoint, direction string, deviceID ...string) []float64 {
+	targetDev := ""
+	if len(deviceID) > 0 {
+		targetDev = deviceID[0]
+	}
+
 	values := make([]float64, 0, len(points))
 	for _, p := range points {
-		if !matchDirection(p.Direction, direction) || p.Status != "completed" || len(p.CollectedData) == 0 {
+		if !matchDirection(p.Direction, direction) || p.Status != "completed" {
+			continue
+		}
+		if _, ok := measurementPointData(&p, targetDev); !ok {
 			continue
 		}
 		values = append(values, p.TargetPressure)
@@ -516,11 +598,32 @@ func collectMeasurementStandardValues(points []domain.PressurePoint, direction s
 	return values
 }
 
+// measurementPointData 返回计量压力点指定设备的采集数据。
+// deviceID 为空时回退单设备字段 CollectedData。
+func measurementPointData(p *domain.PressurePoint, deviceID string) ([]float64, bool) {
+	if deviceID != "" {
+		if d, ok := p.CollectedByDevice[deviceID]; ok {
+			return d.Collected, true
+		}
+		return nil, false
+	}
+	if len(p.CollectedData) > 0 {
+		return p.CollectedData, true
+	}
+	return nil, false
+}
+
 // collectMeasurementChannelByTarget 按 (通道, 标准压力) 聚合指定方向的平均值，
 // 返回 channels[ch][targetPressure] = avg。键直接使用 float64 的 TargetPressure
 // （等距生成时由 RoundToPrecision 量化，存在精确相等保证）。
-// 跳过未完成、CollectedData 为空、以及无法推断 samplesPerChannel 的异常点。
-func collectMeasurementChannelByTarget(points []domain.PressurePoint, numChannels, averageCount int, direction string) []map[float64]float64 {
+// 跳过未完成、数据为空、以及无法推断 samplesPerChannel 的异常点。
+// deviceID 为空时回退单设备字段。
+func collectMeasurementChannelByTarget(points []domain.PressurePoint, numChannels, averageCount int, direction string, deviceID ...string) []map[float64]float64 {
+	targetDev := ""
+	if len(deviceID) > 0 {
+		targetDev = deviceID[0]
+	}
+
 	result := make([]map[float64]float64, numChannels)
 	for i := range result {
 		result[i] = make(map[float64]float64)
@@ -530,17 +633,18 @@ func collectMeasurementChannelByTarget(points []domain.PressurePoint, numChannel
 		if !matchDirection(p.Direction, direction) || p.Status != "completed" {
 			continue
 		}
-		if len(p.CollectedData) == 0 {
+		data, ok := measurementPointData(&p, targetDev)
+		if !ok {
 			continue
 		}
 
 		samplesPerChannel := averageCount
 		if samplesPerChannel <= 0 {
-			samplesPerChannel = len(p.CollectedData) / numChannels
+			samplesPerChannel = len(data) / numChannels
 		}
 		if samplesPerChannel <= 0 {
-			log.Printf("report: skip measurement point index=%d direction=%s: cannot infer samplesPerChannel from len(CollectedData)=%d, numChannels=%d",
-				p.Index, p.Direction, len(p.CollectedData), numChannels)
+			log.Printf("report: skip measurement point index=%d direction=%s: cannot infer samplesPerChannel from len(data)=%d, numChannels=%d",
+				p.Index, p.Direction, len(data), numChannels)
 			continue
 		}
 
@@ -549,8 +653,8 @@ func collectMeasurementChannelByTarget(points []domain.PressurePoint, numChannel
 			count := 0
 			for sIdx := 0; sIdx < samplesPerChannel; sIdx++ {
 				idx := sIdx*numChannels + ch
-				if idx < len(p.CollectedData) {
-					sum += p.CollectedData[idx]
+				if idx < len(data) {
+					sum += data[idx]
 					count++
 				}
 			}
@@ -564,12 +668,18 @@ func collectMeasurementChannelByTarget(points []domain.PressurePoint, numChannel
 	return result
 }
 
-// collectMeasurementChannelData 从平铺的 CollectedData 中按通道聚合指定方向的平均值。
-// 计量模块的 CollectedData 是平铺格式：sample0_ch0, sample0_ch1, ..., sampleN_ch0, sampleN_ch1。
+// collectMeasurementChannelData 从平铺数据中按通道聚合指定方向的平均值。
+// 计量模块的数据是平铺格式：sample0_ch0, sample0_ch1, ..., sampleN_ch0, sampleN_ch1。
 // direction 为 "forward" 时仅聚合正程点，为 "backward" 时仅聚合回程点。
 // 返回顺序与 points 中匹配方向点的出现顺序一致；如需按标准压力查找回程数据，
 // 请改用 collectMeasurementChannelByTarget。
-func collectMeasurementChannelData(points []domain.PressurePoint, numChannels, averageCount int, direction string) [][]float64 {
+// deviceID 为空时回退单设备字段。
+func collectMeasurementChannelData(points []domain.PressurePoint, numChannels, averageCount int, direction string, deviceID ...string) [][]float64 {
+	targetDev := ""
+	if len(deviceID) > 0 {
+		targetDev = deviceID[0]
+	}
+
 	channels := make([][]float64, numChannels)
 	for i := range channels {
 		channels[i] = make([]float64, 0)
@@ -579,18 +689,19 @@ func collectMeasurementChannelData(points []domain.PressurePoint, numChannels, a
 		if !matchDirection(p.Direction, direction) || p.Status != "completed" {
 			continue
 		}
-		if len(p.CollectedData) == 0 {
+		data, ok := measurementPointData(&p, targetDev)
+		if !ok {
 			continue
 		}
 
 		samplesPerChannel := averageCount
 		if samplesPerChannel <= 0 {
-			samplesPerChannel = len(p.CollectedData) / numChannels
+			samplesPerChannel = len(data) / numChannels
 		}
 		// 异常数据点直接跳过，避免向通道写入 0 导致下游对齐错误。
 		if samplesPerChannel <= 0 {
-			log.Printf("report: skip measurement point index=%d direction=%s: cannot infer samplesPerChannel from len(CollectedData)=%d, numChannels=%d",
-				p.Index, p.Direction, len(p.CollectedData), numChannels)
+			log.Printf("report: skip measurement point index=%d direction=%s: cannot infer samplesPerChannel from len(data)=%d, numChannels=%d",
+				p.Index, p.Direction, len(data), numChannels)
 			continue
 		}
 
@@ -599,8 +710,8 @@ func collectMeasurementChannelData(points []domain.PressurePoint, numChannels, a
 			count := 0
 			for s := 0; s < samplesPerChannel; s++ {
 				idx := s*numChannels + ch
-				if idx < len(p.CollectedData) {
-					sum += p.CollectedData[idx]
+				if idx < len(data) {
+					sum += data[idx]
 					count++
 				}
 			}
@@ -616,16 +727,22 @@ func collectMeasurementChannelData(points []domain.PressurePoint, numChannels, a
 }
 
 // collectChannelData 从会话压力点中按通道提取采集数据。
-func collectChannelData(session *calibration.CalibrationSession) [][]float64 {
+// deviceID 为空时回退单设备字段 CollectedData；非空时读取该设备的设备维度数据。
+func collectChannelData(session *calibration.CalibrationSession, deviceID ...string) [][]float64 {
 	if len(session.Points) == 0 {
 		return nil
+	}
+
+	targetDev := ""
+	if len(deviceID) > 0 {
+		targetDev = deviceID[0]
 	}
 
 	// 确定通道数
 	numChannels := 0
 	for _, p := range session.Points {
-		if len(p.CollectedData) > numChannels {
-			numChannels = len(p.CollectedData)
+		if data, ok := pointDataForReport(&p, targetDev); ok {
+			numChannels = len(data)
 			break
 		}
 	}
@@ -643,8 +760,12 @@ func collectChannelData(session *calibration.CalibrationSession) [][]float64 {
 		if p.Direction == "backward" {
 			continue
 		}
-		for ch := 0; ch < numChannels && ch < len(p.CollectedData); ch++ {
-			channels[ch] = append(channels[ch], p.CollectedData[ch])
+		data, ok := pointDataForReport(&p, targetDev)
+		if !ok {
+			continue
+		}
+		for ch := 0; ch < numChannels && ch < len(data); ch++ {
+			channels[ch] = append(channels[ch], data[ch])
 		}
 	}
 
@@ -652,15 +773,40 @@ func collectChannelData(session *calibration.CalibrationSession) [][]float64 {
 }
 
 // collectBackwardData 从会话压力点中提取指定通道的回程数据。
-func collectBackwardData(session *calibration.CalibrationSession, channelIdx int) []float64 {
+// deviceID 为空时回退单设备字段 CollectedData；非空时读取该设备的设备维度数据。
+func collectBackwardData(session *calibration.CalibrationSession, channelIdx int, deviceID ...string) []float64 {
+	targetDev := ""
+	if len(deviceID) > 0 {
+		targetDev = deviceID[0]
+	}
+
 	var data []float64
 	for _, p := range session.Points {
 		if p.Direction != "backward" {
 			continue
 		}
-		if channelIdx < len(p.CollectedData) {
-			data = append(data, p.CollectedData[channelIdx])
+		pData, ok := pointDataForReport(&p, targetDev)
+		if !ok {
+			continue
+		}
+		if channelIdx < len(pData) {
+			data = append(data, pData[channelIdx])
 		}
 	}
 	return data
+}
+
+// pointDataForReport 返回压力点指定设备的采集数据。
+// deviceID 为空时回退单设备字段；否则读取设备维度数据。
+func pointDataForReport(p *domain.PressurePoint, deviceID string) ([]float64, bool) {
+	if deviceID != "" {
+		if d, ok := p.CollectedByDevice[deviceID]; ok {
+			return d.Collected, true
+		}
+		return nil, false
+	}
+	if len(p.CollectedData) > 0 {
+		return p.CollectedData, true
+	}
+	return nil, false
 }

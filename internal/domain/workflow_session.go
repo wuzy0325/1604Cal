@@ -10,6 +10,7 @@ type WorkflowSession struct {
 	Config           WorkflowConfig    `json:"config"`
 	Points           []PressurePoint   `json:"points"`
 	MeasureDeviceID  string            `json:"measureDeviceId"`
+	MeasureDeviceIDs []string          `json:"measureDeviceIds,omitempty"`
 	PressureDeviceID string            `json:"pressureDeviceId"`
 	Status           SessionState      `json:"status"`
 }

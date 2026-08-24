@@ -4,9 +4,11 @@ import (
 	"context"
 	"errors"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
+	"cal1604/internal/device"
 	"cal1604/internal/domain"
 	"cal1604/internal/events"
 	"cal1604/internal/workflow"
@@ -57,13 +59,25 @@ func (d *valveGateFakeMeasureDriver) CalibrateFullScale(_ context.Context, _ []i
 
 func newValveGateTestService() *Service {
 	svc := NewService(workflow.NewWorkflowCoordinator(), nil, nil, nil, nil, nil)
-	svc.measureDriver = &valveGateFakeMeasureDriver{valveStatus: "measurement"}
+	svc.setMeasureDriver("m1", &valveGateFakeMeasureDriver{valveStatus: "measurement"})
 	svc.config = domain.WorkflowConfig{
 		Channels:       []int{1},
 		PointCount: 2,
 		ControlMode:    domain.ControlModeManual,
 	}
 	return svc
+}
+
+// setMeasureDriver 测试辅助：把驱动注册进校准服务的多设备驱动表。
+func (s *Service) setMeasureDriver(id string, drv device.MeasureDriver) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.measureDrivers == nil {
+		s.measureDrivers = make(map[string]device.MeasureDriver)
+	}
+	s.measureDrivers[id] = drv
+	s.measureDevID = id
+	s.measureDevIDs = []string{id}
 }
 
 func TestValidateStartPrerequisitesValveGateSwitch(t *testing.T) {
@@ -201,11 +215,14 @@ func (d *calibrationPressureDriverForStatusTest) ReadStability(_ context.Context
 }
 
 type calibrationEventRecorder struct {
+	mu       sync.Mutex
 	events   []string
 	statuses []string
 }
 
 func (r *calibrationEventRecorder) Publish(eventType string, data any) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	r.events = append(r.events, eventType)
 	if eventType != events.EventCalibrationPointStatus {
 		return
@@ -291,7 +308,7 @@ func waitAlarmPending(t *testing.T, svc *Service) {
 func TestCollectUsesCalibrationPointCommandWhenSupported(t *testing.T) {
 	drv := &calibrationCollectFakeMeasureDriver{}
 	svc := NewService(workflow.NewWorkflowCoordinator(), nil, nil, nil, nil, nil)
-	svc.measureDriver = drv
+	svc.setMeasureDriver("m1", drv)
 	svc.config = domain.WorkflowConfig{
 		Channels:       []int{1, 2},
 		AverageCount:   5,
@@ -326,6 +343,170 @@ func TestCollectUsesCalibrationPointCommandWhenSupported(t *testing.T) {
 
 	if svc.pressurePoints[0].Status != domain.PointStatusCompleted {
 		t.Fatalf("expected point status completed, got %s", svc.pressurePoints[0].Status)
+	}
+}
+
+func TestCollectMultiDeviceStoresPerDeviceData(t *testing.T) {
+	recorder := &calibrationEventRecorder{}
+	drvA := &calibrationCollectFakeMeasureDriver{}
+	drvB := &calibrationCollectFakeMeasureDriver{}
+	svc := NewService(workflow.NewWorkflowCoordinator(), nil, nil, recorder.Publish, nil, nil)
+	svc.setMeasureDriver("dev-a", drvA)
+	svc.setMeasureDriver("dev-b", drvB)
+	svc.measureDevIDs = []string{"dev-a", "dev-b"}
+	svc.config = domain.WorkflowConfig{
+		Channels:       []int{1, 2},
+		AverageCount:   3,
+		PointCount: 2,
+	}
+	svc.pressurePoints = []domain.PressurePoint{
+		{
+			Index:          1,
+			TargetPressure: 10,
+			Status:         domain.PointStatusStabilizing,
+		},
+	}
+
+	data, err := svc.Collect(context.Background(), 1)
+	if err != nil {
+		t.Fatalf("Collect multi-device failed: %v", err)
+	}
+
+	// 首个设备数据兼容返回
+	if len(data) == 0 {
+		t.Fatal("expected first device data")
+	}
+
+	// 设备维度数据必须包含两台设备
+	point := svc.pressurePoints[0]
+	if len(point.CollectedByDevice) != 2 {
+		t.Fatalf("expected 2 devices in CollectedByDevice, got %d", len(point.CollectedByDevice))
+	}
+	for _, devID := range []string{"dev-a", "dev-b"} {
+		d, ok := point.CollectedByDevice[devID]
+		if !ok {
+			t.Fatalf("missing device %s in CollectedByDevice", devID)
+		}
+		if d.Status != domain.PointStatusCompleted {
+			t.Fatalf("device %s status = %s, want completed", devID, d.Status)
+		}
+		if len(d.Collected) == 0 {
+			t.Fatalf("device %s has no collected data", devID)
+		}
+	}
+}
+
+func TestResolveSkipDeviceMarksRemainingPoints(t *testing.T) {
+	recorder := &calibrationEventRecorder{}
+	svc := NewService(workflow.NewWorkflowCoordinator(), nil, nil, recorder.Publish, nil, nil)
+	svc.setMeasureDriver("dev-a", &calibrationCollectFakeMeasureDriver{})
+	svc.setMeasureDriver("dev-b", &calibrationCollectFakeMeasureDriver{})
+	svc.measureDevIDs = []string{"dev-a", "dev-b"}
+	svc.pressurePoints = []domain.PressurePoint{
+		{
+			Index:   1,
+			Status:  domain.PointStatusCompleted,
+			CollectedByDevice: map[string]domain.DevicePointData{
+				"dev-a": {DeviceID: "dev-a", Collected: []float64{1.0}, Status: domain.PointStatusCompleted},
+				"dev-b": {DeviceID: "dev-b", Collected: []float64{2.0}, Status: domain.PointStatusCompleted},
+			},
+		},
+		{
+			Index:  2,
+			Status: domain.PointStatusPending,
+		},
+	}
+
+	if err := svc.ResolveSkipDevice("dev-b", "采集超时"); err != nil {
+		t.Fatalf("ResolveSkipDevice: %v", err)
+	}
+
+	// 已完成点数据保留
+	completed := svc.pressurePoints[0]
+	if d := completed.CollectedByDevice["dev-b"]; d.Status != domain.PointStatusCompleted {
+		t.Fatalf("completed point dev-b should stay completed, got %s", d.Status)
+	}
+
+	// 未完成点标记 skipped + 原因
+	next := svc.pressurePoints[1]
+	d, ok := next.CollectedByDevice["dev-b"]
+	if !ok {
+		t.Fatal("missing dev-b in next point CollectedByDevice")
+	}
+	if d.Status != domain.PointStatusSkipped || d.SkipReason != "采集超时" {
+		t.Fatalf("expected skipped with reason, got %+v", d)
+	}
+}
+
+// TestCheckAlarmDeviceErrorTriggersPause 验证设备级采集失败（CollectedByDevice 中 status=error）会触发报警并暂停，
+// 而不是静默返回 continue。这是多设备失败处理的核心回归点。
+func TestCheckAlarmDeviceErrorTriggersPause(t *testing.T) {
+	recorder := &calibrationEventRecorder{}
+	svc := NewService(workflow.NewWorkflowCoordinator(), nil, nil, recorder.Publish, nil, nil)
+	svc.setMeasureDriver("dev-a", &calibrationCollectFakeMeasureDriver{})
+	svc.setMeasureDriver("dev-b", &calibrationCollectFakeMeasureDriver{})
+	svc.measureDevIDs = []string{"dev-a", "dev-b"}
+	svc.config = domain.WorkflowConfig{
+		Channels:       []int{1, 2},
+		AverageCount:   1,
+		PointCount: 2,
+		MaxPressure:    10,
+		MinPressure:    0,
+	}
+	svc.alarmConfig = domain.AlarmConfig{
+		Enabled:            true,
+		PrecisionThreshold: 0.5,
+		EnabledChannels:    []int{1},
+	}
+	svc.pressurePoints = []domain.PressurePoint{
+		{
+			Index:          1,
+			TargetPressure: 10,
+			Status:         domain.PointStatusPending,
+			CollectedByDevice: map[string]domain.DevicePointData{
+				// dev-a 成功，dev-b 采集失败（status=error）
+				"dev-a": {DeviceID: "dev-a", Collected: []float64{10.1, 10.2}, Status: domain.PointStatusCompleted},
+				"dev-b": {DeviceID: "dev-b", Status: domain.PointStatusError, Error: "collect sample 1: timeout"},
+			},
+		},
+	}
+	if err := svc.coordinator.Machine().Transition(domain.SessionStateReady); err != nil {
+		t.Fatalf("transition to ready: %v", err)
+	}
+	if err := svc.coordinator.Machine().Transition(domain.SessionStateCollecting); err != nil {
+		t.Fatalf("transition to collecting: %v", err)
+	}
+	if err := svc.coordinator.Machine().Transition(domain.SessionStatePointDone); err != nil {
+		t.Fatalf("transition to point_done: %v", err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		// checkAlarm 遇到设备错误必须阻塞在 await_alarm_resolution，等待用户决策
+		_, _ = svc.checkAlarm(ctx, 1, nil)
+	}()
+
+	// 设备错误必须触发报警等待，而不是直接返回 continue
+	waitAlarmPending(t, svc)
+
+	// 用户选择跳过该设备
+	if err := svc.ResolveSkipDevice("dev-b", "采集超时"); err != nil {
+		t.Fatalf("ResolveSkipDevice: %v", err)
+	}
+
+	<-done
+
+	// dev-b 被跳过，dev-a 数据保留
+	point := svc.pressurePoints[0]
+	if d, ok := point.CollectedByDevice["dev-b"]; !ok || d.Status != domain.PointStatusSkipped {
+		t.Fatalf("expected dev-b skipped, got %+v", d)
+	}
+	if d := point.CollectedByDevice["dev-a"]; d.Status != domain.PointStatusCompleted {
+		t.Fatalf("expected dev-a completed, got %s", d.Status)
 	}
 }
 
@@ -394,7 +575,7 @@ func TestCollectPublishesPointStatusEvents(t *testing.T) {
 	recorder := &calibrationEventRecorder{}
 	drv := &calibrationCollectFakeMeasureDriver{}
 	svc := NewService(workflow.NewWorkflowCoordinator(), nil, nil, recorder.Publish, nil, nil)
-	svc.measureDriver = drv
+	svc.setMeasureDriver("m1", drv)
 	svc.config = domain.WorkflowConfig{
 		Channels:       []int{1, 2},
 		AverageCount:   1,
@@ -484,7 +665,7 @@ func TestResolveAlarmSupportsNewDecisions(t *testing.T) {
 
 func TestCollectPointAlarmDecisionSkip(t *testing.T) {
 	svc := NewService(workflow.NewWorkflowCoordinator(), nil, nil, nil, nil, nil)
-	svc.measureDriver = &alarmDecisionMeasureDriver{samples: [][]float64{{20}}}
+	svc.setMeasureDriver("m1", &alarmDecisionMeasureDriver{samples: [][]float64{{20}}})
 	svc.pressureDriver = &calibrationPressureDriverForStatusTest{}
 	svc.config = domain.WorkflowConfig{
 		Channels:       []int{1},
@@ -528,7 +709,7 @@ func TestCollectPointAlarmDecisionSkip(t *testing.T) {
 
 func TestCollectPointAlarmDecisionStop(t *testing.T) {
 	svc := NewService(workflow.NewWorkflowCoordinator(), nil, nil, nil, nil, nil)
-	svc.measureDriver = &alarmDecisionMeasureDriver{samples: [][]float64{{20}}}
+	svc.setMeasureDriver("m1", &alarmDecisionMeasureDriver{samples: [][]float64{{20}}})
 	svc.pressureDriver = &calibrationPressureDriverForStatusTest{}
 	svc.config = domain.WorkflowConfig{
 		Channels:       []int{1},
@@ -570,7 +751,7 @@ func TestCollectPointAlarmDecisionStop(t *testing.T) {
 func TestCollectPointAlarmDecisionRecollect(t *testing.T) {
 	measureDriver := &alarmDecisionMeasureDriver{samples: [][]float64{{20}, {10}}}
 	svc := NewService(workflow.NewWorkflowCoordinator(), nil, nil, nil, nil, nil)
-	svc.measureDriver = measureDriver
+	svc.setMeasureDriver("m1", measureDriver)
 	svc.pressureDriver = &calibrationPressureDriverForStatusTest{}
 	svc.config = domain.WorkflowConfig{
 		Channels:       []int{1},

@@ -23,7 +23,7 @@ type Session = domain.WorkflowSession
 func (s *Service) StartWorkflow(ctx context.Context, channels []int) error {
 	s.mu.Lock()
 
-	if s.sess.MeasureDriver() == nil {
+	if len(s.sess.MeasureDrivers()) == 0 {
 		s.mu.Unlock()
 		return session.ErrMeasureDeviceNotSet
 	}
@@ -80,6 +80,7 @@ func (s *Service) StartWorkflow(ctx context.Context, channels []int) error {
 		Config:           s.config,
 		Points:           append([]domain.PressurePoint(nil), s.points...),
 		MeasureDeviceID:  s.sess.MeasureDeviceID(),
+		MeasureDeviceIDs: s.sess.MeasureDeviceIDs(),
 		PressureDeviceID: s.sess.PressureDeviceID(),
 		Status:           s.coordinator.State(),
 	}

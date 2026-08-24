@@ -10,8 +10,9 @@ import (
 )
 
 type calibrationSetDevicesRequest struct {
-	MeasureDeviceID  string `json:"measureDeviceId"`
-	PressureDeviceID string `json:"pressureDeviceId"`
+	MeasureDeviceID  string   `json:"measureDeviceId"`
+	MeasureDeviceIDs []string `json:"measureDeviceIds"`
+	PressureDeviceID string   `json:"pressureDeviceId"`
 }
 
 type setConfigRequest struct {
@@ -50,12 +51,16 @@ func (s *apiServer) calibrationSetDevicesHandler(w http.ResponseWriter, r *http.
 		return
 	}
 
-	if req.MeasureDeviceID == "" {
+	measureDevIDs := req.MeasureDeviceIDs
+	if len(measureDevIDs) == 0 && req.MeasureDeviceID != "" {
+		measureDevIDs = []string{req.MeasureDeviceID}
+	}
+	if len(measureDevIDs) == 0 {
 		writeError(w, apperrors.ErrInvalidArgument)
 		return
 	}
 
-	if err := s.calibrationService.SetDevices(req.MeasureDeviceID, req.PressureDeviceID); err != nil {
+	if err := s.calibrationService.SetMeasureDevices(measureDevIDs, req.PressureDeviceID); err != nil {
 		writeError(w, err)
 		return
 	}
@@ -164,6 +169,33 @@ func (s *apiServer) calibrationResolveAlarmHandler(w http.ResponseWriter, r *htt
 	}
 
 	if err := s.calibrationService.ResolveAlarm(req.Decision); err != nil {
+		writeError(w, err)
+		return
+	}
+
+	writeSuccess(w, http.StatusOK, map[string]string{"status": "ok"})
+}
+
+// skipDeviceRequest 跳过指定设备的请求体。
+type skipDeviceRequest struct {
+	DeviceID string `json:"deviceId"`
+	Reason   string `json:"reason"`
+}
+
+// calibrationSkipDeviceHandler 用户选择永久跳过指定计量设备。
+func (s *apiServer) calibrationSkipDeviceHandler(w http.ResponseWriter, r *http.Request) {
+	req, err := decodeJSON[skipDeviceRequest](r)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+
+	if req.DeviceID == "" {
+		writeError(w, apperrors.ErrInvalidArgument)
+		return
+	}
+
+	if err := s.calibrationService.ResolveSkipDevice(req.DeviceID, req.Reason); err != nil {
 		writeError(w, err)
 		return
 	}

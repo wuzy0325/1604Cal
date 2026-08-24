@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"sync"
 	"time"
 
 	"cal1604/internal/application/session"
@@ -137,7 +138,7 @@ func (s *Service) ManualPressurize(ctx context.Context, pointIndex int) error {
 
 // ManualCollect 对指定 measurement 点执行一次按点采集。
 func (s *Service) ManualCollect(ctx context.Context, pointIndex int) error {
-	measureDriver, point, channels, averageCount, totalPoints, err := s.prepareCollectStep(pointIndex)
+	measureDrivers, point, channels, averageCount, totalPoints, err := s.prepareCollectStep(pointIndex)
 	if err != nil {
 		return err
 	}
@@ -147,11 +148,65 @@ func (s *Service) ManualCollect(ctx context.Context, pointIndex int) error {
 		return err
 	}
 
+	// 单设备路径：保持原逻辑
+	if len(measureDrivers) <= 1 {
+		for _, measureDriver := range measureDrivers {
+			flattened, err := s.collectSamplesFromDriver(ctx, measureDriver, channels, averageCount)
+			if err != nil {
+				return err
+			}
+			s.updatePointCollectedData(pointIndex, flattened, time.Now())
+			s.publish(events.EventMeasurementDataCollected, map[string]any{
+				"pointIndex": point.Index,
+				"channels":   channels,
+				"data":       flattened,
+			})
+		}
+		return s.finalizePointCollect(ctx, pointIndex, point, totalPoints)
+	}
+
+	// 多设备路径：并行采集
+	results := make(map[string][]float64, len(measureDrivers))
+	var mu sync.Mutex
+	var wg sync.WaitGroup
+	for devID, drv := range measureDrivers {
+		wg.Add(1)
+		go func(id string, d device.MeasureDriver) {
+			defer wg.Done()
+			devCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+			defer cancel()
+			flattened, err := s.collectSamplesFromDriver(devCtx, d, channels, averageCount)
+			if err != nil {
+				s.recordDeviceCollectError(pointIndex, id, err)
+				return
+			}
+			mu.Lock()
+			results[id] = flattened
+			mu.Unlock()
+		}(devID, drv)
+	}
+	wg.Wait()
+
+	for devID, flattened := range results {
+		s.updatePointCollectedDataForDevice(pointIndex, devID, flattened, time.Now())
+		s.publish(events.EventMeasurementDataCollected, map[string]any{
+			"pointIndex": point.Index,
+			"channels":   channels,
+			"deviceId":   devID,
+			"data":       flattened,
+		})
+	}
+
+	return s.finalizePointCollect(ctx, pointIndex, point, totalPoints)
+}
+
+// collectSamplesFromDriver 从单个计量驱动采集平均样本并平铺。
+func (s *Service) collectSamplesFromDriver(ctx context.Context, measureDriver device.MeasureDriver, channels []int, averageCount int) ([]float64, error) {
 	samples := make([][]float64, 0, averageCount)
 	for i := 0; i < averageCount; i++ {
 		data, err := measureDriver.CollectData(ctx, channels)
 		if err != nil {
-			return fmt.Errorf("collect sample %d: %w", i+1, err)
+			return nil, fmt.Errorf("collect sample %d: %w", i+1, err)
 		}
 		samples = append(samples, append([]float64(nil), data...))
 		if i < averageCount-1 {
@@ -163,13 +218,11 @@ func (s *Service) ManualCollect(ctx context.Context, pointIndex int) error {
 	for _, sample := range samples {
 		flattened = append(flattened, sample...)
 	}
-	s.updatePointCollectedData(pointIndex, flattened, time.Now())
-	s.publish(events.EventMeasurementDataCollected, map[string]any{
-		"pointIndex": point.Index,
-		"channels":   channels,
-		"data":       flattened,
-	})
+	return flattened, nil
+}
 
+// finalizePointCollect 完成单点采集后的状态迁移与报警检查。
+func (s *Service) finalizePointCollect(ctx context.Context, pointIndex int, point domain.PressurePoint, totalPoints int) error {
 	// 采集后自动检查报警。
 	updatedPoint := s.getPoint(pointIndex)
 	if alarm, _ := s.CheckAlarm(updatedPoint); alarm != nil {
@@ -257,12 +310,16 @@ func (s *Service) preparePressureStep(pointIndex int) (device.PressureDriver, do
 	return pressureDriver, s.points[pointIndex-1], stableWaitMs, stabilityTimeoutMs, nil
 }
 
-func (s *Service) prepareCollectStep(pointIndex int) (device.MeasureDriver, domain.PressurePoint, []int, int, int, error) {
+func (s *Service) prepareCollectStep(pointIndex int) (map[string]device.MeasureDriver, domain.PressurePoint, []int, int, int, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	measureDriver := s.sess.MeasureDriver()
-	if measureDriver == nil {
+	measureDrivers := s.sess.MeasureDrivers()
+	// 过滤已跳过的设备
+	for devID := range s.skippedDevices {
+		delete(measureDrivers, devID)
+	}
+	if len(measureDrivers) == 0 {
 		return nil, domain.PressurePoint{}, nil, 0, 0, session.ErrMeasureDeviceNotSet
 	}
 	if pointIndex < 1 || pointIndex > len(s.points) {
@@ -277,7 +334,7 @@ func (s *Service) prepareCollectStep(pointIndex int) (device.MeasureDriver, doma
 		averageCount = 1
 	}
 
-	return measureDriver, s.points[pointIndex-1], channels, averageCount, len(s.points), nil
+	return measureDrivers, s.points[pointIndex-1], channels, averageCount, len(s.points), nil
 }
 
 func (s *Service) transitionTo(state domain.SessionState) error {
@@ -354,6 +411,84 @@ func (s *Service) updatePointCollectedData(pointIndex int, data []float64, colle
 	s.mu.Unlock()
 
 	s.publish(events.EventMeasurementPointStatus, point)
+}
+
+// updatePointCollectedDataForDevice 把指定计量设备的采集结果写入压力点的设备维度数据。
+// 单设备场景（points 中仅一台设备绑定）同时回填 CollectedData 兼容旧字段。
+func (s *Service) updatePointCollectedDataForDevice(pointIndex int, devID string, data []float64, collectedAt time.Time) {
+	s.mu.Lock()
+	if pointIndex < 1 || pointIndex > len(s.points) {
+		s.mu.Unlock()
+		return
+	}
+	timestamp := collectedAt.UTC().Format(time.RFC3339)
+	clonedData := append([]float64(nil), data...)
+
+	point := &s.points[pointIndex-1]
+	if point.CollectedByDevice == nil {
+		point.CollectedByDevice = make(map[string]domain.DevicePointData)
+	}
+	point.CollectedByDevice[devID] = domain.DevicePointData{
+		DeviceID:    devID,
+		Collected:   clonedData,
+		Status:      domain.PointStatusCompleted,
+		CollectTime: timestamp,
+	}
+
+	// 单设备兼容：若当前仅绑定一台计量设备，同时写入旧字段。
+	if len(s.sess.MeasureDeviceIDs()) <= 1 {
+		point.CollectedData = append([]float64(nil), clonedData...)
+		point.CollectTime = timestamp
+		point.Status = domain.PointStatusCompleted
+	}
+
+	if s.session != nil && pointIndex <= len(s.session.Points) {
+		sp := &s.session.Points[pointIndex-1]
+		if sp.CollectedByDevice == nil {
+			sp.CollectedByDevice = make(map[string]domain.DevicePointData)
+		}
+		sp.CollectedByDevice[devID] = domain.DevicePointData{
+			DeviceID:    devID,
+			Collected:   append([]float64(nil), clonedData...),
+			Status:      domain.PointStatusCompleted,
+			CollectTime: timestamp,
+		}
+		if len(s.sess.MeasureDeviceIDs()) <= 1 {
+			sp.CollectedData = append([]float64(nil), clonedData...)
+			sp.CollectTime = timestamp
+			sp.Status = domain.PointStatusCompleted
+		}
+	}
+
+	snapshot := *point
+	s.mu.Unlock()
+
+	s.publish(events.EventMeasurementPointStatus, snapshot)
+}
+
+// recordDeviceCollectError 记录指定设备在压力点的采集失败状态。
+func (s *Service) recordDeviceCollectError(pointIndex int, devID string, err error) {
+	s.mu.Lock()
+	if pointIndex < 1 || pointIndex > len(s.points) {
+		s.mu.Unlock()
+		return
+	}
+	point := &s.points[pointIndex-1]
+	if point.CollectedByDevice == nil {
+		point.CollectedByDevice = make(map[string]domain.DevicePointData)
+	}
+	point.CollectedByDevice[devID] = domain.DevicePointData{
+		DeviceID: devID,
+		Status:   domain.PointStatusError,
+		Error:    err.Error(),
+	}
+	s.mu.Unlock()
+
+	s.publish(events.EventPointError, map[string]any{
+		"pointIndex": pointIndex,
+		"deviceId":   devID,
+		"error":      err.Error(),
+	})
 }
 
 // waitForMeasurementStability 等待压力稳定，通过 StabilityMonitor 判定并发布 SSE 进度事件。

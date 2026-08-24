@@ -36,11 +36,12 @@ export function useCalibrationUI() {
   const connectPressDevice = async (id: string) => handleResult(() => store.connectPressDevice(id), '')
   const disconnectPressDevice = async (id: string) => handleResult(() => store.disconnectPressDevice(id), '')
   const resolveAlarm = async (decision: 'continue' | 'skip' | 'recollect' | 'stop') => handleResult(() => store.resolveAlarm(decision), M.ALARM_RESOLVED)
+  const skipDevice = async (deviceId: string, reason: string) => handleResult(() => store.skipDevice(deviceId, reason), M.SKIP_DEVICE_OK)
 
   return {
     startCalibration, pauseCalibration, resumeCalibration, stopCalibration,
     fitData, endCalibration, resetCollection,
     connectDevice1604, disconnectDevice1604, connectPressDevice, disconnectPressDevice,
-    resolveAlarm,
+    resolveAlarm, skipDevice,
   }
 }

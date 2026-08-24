@@ -33,8 +33,10 @@ var allChannels = []int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16}
 const maxCollectedRows = 2000
 
 // CollectedRow 单次采集的数据行。
+// DeviceID 标识该行数据所属的计量设备（单设备场景为空，保持兼容）。
 type CollectedRow struct {
 	Timestamp string             `json:"timestamp"`
+	DeviceID  string             `json:"deviceId,omitempty"`
 	Channels  map[string]float64 `json:"channels"`
 }
 
@@ -70,6 +72,9 @@ type Service struct {
 	alarmConfig  domain.AlarmConfig
 	alarmPending bool
 	currentAlarm *Alarm
+
+	// skippedDevices 记录本批次中被用户永久跳过的计量设备（deviceID -> 跳过原因）。
+	skippedDevices map[string]string
 
 	// alarmCh 用于在自动采集过程中阻塞等待用户确认报警。
 	alarmCh chan string
@@ -107,6 +112,7 @@ func NewService(sess *session.Service, publisher EventPublisher, coordinator *wo
 		publish:                 publisher,
 		stabilityTimeoutCh:      make(chan string, 1),
 		startPrerequisiteConfig: defaultStartPrerequisiteConfig(),
+		skippedDevices:          make(map[string]string),
 	}
 }
 
@@ -445,50 +451,63 @@ func (s *Service) startCollectLoop(_ context.Context) {
 				s.mu.Unlock()
 
 				pollCtx := device.WithPollContext(collectCtx)
-				data, err := s.sess.ReadMeasureData(pollCtx, s.sess.Token())
-				if err != nil {
-					consecutiveErrors++
-					if consecutiveErrors >= maxConsecutiveErrors {
-						s.publish(events.EventMeasurementStateChanged, map[string]any{
-							"state": string(domain.SessionStateError),
-							"error": fmt.Sprintf("连续%d次采集失败: %v", consecutiveErrors, err),
-						})
-						s.mu.Lock()
-						_ = s.coordinator.Machine().Transition(domain.SessionStateError)
-						s.mu.Unlock()
-						return
+				deviceIDs := s.sess.MeasureDeviceIDs()
+				if len(deviceIDs) == 0 {
+					deviceIDs = []string{""}
+				}
+				allOK := true
+				for _, devID := range deviceIDs {
+					data, err := s.sess.ReadMeasureDataForDevice(pollCtx, s.sess.Token(), devID)
+					if err != nil {
+						allOK = false
+						consecutiveErrors++
+						if consecutiveErrors >= maxConsecutiveErrors {
+							s.publish(events.EventMeasurementStateChanged, map[string]any{
+								"state": string(domain.SessionStateError),
+								"error": fmt.Sprintf("连续%d次采集失败: %v", consecutiveErrors, err),
+							})
+							s.mu.Lock()
+							_ = s.coordinator.Machine().Transition(domain.SessionStateError)
+							s.mu.Unlock()
+							return
+						}
+						continue
 					}
+					consecutiveErrors = 0
+
+					// 构建通道映射（始终包含全部16通道）
+					chMap := make(map[string]float64, 16)
+					for i, ch := range allChannels {
+						if i < len(data) {
+							chMap[fmt.Sprintf("%d", ch)] = data[i]
+						}
+					}
+
+					row := CollectedRow{
+						Timestamp: time.Now().UTC().Format(time.RFC3339),
+						DeviceID:  devID,
+						Channels:  chMap,
+					}
+
+					s.mu.Lock()
+					s.rows = append(s.rows, row)
+					// 超出上限时保留最近 maxCollectedRows 行：copy 将尾部覆盖到头部再截断长度，
+					// 避免单纯 reslice 导致底层数组仍引用已丢弃的旧数据而无法被 GC 回收。
+					if len(s.rows) > maxCollectedRows {
+						copy(s.rows, s.rows[len(s.rows)-maxCollectedRows:])
+						s.rows = s.rows[:maxCollectedRows]
+					}
+					s.mu.Unlock()
+
+					s.publish(events.EventMeasurementDataUpdated, map[string]any{
+						"timestamp": row.Timestamp,
+						"deviceId":  devID,
+						"channels":  chMap,
+					})
+				}
+				if !allOK {
 					continue
 				}
-				consecutiveErrors = 0
-
-				// 构建通道映射（始终包含全部16通道）
-				chMap := make(map[string]float64, 16)
-				for i, ch := range allChannels {
-					if i < len(data) {
-						chMap[fmt.Sprintf("%d", ch)] = data[i]
-					}
-				}
-
-				row := CollectedRow{
-					Timestamp: time.Now().UTC().Format(time.RFC3339),
-					Channels:  chMap,
-				}
-
-				s.mu.Lock()
-				s.rows = append(s.rows, row)
-				// 超出上限时保留最近 maxCollectedRows 行：copy 将尾部覆盖到头部再截断长度，
-				// 避免单纯 reslice 导致底层数组仍引用已丢弃的旧数据而无法被 GC 回收。
-				if len(s.rows) > maxCollectedRows {
-					copy(s.rows, s.rows[len(s.rows)-maxCollectedRows:])
-					s.rows = s.rows[:maxCollectedRows]
-				}
-				s.mu.Unlock()
-
-				s.publish(events.EventMeasurementDataUpdated, map[string]any{
-					"timestamp": row.Timestamp,
-					"channels":  chMap,
-				})
 			}
 		}
 	}()

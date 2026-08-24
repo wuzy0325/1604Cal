@@ -1,4 +1,5 @@
 import { apiGet, apiPost } from './client'
+import type { DevicePointDataDTO } from '@/types/calibration'
 
 export interface CollectedRow {
   timestamp: string
@@ -70,6 +71,7 @@ export interface MeasurementPoint {
   direction: string
   status: string
   collectedData?: number[]
+  collectedByDevice?: Record<string, DevicePointDataDTO>
   actualPressure?: number
   collectTime?: string
   errorMessage?: string
@@ -122,6 +124,11 @@ export type AlarmDecision = 'continue' | 'recollect' | 'skip' | 'stop'
 /** 处理报警 */
 export async function resolveMeasurementAlarm(decision: AlarmDecision): Promise<void> {
   await apiPost('/measurement/alarm/resolve', { decision })
+}
+
+/** 永久跳过指定计量设备（从本批次剩余压力点移除） */
+export async function skipMeasurementDevice(deviceId: string, reason: string): Promise<void> {
+  await apiPost('/measurement/skip-device', { deviceId, reason })
 }
 
 /** 自动按点采集（逐点打压→稳定→采集） */

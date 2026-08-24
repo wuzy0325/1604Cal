@@ -347,8 +347,8 @@ const handleZeroCalibrate = async () => {
       .map((ch, i) => `CH${ch}=${offsets[i] ?? 0}`)
       .join('，')
     ElMessage.success(`校零完成：${preview}`)
-  } catch (err: any) {
-    ElMessage.error(err?.message || '校零失败，请检查设备连接')
+  } catch (err) {
+    ElMessage.error((err as Error | undefined)?.message || '校零失败，请检查设备连接')
   } finally {
     zeroCalibPending.value = false
   }

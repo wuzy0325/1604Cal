@@ -62,6 +62,11 @@ export async function collectData(pointIndex: number): Promise<number[]> {
   return (await apiPost<{ data: number[] }>('/calibration/collect', { pointIndex })).data
 }
 
+/** 永久跳过指定计量设备（从本批次剩余压力点移除） */
+export async function skipCalibrationDevice(deviceId: string, reason: string): Promise<void> {
+  await apiPost('/calibration/skip-device', { deviceId, reason })
+}
+
 /** 执行拟合 */
 export async function fitData(): Promise<FittingResultDTO> {
   return apiPost<FittingResultDTO>('/calibration/fit')

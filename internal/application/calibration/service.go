@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"sort"
 	"sync"
 	"time"
 
@@ -78,7 +79,8 @@ type Service struct {
 	driverProvider device.ActiveDriverProvider
 	sessionService *session.Service
 
-	measureDriver  device.MeasureDriver
+	measureDrivers map[string]device.MeasureDriver
+	measureDevIDs  []string
 	pressureDriver device.PressureDriver
 	measureDevID   string
 	pressureDevID  string
@@ -88,6 +90,9 @@ type Service struct {
 	pressurePoints     []domain.PressurePoint
 	currentPoint       int
 	calibrationSession *CalibrationSession
+
+	// skippedDevices 记录本批次中被用户永久跳过的计量设备（deviceID -> 跳过原因）。
+	skippedDevices map[string]string
 
 	// autoCollectionCtx 用于控制自动采集 goroutine 的生命周期。
 	autoCollectionCtx    context.Context
@@ -99,6 +104,9 @@ type Service struct {
 	alarmMu      sync.Mutex
 	alarmCh      chan string
 	alarmPending bool
+
+	// skipDeviceCh 用于在报警等待期间接收"跳过指定设备"的用户决策。
+	skipDeviceCh chan string
 
 	// stabilityTimeoutCh 用于等待前端用户对稳定超时的决定。
 	stabilityTimeoutCh chan string
@@ -128,7 +136,10 @@ func NewService(
 		driverProvider:          driverProvider,
 		sessionService:          sessionSvc,
 		stabilityTimeoutCh:      make(chan string, 1),
+		skipDeviceCh:            make(chan string, 1),
 		startPrerequisiteConfig: defaultStartPrerequisiteConfig(),
+		measureDrivers:          make(map[string]device.MeasureDriver),
+		skippedDevices:          make(map[string]string),
 	}
 }
 
@@ -139,12 +150,45 @@ func (s *Service) SetStartPrerequisiteConfig(cfg StartPrerequisiteConfig) {
 	s.startPrerequisiteConfig = cfg
 }
 
-// getMeasureDriver 从 session 服务获取计量驱动；session 为 nil 时回退到本地字段。
+// getMeasureDriver 返回首个计量驱动；session 为 nil 时回退到本地字段。
+// 注意：调用方必须持有 s.mu（或保证字段不被并发修改）。
 func (s *Service) getMeasureDriver() device.MeasureDriver {
 	if s.sessionService != nil {
 		return s.sessionService.MeasureDriver()
 	}
-	return s.measureDriver
+	if len(s.measureDevIDs) == 0 {
+		return nil
+	}
+	return s.measureDrivers[s.measureDevIDs[0]]
+}
+
+// getMeasureDrivers 返回全部计量驱动（设备 ID → 驱动）。
+// 优先从 session 服务获取，session 为 nil 时回退到本地字段。
+// 注意：调用方必须持有 s.mu（或保证字段不被并发修改）。
+func (s *Service) getMeasureDrivers() map[string]device.MeasureDriver {
+	if s.sessionService != nil {
+		return s.sessionService.MeasureDrivers()
+	}
+	result := make(map[string]device.MeasureDriver, len(s.measureDrivers))
+	for k, v := range s.measureDrivers {
+		result[k] = v
+	}
+	return result
+}
+
+// isDeviceBound 判断指定设备是否属于当前批次绑定集合。
+// 有 sessionService 时以会话绑定为准，否则以本地驱动表为准。调用方必须持有 s.mu。
+func (s *Service) isDeviceBound(deviceID string) bool {
+	if s.sessionService != nil {
+		for _, id := range s.sessionService.MeasureDeviceIDs() {
+			if id == deviceID {
+				return true
+			}
+		}
+		return false
+	}
+	_, ok := s.measureDrivers[deviceID]
+	return ok
 }
 
 // getPressureDriver 从 session 服务获取打压驱动；session 为 nil 时回退到本地字段。
@@ -175,6 +219,8 @@ func (s *Service) StartCalibration(ctx context.Context) error {
 	// 在锁内提取所需配置
 	enforceValveGate := s.startPrerequisiteConfig.EnforceValveCalibration
 	measureDriver := s.getMeasureDriver()
+	measureDrivers := s.getMeasureDrivers()
+	measureDevIDs := append([]string(nil), s.measureDevIDs...)
 	avgCount := s.config.AverageCount
 	channels := s.config.Channels
 	pointCount := s.config.PointCount
@@ -189,7 +235,6 @@ func (s *Service) StartCalibration(ctx context.Context) error {
 		return fmt.Errorf("%w: %s", ErrInvalidStartState, s.coordinator.State())
 	}
 
-	calDev, calDevOK := measureDriver.(device.CalibrationCapable)
 	s.mu.Unlock()
 
 	// 阀门门禁：必须在锁外执行，避免 TCP I/O（最长 3s）阻塞会话锁，
@@ -208,11 +253,15 @@ func (s *Service) StartCalibration(ctx context.Context) error {
 		}
 	}
 
-	// WTN1604 开始多点校准（不持有锁，避免 I/O 阻塞影响其他操作）
-	if calDevOK {
+	// 每台支持校准的计量设备依次开始多点校准（不持有锁，避免 I/O 阻塞影响其他操作）
+	for devID, drv := range measureDrivers {
+		calDev, ok := drv.(device.CalibrationCapable)
+		if !ok {
+			continue
+		}
 		if err := calDev.StartCalibration(ctx, channels, pointCount, avgCount); err != nil {
 			s.coordinator.End()
-			return fmt.Errorf("start WTN1604 calibration: %w", err)
+			return fmt.Errorf("start WTN1604 calibration on %s: %w", devID, err)
 		}
 	}
 
@@ -224,6 +273,7 @@ func (s *Service) StartCalibration(ctx context.Context) error {
 		Config:           s.config,
 		Points:           s.pressurePoints,
 		MeasureDeviceID:  s.measureDevID,
+		MeasureDeviceIDs: measureDevIDs,
 		PressureDeviceID: s.pressureDevID,
 		Status:           "running",
 	}
@@ -300,13 +350,15 @@ func (s *Service) EndCalibration(ctx context.Context) error {
 
 	// 先获取驱动引用（持有锁），I/O 操作在锁外执行
 	s.mu.Lock()
-	calDev, _ := s.getMeasureDriver().(device.CalibrationCapable)
+	measureDrivers := s.getMeasureDrivers()
 	pressureDriver := s.getPressureDriver()
 	s.mu.Unlock()
 
-	// WTN1604 结束校准（不持有锁，避免 I/O 阻塞影响其他操作）
-	if calDev != nil {
-		_ = calDev.EndCalibration(ctx)
+	// 每台支持校准的计量设备依次结束校准（不持有锁，避免 I/O 阻塞影响其他操作）
+	for _, drv := range measureDrivers {
+		if calDev, ok := drv.(device.CalibrationCapable); ok {
+			_ = calDev.EndCalibration(ctx)
+		}
 	}
 
 	// 停止压力控制
@@ -519,7 +571,9 @@ func (s *Service) collectPoint(ctx context.Context, pointIndex int) error {
 }
 
 // checkAlarm 检查采集数据是否触发报警，若触发则阻塞等待用户决策。
-// 返回决策动作：continue/skip/recollect/stop。
+// 多设备场景：优先检测设备级采集失败（采集/超时/断开），其次对每台设备独立评估超限通道，
+// 任一设备触发即报警，事件携带 deviceId。设备维度数据在锁内快照，避免并发写竞态。
+// 返回决策动作：continue/skip/recollect/stop，或设备级跳过（由 skipDeviceCh 接收）。
 func (s *Service) checkAlarm(ctx context.Context, pointIndex int, data []float64) (string, error) {
 	s.mu.Lock()
 	point := s.pressurePoints[pointIndex-1]
@@ -527,12 +581,87 @@ func (s *Service) checkAlarm(ctx context.Context, pointIndex int, data []float64
 	channels := s.config.Channels
 	maxPressure := s.config.MaxPressure
 	minPressure := s.config.MinPressure
+	collectedByDevice := s.snapshotCollectedByDeviceLocked(pointIndex)
 	s.mu.Unlock()
 
-	if len(data) == 0 {
+	// 单设备兼容：data 为 Collect 返回的单设备数据，直接走原逻辑
+	if len(collectedByDevice) == 0 {
+		if len(data) == 0 {
+			return workflow.AlarmDecisionContinue, nil
+		}
+		triggered, overLimit, maxDev, details := s.evaluateChannels(alarmConfig, point.TargetPressure, maxPressure, minPressure, channels, data)
+		if !triggered {
+			return workflow.AlarmDecisionContinue, nil
+		}
+		return s.awaitAlarmDecision(ctx, pointIndex, point, "", overLimit, maxDev, details, "")
+	}
+
+	// 按设备 ID 排序保证确定性
+	deviceIDs := make([]string, 0, len(collectedByDevice))
+	for devID := range collectedByDevice {
+		deviceIDs = append(deviceIDs, devID)
+	}
+	sort.Strings(deviceIDs)
+
+	// 第一遍：设备级采集失败优先报警（采集/超时/断开，Collected 为空且带错误状态）。
+	for _, devID := range deviceIDs {
+		d := collectedByDevice[devID]
+		if d.Status == domain.PointStatusError || d.Error != "" {
+			return s.awaitAlarmDecision(ctx, pointIndex, point, devID, nil, 0, nil, d.Error)
+		}
+	}
+
+	// 第二遍：逐设备评估通道超限。
+	var triggeredDeviceID string
+	var triggeredOverLimit []int
+	var triggeredMaxDev float64
+	var triggeredDetails map[int]float64
+
+	for _, devID := range deviceIDs {
+		d := collectedByDevice[devID]
+		if len(d.Collected) == 0 {
+			continue
+		}
+		triggered, overLimit, maxDev, details := s.evaluateChannels(alarmConfig, point.TargetPressure, maxPressure, minPressure, channels, d.Collected)
+		if triggered {
+			triggeredDeviceID = devID
+			triggeredOverLimit = overLimit
+			triggeredMaxDev = maxDev
+			triggeredDetails = details
+			break
+		}
+	}
+
+	if triggeredDeviceID == "" {
 		return workflow.AlarmDecisionContinue, nil
 	}
 
+	return s.awaitAlarmDecision(ctx, pointIndex, point, triggeredDeviceID, triggeredOverLimit, triggeredMaxDev, triggeredDetails, "")
+}
+
+// snapshotCollectedByDeviceLocked 在锁内深拷贝指定压力点的设备维度数据。
+// 调用方必须持有 s.mu。返回的快照可安全地在锁外遍历，避免与 ResolveSkipDevice 并发写 map 产生竞态。
+func (s *Service) snapshotCollectedByDeviceLocked(pointIndex int) map[string]domain.DevicePointData {
+	if pointIndex < 1 || pointIndex > len(s.pressurePoints) {
+		return nil
+	}
+	src := s.pressurePoints[pointIndex-1].CollectedByDevice
+	if len(src) == 0 {
+		return nil
+	}
+	snap := make(map[string]domain.DevicePointData, len(src))
+	for k, v := range src {
+		cloned := v
+		if v.Collected != nil {
+			cloned.Collected = append([]float64(nil), v.Collected...)
+		}
+		snap[k] = cloned
+	}
+	return snap
+}
+
+// evaluateChannels 对单设备通道数据执行报警判定，返回是否触发、超限通道、最大偏差与详情。
+func (s *Service) evaluateChannels(alarmConfig domain.AlarmConfig, target, maxPressure, minPressure float64, channels []int, data []float64) (bool, []int, float64, map[int]float64) {
 	// 多通道报警判定
 	channelData := make(map[int]float64)
 	for i, ch := range channels {
@@ -541,11 +670,16 @@ func (s *Service) checkAlarm(ctx context.Context, pointIndex int, data []float64
 		}
 	}
 
-	result := defaultAlarmService.EvaluateMultiChannel(alarmConfig, point.TargetPressure, maxPressure, minPressure, channelData)
+	result := defaultAlarmService.EvaluateMultiChannel(alarmConfig, target, maxPressure, minPressure, channelData)
 	if !result.Triggered {
-		return workflow.AlarmDecisionContinue, nil
+		return false, nil, 0, nil
 	}
+	return true, result.OverLimitChannels, result.MaxDeviation, result.ChannelDetails
+}
 
+// awaitAlarmDecision 触发报警后进入等待用户决策状态。
+// deviceID 为空表示单设备场景。deviceErr 非空表示该设备采集失败（采集/超时/断开）。
+func (s *Service) awaitAlarmDecision(ctx context.Context, pointIndex int, point domain.PressurePoint, deviceID string, overLimit []int, maxDev float64, details map[int]float64, deviceErr string) (string, error) {
 	// 触发报警，进入等待报警确认状态
 	if err := s.coordinator.Machine().Transition(domain.SessionStateAwaitAlarmResolution); err != nil {
 		// 若状态机不支持该迁移，记录日志后继续（不阻塞采集流程）
@@ -560,15 +694,38 @@ func (s *Service) checkAlarm(ctx context.Context, pointIndex int, data []float64
 	alarmCh := s.alarmCh
 	s.alarmMu.Unlock()
 
-	s.publish("alarm.triggered", map[string]any{
+	payload := map[string]any{
 		"pointIndex":        pointIndex,
 		"targetPressure":    point.TargetPressure,
-		"overLimitChannels": result.OverLimitChannels,
-		"maxDeviation":      result.MaxDeviation,
-		"channelDetails":    result.ChannelDetails,
-	})
+		"overLimitChannels": overLimit,
+		"maxDeviation":      maxDev,
+		"channelDetails":    details,
+	}
+	if deviceID != "" {
+		payload["deviceId"] = deviceID
+	}
+	if deviceErr != "" {
+		payload["error"] = deviceErr
+	}
+	s.publish("alarm.triggered", payload)
 
 	select {
+	case deviceID2 := <-s.skipDeviceCh:
+		// 用户选择跳过指定设备：整批继续，但该设备从剩余流程移除。
+		s.alarmMu.Lock()
+		s.alarmPending = false
+		s.alarmCh = nil
+		s.alarmMu.Unlock()
+		_ = s.coordinator.Machine().Transition(domain.SessionStatePointDone)
+		s.publishSessionState()
+		s.publish(events.EventCalibrationAlarmResolved, map[string]any{
+			"pointIndex": pointIndex,
+			"decision":   "skip_device",
+			"deviceId":   deviceID2,
+			"triggered":  true,
+		})
+		return workflow.AlarmDecisionContinue, nil
+
 	case decision := <-alarmCh:
 		s.alarmMu.Lock()
 		s.alarmPending = false
@@ -582,6 +739,7 @@ func (s *Service) checkAlarm(ctx context.Context, pointIndex int, data []float64
 		s.publish(events.EventCalibrationAlarmResolved, map[string]any{
 			"pointIndex": pointIndex,
 			"decision":   decision,
+			"deviceId":   deviceID,
 			"triggered":  true,
 		})
 
@@ -632,6 +790,49 @@ func (s *Service) ResolveAlarm(decision string) error {
 	default:
 		return fmt.Errorf("alarm channel blocked")
 	}
+}
+
+// ResolveSkipDevice 用户选择永久跳过指定计量设备。
+// 该设备从本批次剩余压力点中移除，已完成压力点数据保留并标记设备级 skipped + 原因。
+// 通过 skipDeviceCh 通知阻塞中的采集循环继续。
+func (s *Service) ResolveSkipDevice(deviceID, reason string) error {
+	s.mu.Lock()
+	if !s.isDeviceBound(deviceID) {
+		s.mu.Unlock()
+		return fmt.Errorf("device %s not bound in this batch", deviceID)
+	}
+	if _, already := s.skippedDevices[deviceID]; already {
+		s.mu.Unlock()
+		return fmt.Errorf("device %s already skipped", deviceID)
+	}
+	s.skippedDevices[deviceID] = reason
+	// 剩余压力点（含当前点）标记该设备 skipped + 原因；已完成点的数据保留。
+	for i := range s.pressurePoints {
+		p := &s.pressurePoints[i]
+		if p.CollectedByDevice == nil {
+			p.CollectedByDevice = make(map[string]domain.DevicePointData)
+		}
+		if d, ok := p.CollectedByDevice[deviceID]; ok && d.Status == domain.PointStatusCompleted {
+			continue
+		}
+		p.CollectedByDevice[deviceID] = domain.DevicePointData{
+			DeviceID:   deviceID,
+			Status:     domain.PointStatusSkipped,
+			SkipReason: reason,
+		}
+	}
+	s.mu.Unlock()
+
+	s.publish(events.EventPointSkipped, map[string]any{
+		"deviceId":   deviceID,
+		"skipReason": reason,
+	})
+
+	select {
+	case s.skipDeviceCh <- deviceID:
+	default:
+	}
+	return nil
 }
 
 // RetryPoint 重试指定压力点，将其状态重置为 pending 并重新采集。

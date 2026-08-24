@@ -53,13 +53,23 @@
         >
           {{ action.label }}
         </button>
+
+        <!-- 设备级报警（多设备采集失败/超限）：提供"跳过该设备"动作 -->
+        <button
+          v-if="alarmDeviceId && calibrationStore.sessionState === 'await_alarm_resolution'"
+          type="button"
+          class="ctrl-btn btn-amber"
+          @click="handleSkipDevice"
+        >
+          跳过该设备
+        </button>
       </div>
     </div>
   </section>
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, inject, ref } from 'vue'
 import {
   VideoPlay,
   VideoPause,
@@ -74,9 +84,14 @@ import { ElMessageBox } from 'element-plus'
 import { useCalibrationStore } from '@/stores/calibration'
 import type { SecondaryAction } from '@/stores/calibration/types'
 import { useCalibrationUI } from '@/composables/useCalibrationUI'
+import { alarmEventKey, type AlarmEventData } from '@/composables/useCalibrationSync'
 
 const calibrationStore = useCalibrationStore()
 const calibrationUI = useCalibrationUI()
+
+// 当前报警事件：携带 deviceId 时表示设备级报警（采集失败/超限），可提供"跳过该设备"动作
+const alarmEvent = inject(alarmEventKey, ref<AlarmEventData | null>(null))
+const alarmDeviceId = computed(() => alarmEvent?.value?.deviceId || '')
 
 // 图标名 → 组件映射，与 primaryAction.icon 字符串对应
 const iconMap: Record<string, unknown> = {
@@ -159,6 +174,22 @@ async function dispatchSecondary(action: SecondaryAction) {
     case 'alarm-recollect': await calibrationUI.resolveAlarm('recollect'); break
     case 'alarm-stop':      await calibrationUI.resolveAlarm('stop'); break
   }
+}
+
+// 设备级报警时跳过指定设备：确认后永久从本批次剩余流程移除该设备。
+async function handleSkipDevice() {
+  const deviceId = alarmDeviceId.value
+  if (!deviceId) return
+  try {
+    await ElMessageBox.confirm(
+      `确认永久跳过该计量设备？后续压力点将不再采集该设备，已完成数据将保留。`,
+      '跳过设备',
+      { confirmButtonText: '跳过', cancelButtonText: '取消', type: 'warning' }
+    )
+  } catch {
+    return
+  }
+  await calibrationUI.skipDevice(deviceId, '人工放弃')
 }
 </script>
 

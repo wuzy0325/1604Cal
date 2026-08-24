@@ -14,7 +14,18 @@ export interface PressurePoint {
   status: 'pending' | 'pressurizing' | 'stabilizing' | 'collecting' | 'completed' | 'error'
   direction?: 'forward' | 'backward'
   collectedData?: number[]
+  collectedByDevice?: Record<string, DevicePointData>
   actualPressure?: number
+}
+
+/** 单台计量设备在某个压力点的采集结果与状态 */
+export interface DevicePointData {
+  deviceId: string
+  collected?: number[]
+  status: 'completed' | 'error' | 'skipped'
+  collectTime?: string
+  skipReason?: string
+  error?: string
 }
 
 import type { PressureMode } from '@/types/calibration'

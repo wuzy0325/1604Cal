@@ -813,6 +813,45 @@ func TestMeasurementAlarmCheckTriggersAlarm(t *testing.T) {
 	}
 }
 
+// TestMeasurementAlarmDeviceErrorTriggers 验证多设备场景下某台设备采集失败会触发报警并携带 deviceId。
+func TestMeasurementAlarmDeviceErrorTriggers(t *testing.T) {
+	svc, _ := setupMeasurementService()
+	svc.SetConfig(domain.WorkflowConfig{
+		MinPressure:    0,
+		MaxPressure:    100,
+		PrecisionLevel: 0.0004,
+	})
+	svc.SetAlarmConfig(domain.AlarmConfig{
+		Enabled:         true,
+		EnabledChannels: []int{1},
+		ConfirmOnAlarm:  true,
+	})
+
+	point := domain.PressurePoint{
+		Index:          1,
+		TargetPressure: 100,
+		ActualPressure: float64Ptr(100.05),
+		CollectedByDevice: map[string]domain.DevicePointData{
+			"dev-a": {DeviceID: "dev-a", Collected: []float64{100.05}, Status: domain.PointStatusCompleted},
+			"dev-b": {DeviceID: "dev-b", Status: domain.PointStatusError, Error: "collect sample 1: timeout"},
+		},
+	}
+
+	alarm, err := svc.CheckAlarm(point)
+	if err != nil {
+		t.Fatalf("CheckAlarm: %v", err)
+	}
+	if alarm == nil {
+		t.Fatal("expected alarm for device error")
+	}
+	if alarm.DeviceID != "dev-b" {
+		t.Fatalf("expected deviceId dev-b, got %q", alarm.DeviceID)
+	}
+	if alarm.ErrorMessage == "" {
+		t.Fatal("expected error message on alarm")
+	}
+}
+
 func TestMeasurementAlarmBlocksWhenConfirmRequired(t *testing.T) {
 	svc, _ := setupMeasurementService()
 	svc.SetConfig(domain.WorkflowConfig{

@@ -125,6 +125,23 @@
             {{ collectedCount }}/{{ tableData.length }} 已采集
           </span>
         </div>
+        <div
+          v-if="deviceOptions.length > 1"
+          class="device-tabs"
+        >
+          <el-radio-group
+            v-model="activeDeviceId"
+            size="small"
+          >
+            <el-radio-button
+              v-for="opt in deviceOptions"
+              :key="opt.value"
+              :value="opt.value"
+            >
+              {{ opt.label }}
+            </el-radio-button>
+          </el-radio-group>
+        </div>
       </div>
 
       <div class="table-body data-table-body">
@@ -153,6 +170,28 @@
           >
             <template #default="{ row }">
               {{ row.actualPressure?.toFixed(2) || '--' }}
+            </template>
+          </el-table-column>
+          <el-table-column
+            label="设备状态"
+            width="110"
+          >
+            <template #default="{ row }">
+              <el-tag
+                v-if="row.deviceStatus === 'skipped'"
+                type="warning"
+                size="small"
+              >
+                已跳过
+              </el-tag>
+              <el-tag
+                v-else-if="row.deviceStatus === 'error'"
+                type="danger"
+                size="small"
+              >
+                异常
+              </el-tag>
+              <span v-else>--</span>
             </template>
           </el-table-column>
           <el-table-column
@@ -187,15 +226,55 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Operation } from '@element-plus/icons-vue'
 import { useCalibrationStore } from '@/stores/calibration'
+import { useDeviceInventoryStore } from '@/stores/device/inventoryStore'
 import { type SessionState, ControlMode } from '@/types/calibration'
+import { type DevicePointData } from '@/stores/calibration/types'
 
 const calibrationStore = useCalibrationStore()
+const deviceStore = useDeviceInventoryStore()
 
 const precision = computed(() => calibrationStore.calibrationParams.precision || 2)
+
+// 设备维度：多设备时按设备切换展示
+const activeDeviceId = ref('')
+
+// 设备选项：优先取压力点携带的设备维度数据中的设备 ID，缺失时用设备清单
+const deviceOptions = computed(() => {
+  const ids = new Map<string, string>()
+  for (const p of calibrationStore.pressurePoints) {
+    if (p.collectedByDevice) {
+      for (const devId of Object.keys(p.collectedByDevice)) {
+        const dev = deviceStore.measureDevices.find(d => d.id === devId)
+        ids.set(devId, dev?.name || dev?.model || devId)
+      }
+    }
+  }
+  if (ids.size === 0 && deviceStore.measureDevices.length > 0) {
+    for (const dev of deviceStore.measureDevices) {
+      ids.set(dev.id, dev.name || dev.model || dev.id)
+    }
+  }
+  return Array.from(ids.entries()).map(([value, label]) => ({ value, label }))
+})
+
+// 设备选项异步加载完成后自动选中首个设备（避免初始化时选项为空导致活动设备留空）
+watch(
+  deviceOptions,
+  (options) => {
+    if (!activeDeviceId.value && options.length > 0) {
+      activeDeviceId.value = options[0].value
+    }
+    // 若活动设备已不在选项中（如设备被移除），回退到首个
+    if (activeDeviceId.value && !options.some(o => o.value === activeDeviceId.value)) {
+      activeDeviceId.value = options.length > 0 ? options[0].value : ''
+    }
+  },
+  { immediate: true }
+)
 
 // 测点状态
 const getPointStatusType = (status: string) => {
@@ -235,17 +314,33 @@ interface TableRow {
   targetValue: number
   channelValues: (number | undefined)[]
   actualPressure?: number
+  deviceStatus?: string
+}
+
+// 取指定压力点当前活动设备的通道数据
+function pointChannelValues(point: import('@/stores/calibration/types').PressurePoint): (number | undefined)[] {
+  if (point.collectedByDevice && activeDeviceId.value) {
+    const d = point.collectedByDevice[activeDeviceId.value]
+    if (d?.collected) return d.collected
+    return []
+  }
+  return point.collectedData || []
 }
 
 const tableData = computed<TableRow[]>(() =>
-  calibrationStore.pressurePoints.map(point => ({
-    id: point.id,
-    index: point.index,
-    status: point.status,
-    targetValue: point.targetPressure,
-    channelValues: point.collectedData || [],
-    actualPressure: point.actualPressure
-  }))
+  calibrationStore.pressurePoints.map(point => {
+    const devData: DevicePointData | undefined =
+      point.collectedByDevice && activeDeviceId.value ? point.collectedByDevice[activeDeviceId.value] : undefined
+    return {
+      id: point.id,
+      index: point.index,
+      status: point.status,
+      targetValue: point.targetPressure,
+      channelValues: pointChannelValues(point),
+      actualPressure: point.actualPressure,
+      deviceStatus: devData?.status
+    }
+  })
 )
 
 const collectedCount = computed(() =>
@@ -394,6 +489,18 @@ const handleTargetPressureChange = async (row: TableRow, val: string) => {
     font-size: 12px;
     font-weight: 500;
     border-radius: 8px;
+  }
+}
+
+/* 多设备切换标签 */
+.device-tabs {
+  flex-shrink: 0;
+
+  :deep(.el-radio-group) {
+    .el-radio-button__inner {
+      font-size: 12px;
+      padding: 6px 12px;
+    }
   }
 }
 

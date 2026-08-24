@@ -7,6 +7,7 @@ import {
   setCalibrationConfig,
   fitData as apiFitData,
   resolveAlarm as apiResolveAlarm,
+  skipCalibrationDevice,
   type AlarmConfigPayload
 } from "@/api/calibration"
 import { type SessionState, ControlMode } from "@/types/calibration"
@@ -271,12 +272,20 @@ export const useCalibrationStore = defineStore('calibration', () => {
 
   const pushCalibrationConfigAndStart = async (controlMode: ControlMode): Promise<ActionResult> => {
     try {
-      const measureDev = deviceStore.measureDevices.find(d => d.status === 'connected')
+      const measureDevs = deviceStore.measureDevices.filter(d => d.status === 'connected')
       const pressureDev = deviceStore.pressureDevices.find(d => d.status === 'connected')
-      if (measureDev && pressureDev) {
-        await deviceControlStore.setDevices(measureDev.id, pressureDev.id)
-      } else if (measureDev) {
-        await deviceControlStore.setDevices(measureDev.id, '')
+      if (measureDevs.length > 0) {
+        if (pressureDev) {
+          if (measureDevs.length === 1) {
+            await deviceControlStore.setDevices(measureDevs[0].id, pressureDev.id)
+          } else {
+            await deviceControlStore.setMeasureDevices(measureDevs.map(d => d.id), pressureDev.id)
+          }
+        } else if (measureDevs.length === 1) {
+          await deviceControlStore.setDevices(measureDevs[0].id, '')
+        } else {
+          await deviceControlStore.setMeasureDevices(measureDevs.map(d => d.id), '')
+        }
       }
       await setCalibrationConfig({
         channels: selectedChannels.value,
@@ -327,6 +336,17 @@ export const useCalibrationStore = defineStore('calibration', () => {
     } catch (error) {
       console.error('报警处理失败:', error)
       return { ok: false, error: 'ALARM_RESOLVE_FAILED', detail: '报警处理失败' }
+    }
+  }
+
+  // 永久跳过指定计量设备（从本批次剩余压力点移除）。
+  const skipDevice = async (deviceId: string, reason: string): Promise<ActionResult> => {
+    try {
+      await skipCalibrationDevice(deviceId, reason)
+      return { ok: true }
+    } catch (error) {
+      console.error('跳过设备失败:', error)
+      return { ok: false, error: 'SKIP_DEVICE_FAILED', detail: '跳过设备失败' }
     }
   }
 
@@ -434,6 +454,7 @@ export const useCalibrationStore = defineStore('calibration', () => {
     resumeCalibration,
     stopCalibration,
     resolveAlarm,
+    skipDevice,
     pressurize,
     collectData: pressurePointStore.collectData,
     fitData,

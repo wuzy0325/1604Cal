@@ -83,16 +83,46 @@ func EquidistantPoints(minPressure, maxPressure float64, pointCount, precision i
 	return append(forward, backward...)
 }
 
+// DevicePointData 表示单台计量设备在某个压力点的采集结果与状态。
+// 多设备计量时，PressurePoint.CollectedByDevice 以设备 ID 为键存储每台设备的数据。
+type DevicePointData struct {
+	DeviceID    string    `json:"deviceId"`
+	Collected   []float64 `json:"collected"`
+	Status      string    `json:"status"` // completed | error | skipped
+	CollectTime string    `json:"collectTime,omitempty"`
+	SkipReason  string    `json:"skipReason,omitempty"`
+	Error       string    `json:"error,omitempty"`
+}
+
 // PressurePoint 表示一个压力测试点及其采集状态。
 // 标定和计量模块共用此类型。
+// CollectedData 为单设备场景下的通道数据（兼容旧逻辑与旧数据）；
+// CollectedByDevice 为多设备场景下的设备维度数据，优先读取。
 type PressurePoint struct {
-	ID             string    `json:"id"`
-	Index          int       `json:"index"`
-	TargetPressure float64   `json:"targetPressure"`
-	Direction      string    `json:"direction"` // forward | backward
-	Status         string    `json:"status"`
-	ActualPressure *float64  `json:"actualPressure,omitempty"`
-	CollectedData  []float64 `json:"collectedData,omitempty"`
-	CollectTime    string    `json:"collectTime,omitempty"`
-	ErrorMessage   string    `json:"errorMessage,omitempty"`
+	ID               string                     `json:"id"`
+	Index            int                        `json:"index"`
+	TargetPressure   float64                    `json:"targetPressure"`
+	Direction        string                     `json:"direction"` // forward | backward
+	Status           string                     `json:"status"`
+	ActualPressure   *float64                   `json:"actualPressure,omitempty"`
+	CollectedData    []float64                  `json:"collectedData,omitempty"`
+	CollectedByDevice map[string]DevicePointData `json:"collectedByDevice,omitempty"`
+	CollectTime      string                     `json:"collectTime,omitempty"`
+	ErrorMessage     string                     `json:"errorMessage,omitempty"`
+}
+
+// PointDataForDevice 返回指定设备的采集数据。
+// 优先读取设备维度数据（CollectedByDevice），缺失时回退单设备字段 CollectedData，
+// 以保证多设备新路径与单设备旧数据（JSON 反序列化）都能正确消费。
+func (p *PressurePoint) PointDataForDevice(deviceID string) ([]float64, bool) {
+	if len(p.CollectedByDevice) > 0 {
+		if d, ok := p.CollectedByDevice[deviceID]; ok {
+			return d.Collected, true
+		}
+		return nil, false
+	}
+	if len(p.CollectedData) > 0 {
+		return p.CollectedData, true
+	}
+	return nil, false
 }

@@ -161,6 +161,62 @@ func TestBindDevicesSuccess(t *testing.T) {
 	}
 }
 
+func TestBindMeasureDevicesMulti(t *testing.T) {
+	m1 := &fakeMeasureDriver{collectData: []float64{1.0, 2.0}, unit: "kPa"}
+	m2 := &fakeMeasureDriver{collectData: []float64{3.0, 4.0}, unit: "kPa"}
+	pDrv := &fakePressureDriver{pressure: 100.5, stable: true}
+
+	store := newFakeStore(
+		domain.Device{ID: "m1", Type: domain.DeviceTypeMeasure, Model: "WTN1604", Host: "127.0.0.1", Port: 9000},
+		domain.Device{ID: "m2", Type: domain.DeviceTypeMeasure, Model: "WTN1604", Host: "127.0.0.1", Port: 9002},
+		domain.Device{ID: "p1", Type: domain.DeviceTypePressure, Model: "ConST811A", Host: "127.0.0.1", Port: 9001},
+	)
+
+	mp := &mapProvider{drivers: map[string]device.ConnectionDriver{
+		"m1": embedMeasure{m1},
+		"m2": embedMeasure{m2},
+		"p1": embedPressure{pDrv},
+	}}
+
+	svc := session.NewService(store, driver.NewFactory(), func(string, any) {}, mp)
+
+	token, err := svc.BindMeasureDevices([]string{"m1", "m2"}, "p1", "test")
+	if err != nil {
+		t.Fatalf("BindMeasureDevices: %v", err)
+	}
+	if len(token.MeasureDeviceIDs) != 2 {
+		t.Fatalf("expected 2 measure device ids, got %v", token.MeasureDeviceIDs)
+	}
+	if svc.MeasureDeviceID() != "m1" {
+		t.Fatalf("expected first measure device m1, got %s", svc.MeasureDeviceID())
+	}
+	if len(svc.MeasureDeviceIDs()) != 2 {
+		t.Fatalf("expected 2 bound ids, got %v", svc.MeasureDeviceIDs())
+	}
+	if len(svc.MeasureDrivers()) != 2 {
+		t.Fatalf("expected 2 drivers, got %d", len(svc.MeasureDrivers()))
+	}
+	if svc.MeasureDriver() == nil {
+		t.Fatal("measure driver not bound")
+	}
+
+	// 校验通过合法 token 读取指定设备数据
+	data, err := svc.ReadMeasureDataForDevice(context.Background(), token, "m2")
+	if err != nil {
+		t.Fatalf("ReadMeasureDataForDevice m2: %v", err)
+	}
+	if len(data) != 2 || data[0] != 3.0 {
+		t.Fatalf("unexpected m2 data: %v", data)
+	}
+}
+
+func TestBindMeasureDevicesEmpty(t *testing.T) {
+	svc := session.NewService(newFakeStore(), driver.NewFactory(), func(string, any) {}, nil)
+	if _, err := svc.BindMeasureDevices(nil, "p1", "test"); err == nil {
+		t.Fatal("expected error for empty measure device ids")
+	}
+}
+
 func TestBindDevicesMeasureNotFound(t *testing.T) {
 	svc := session.NewService(newFakeStore(), driver.NewFactory(), func(string, any) {}, nil)
 	_, err := svc.BindDevices("nonexistent", "p1", "test")

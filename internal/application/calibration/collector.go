@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"sync"
 	"time"
 
 	"cal1604/internal/device"
@@ -12,10 +13,15 @@ import (
 )
 
 // Collect 从计量设备采集数据。
+// 单设备场景：与改造前逻辑一致，结果同时写入 CollectedData 与 CollectedByDevice。
+// 多设备场景：并行采集所有参与设备，结果按设备 ID 写入 CollectedByDevice。
 func (s *Service) Collect(ctx context.Context, pointIndex int) ([]float64, error) {
 	s.mu.Lock()
-	
-	if s.getMeasureDriver() == nil {
+	if s.sessionService != nil && s.sessionService.MeasureDriver() == nil {
+		s.mu.Unlock()
+		return nil, ErrMeasureDeviceNotSet
+	}
+	if s.sessionService == nil && len(s.measureDevIDs) == 0 {
 		s.mu.Unlock()
 		return nil, ErrMeasureDeviceNotSet
 	}
@@ -23,7 +29,11 @@ func (s *Service) Collect(ctx context.Context, pointIndex int) ([]float64, error
 		s.mu.Unlock()
 		return nil, fmt.Errorf("invalid point index: %d", pointIndex)
 	}
-	measureDriver := s.getMeasureDriver()
+	measureDrivers := s.getMeasureDrivers()
+	// 过滤已跳过的设备
+	for devID := range s.skippedDevices {
+		delete(measureDrivers, devID)
+	}
 	targetPressure := s.pressurePoints[pointIndex-1].TargetPressure
 	channels := s.config.Channels
 	avgCount := s.config.AverageCount
@@ -41,10 +51,94 @@ func (s *Service) Collect(ctx context.Context, pointIndex int) ([]float64, error
 	}
 	s.publishSessionState()
 
-	var averaged []float64
+	// 单设备路径：保持原逻辑
+	if len(measureDrivers) <= 1 {
+		var averaged []float64
+		for devID, measureDriver := range measureDrivers {
+			var err error
+			averaged, err = s.collectFromDriver(ctx, pointIndex, measureDriver, targetPressure, channels, avgCount, prec)
+			if err != nil {
+				return nil, err
+			}
+			s.persistCollectedData(pointIndex, devID, averaged)
+		}
+		s.mu.Lock()
+		s.currentPoint = pointIndex
+		s.mu.Unlock()
+		s.updatePointStatus(pointIndex, domain.PointStatusCompleted)
 
+		// 状态迁移: collecting -> point_done
+		if err := s.coordinator.Machine().Transition(domain.SessionStatePointDone); err != nil {
+			// 忽略
+		}
+		s.publishSessionState()
+
+		s.publish(events.EventDataCollected, map[string]any{
+			"pointIndex": pointIndex,
+			"channels":   channels,
+			"data":       averaged,
+		})
+
+		return averaged, nil
+	}
+
+	// 多设备路径：并行采集
+	results := s.collectAllDevices(ctx, pointIndex, measureDrivers, targetPressure, channels, avgCount, prec)
+
+	s.mu.Lock()
+	point := &s.pressurePoints[pointIndex-1]
+	if point.CollectedByDevice == nil {
+		point.CollectedByDevice = make(map[string]domain.DevicePointData)
+	}
+	for devID, data := range results {
+		point.CollectedByDevice[devID] = domain.DevicePointData{
+			DeviceID:    devID,
+			Collected:   data,
+			Status:      domain.PointStatusCompleted,
+			CollectTime: time.Now().UTC().Format(time.RFC3339),
+		}
+	}
+	s.currentPoint = pointIndex
+	s.mu.Unlock()
+
+	s.updatePointStatus(pointIndex, domain.PointStatusCompleted)
+
+	// 状态迁移: collecting -> point_done
+	if err := s.coordinator.Machine().Transition(domain.SessionStatePointDone); err != nil {
+		// 忽略
+	}
+	s.publishSessionState()
+
+	// 首个设备数据保持兼容（单设备字段只回填单设备场景，多设备场景由前端读设备维度数据）
+	var firstData []float64
+	firstID := ""
+	for id := range results {
+		if firstID == "" {
+			firstID = id
+		}
+		break
+	}
+	if d, ok := results[firstID]; ok {
+		firstData = d
+	}
+
+	for devID, data := range results {
+		s.publish(events.EventDataCollected, map[string]any{
+			"pointIndex": pointIndex,
+			"channels":   channels,
+			"deviceId":   devID,
+			"data":       data,
+		})
+	}
+
+	return firstData, nil
+}
+
+// collectFromDriver 从单个计量驱动采集数据（多样本平均 + 精度截断）。
+func (s *Service) collectFromDriver(ctx context.Context, pointIndex int, measureDriver device.MeasureDriver, targetPressure float64, channels []int, avgCount int, prec int) ([]float64, error) {
 	// WTN1604 等设备在校准模式下需要走"按点采集"命令，
 	// 不能继续复用普通实时采集命令，否则会出现"设备已连接但采集失败"。
+	var averaged []float64
 	if pointCollector, ok := measureDriver.(device.CalibrationCapable); ok {
 		// 校准点采集同样遵循"多次采样取平均"配置，
 		// 仅将单次采样命令从普通采集切换为 C01 校准点采集。
@@ -82,27 +176,79 @@ func (s *Service) Collect(ctx context.Context, pointIndex int) ([]float64, error
 			averaged[i] = domain.RoundToPrecision(averaged[i], prec)
 		}
 	}
-
-	s.mu.Lock()
-	s.pressurePoints[pointIndex-1].CollectedData = averaged
-	s.currentPoint = pointIndex
-	s.mu.Unlock()
-
-	s.updatePointStatus(pointIndex, domain.PointStatusCompleted)
-
-	// 状态迁移: collecting -> point_done
-	if err := s.coordinator.Machine().Transition(domain.SessionStatePointDone); err != nil {
-		// 忽略
-	}
-	s.publishSessionState()
-
-	s.publish(events.EventDataCollected, map[string]any{
-		"pointIndex": pointIndex,
-		"channels":   channels,
-		"data":       averaged,
-	})
-
 	return averaged, nil
+}
+
+// persistCollectedData 把单设备的采集结果写入压力点（设备维度 + 单设备兼容字段）。
+func (s *Service) persistCollectedData(pointIndex int, devID string, data []float64) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if pointIndex < 1 || pointIndex > len(s.pressurePoints) {
+		return
+	}
+	point := &s.pressurePoints[pointIndex-1]
+	if point.CollectedByDevice == nil {
+		point.CollectedByDevice = make(map[string]domain.DevicePointData)
+	}
+	point.CollectedByDevice[devID] = domain.DevicePointData{
+		DeviceID:    devID,
+		Collected:   append([]float64(nil), data...),
+		Status:      domain.PointStatusCompleted,
+		CollectTime: time.Now().UTC().Format(time.RFC3339),
+	}
+	// 单设备兼容：首个设备数据回填 CollectedData
+	if len(s.measureDevIDs) == 1 && s.measureDevIDs[0] == devID {
+		point.CollectedData = append([]float64(nil), data...)
+	}
+}
+
+// collectAllDevices 并行采集所有参与计量设备，返回 deviceID -> 通道数据。
+func (s *Service) collectAllDevices(ctx context.Context, pointIndex int, measureDrivers map[string]device.MeasureDriver, targetPressure float64, channels []int, avgCount int, prec int) map[string][]float64 {
+	results := make(map[string][]float64, len(measureDrivers))
+	var mu sync.Mutex
+	var wg sync.WaitGroup
+
+	for devID, drv := range measureDrivers {
+		wg.Add(1)
+		go func(id string, d device.MeasureDriver) {
+			defer wg.Done()
+			devCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+			defer cancel()
+			data, err := s.collectFromDriver(devCtx, pointIndex, d, targetPressure, channels, avgCount, prec)
+			if err != nil {
+				s.markDeviceError(pointIndex, id, err)
+				return
+			}
+			mu.Lock()
+			results[id] = data
+			mu.Unlock()
+		}(devID, drv)
+	}
+	wg.Wait()
+	return results
+}
+
+// markDeviceError 记录指定设备的采集失败状态。
+func (s *Service) markDeviceError(pointIndex int, devID string, err error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if pointIndex < 1 || pointIndex > len(s.pressurePoints) {
+		return
+	}
+	point := &s.pressurePoints[pointIndex-1]
+	if point.CollectedByDevice == nil {
+		point.CollectedByDevice = make(map[string]domain.DevicePointData)
+	}
+	point.CollectedByDevice[devID] = domain.DevicePointData{
+		DeviceID: devID,
+		Status:   domain.PointStatusError,
+		Error:    err.Error(),
+	}
+	s.publish(events.EventPointError, map[string]any{
+		"pointIndex": pointIndex,
+		"deviceId":   devID,
+		"error":      err.Error(),
+	})
 }
 
 // Fit 执行数据拟合。

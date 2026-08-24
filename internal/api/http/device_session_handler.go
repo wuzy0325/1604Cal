@@ -8,14 +8,16 @@ import (
 )
 
 type setMeasureDeviceRequest struct {
-	MeasureDeviceID string `json:"measureDeviceId"`
-	ModuleName      string `json:"moduleName"`
+	MeasureDeviceID  string   `json:"measureDeviceId"`
+	MeasureDeviceIDs []string `json:"measureDeviceIds"`
+	ModuleName       string   `json:"moduleName"`
 }
 
 type setDevicesRequest struct {
-	MeasureDeviceID  string `json:"measureDeviceId"`
-	PressureDeviceID string `json:"pressureDeviceId"`
-	ModuleName       string `json:"moduleName"`
+	MeasureDeviceID  string   `json:"measureDeviceId"`
+	MeasureDeviceIDs []string `json:"measureDeviceIds"`
+	PressureDeviceID string   `json:"pressureDeviceId"`
+	ModuleName       string   `json:"moduleName"`
 }
 
 type pressureResponse struct {
@@ -58,7 +60,11 @@ func (s *apiServer) sessionSetDevicesHandler(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	if req.MeasureDeviceID == "" {
+	measureDevIDs := req.MeasureDeviceIDs
+	if len(measureDevIDs) == 0 && req.MeasureDeviceID != "" {
+		measureDevIDs = []string{req.MeasureDeviceID}
+	}
+	if len(measureDevIDs) == 0 {
 		writeError(w, apperrors.ErrInvalidArgument)
 		return
 	}
@@ -68,7 +74,7 @@ func (s *apiServer) sessionSetDevicesHandler(w http.ResponseWriter, r *http.Requ
 		moduleName = "measurement"
 	}
 
-	_, err = s.sessionService.BindDevices(req.MeasureDeviceID, req.PressureDeviceID, moduleName)
+	_, err = s.sessionService.BindMeasureDevices(measureDevIDs, req.PressureDeviceID, moduleName)
 	if err != nil {
 		writeError(w, err)
 		return
@@ -84,7 +90,11 @@ func (s *apiServer) sessionSetMeasureDeviceHandler(w http.ResponseWriter, r *htt
 		return
 	}
 
-	if req.MeasureDeviceID == "" {
+	measureDevIDs := req.MeasureDeviceIDs
+	if len(measureDevIDs) == 0 && req.MeasureDeviceID != "" {
+		measureDevIDs = []string{req.MeasureDeviceID}
+	}
+	if len(measureDevIDs) == 0 {
 		writeError(w, apperrors.ErrInvalidArgument)
 		return
 	}
@@ -94,7 +104,7 @@ func (s *apiServer) sessionSetMeasureDeviceHandler(w http.ResponseWriter, r *htt
 		moduleName = "measurement"
 	}
 
-	_, err = s.sessionService.BindMeasureDevice(req.MeasureDeviceID, moduleName)
+	_, err = s.sessionService.BindMeasureDevices(measureDevIDs, s.sessionService.PressureDeviceID(), moduleName)
 	if err != nil {
 		writeError(w, err)
 		return

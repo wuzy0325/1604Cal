@@ -49,6 +49,7 @@ export interface DeviceConnectConfigDTO {
 }
 
 export interface SetDevicesRequest {
-  measureDeviceId: string
+  measureDeviceId?: string
+  measureDeviceIds?: string[]
   pressureDeviceId: string
 }

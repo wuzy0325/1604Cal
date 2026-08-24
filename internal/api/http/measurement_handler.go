@@ -140,6 +140,30 @@ func (s *apiServer) measurementAlarmResolveHandler(w http.ResponseWriter, r *htt
 	writeSuccess(w, http.StatusOK, map[string]string{"status": "resolved"})
 }
 
+// measurementSkipDeviceHandler 用户选择永久跳过指定计量设备。
+func (s *apiServer) measurementSkipDeviceHandler(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		DeviceID string `json:"deviceId"`
+		Reason   string `json:"reason"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, apperrors.ErrInvalidArgument)
+		return
+	}
+
+	if req.DeviceID == "" {
+		writeError(w, apperrors.ErrInvalidArgument)
+		return
+	}
+
+	if err := s.measurementService.ResolveSkipDevice(req.DeviceID, req.Reason); err != nil {
+		writeError(w, err)
+		return
+	}
+
+	writeSuccess(w, http.StatusOK, map[string]string{"status": "skipped"})
+}
+
 func (s *apiServer) measurementAlarmPendingHandler(w http.ResponseWriter, _ *http.Request) {
 	writeSuccess(w, http.StatusOK, map[string]bool{"pending": s.measurementService.IsAlarmPending()})
 }
