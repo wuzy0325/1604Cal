@@ -42,9 +42,19 @@
 
 **工程量换算公式**（device-sdk 已验证，adapter 需对齐）：
 ```
-current = u16Code / 65535 * 20            // 0-20mA 量程
+current = (u16Code - 32768) * CodeWidth - OffsetVolt   // 0-20mA 量程（双极性 ±20mA）
 engValue = engMin + (current-4)/16 * (engMax-engMin)   // 4-20mA 线性映射
 ```
+
+> ⚠️ **关键协议结论（2026-08-24 真机修正）**：WTNDAQ16H 的 0-20mA 量程实为
+> **双极性 ±20mA**（`GetVoltRangeInfo` 返回 `MinVolt=-20 / MaxVolt=+20 / NeadCode=-32768`），
+> **零点（0mA）对应码值 32768 而非 0**。
+>
+> 早期 spec 曾误写 `current = u16Code / 65535 * 20`（假设单极性 0=0mA），
+> 斜率错误约 2 倍，导致打压 -1000Pa 只显示约 -480Pa。正确换算必须用
+> `GetVoltRangeInfo` 返回的权威参数 `CodeWidth`/`OffsetVolt`（NeadCode=-32768 即零点码 32768），
+> 不能调用 `ScaleBinToVolt`（该函数为电压模式设计，电流模式下会崩溃），
+> 也**不能**硬编码 `65535` 作为满量程。
 
 ---
 
@@ -89,6 +99,7 @@ npm run typecheck ; npm run lint ; npm run build
 | D8 | DLL 初始化 | `main.go` 启动时 `ffi.InitWTNDAQ16HFromEnv()`（对齐 WindLabX4）；失败仅告警不阻塞启动（未使用 P1603 时不影响） | DLL 加载幂等（sync.Once）；未配置 P1603 时应用应正常启动 |
 | D9 | 连接生命周期 | Connect → `DAQP1603.Connect()`（FFI Create+VerifyParam+InitTask）；Disconnect → `StopAcquisition` + `DAQP1603.Disconnect()`（StopTask+ReleaseTask+DevRelease） | 对齐 device-sdk 生命周期；DLL 内部管理 socket，Go 端不接触 net.Conn |
 | D10 | 超时 | device-sdk 内部处理 DLL 调用超时；adapter 层：首帧等待复用 WindLabX4 P1603 默认（StartAcquisition 后首帧 <100ms @100Hz，等待 2s 兜底） | P1603 无 socket deadline 概念（FFI 路径），ADR-009 的 deadline-ignore 场景不适用 |
+| D11 | 码值换算（2026-08-24 修正） | 0-20mA 量程为双极性 ±20mA，零点码值 32768；Go 端用 `GetVoltRangeInfo` 返回的 `CodeWidth`/`OffsetVolt` 按 `(code-32768)*CodeWidth - OffsetVolt` 换算，**不调用 `ScaleBinToVolt`**（电流模式崩溃），**不硬编码 65535** | 真机（192.168.3.104）打压 -1000Pa 早期版本只显示 -480Pa，根因是误用 `code/65535*20` 单极性假设；见 §2 关键协议结论 |
 
 ### D3 补充：采集时序
 
