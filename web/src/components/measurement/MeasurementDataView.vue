@@ -95,7 +95,7 @@
             </template>
           </el-table-column>
           <el-table-column
-            v-for="ch in channelCount"
+            v-for="ch in visibleChannels"
             :key="ch"
             :label="`${ch}`"
             width="60"
@@ -240,7 +240,6 @@ const points = computed<MeasurementPoint[]>(() => measurementStore.points)
 
 const isRoundTrip = computed(() => measurementStore.measurementParams.pressureMode === PressureMode.RoundTrip)
 const precisionForDisplay = computed(() => measurementStore.measurementParams.precision)
-const channelCount = 16
 const currentPointIndex = computed(() => measurementStore.currentPointIndex)
 
 const precisionStep = computed(() => Math.pow(10, -(measurementStore.measurementParams.precision || 2)))
@@ -264,8 +263,10 @@ function getPointOverLimitChannels(pt: MeasurementPoint): number[] {
 
   const allowance = calculateAllowance(pt.targetPressure)
   const overLimit: number[] = []
-  for (let ch = 1; ch <= pt.collectedData.length; ch++) {
+  // 仅对已选通道做超限判定，未选通道不显示也不参与报警（与后端 EnabledChannels 一致）。
+  for (const ch of visibleChannels.value) {
     const collectedVal = pt.collectedData[ch - 1]
+    if (collectedVal === undefined || collectedVal === null) continue
     if (Math.abs(collectedVal - pt.targetPressure) > allowance) {
       overLimit.push(ch)
     }
