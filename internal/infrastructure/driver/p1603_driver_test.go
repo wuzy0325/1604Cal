@@ -8,6 +8,7 @@ package driver
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	sharedcore "shared.local/device-sdk/go/daq/core"
@@ -63,6 +64,47 @@ func TestP1603Driver_BuildSharedProfile(t *testing.T) {
 	}
 	if profile.Type != sharedcore.DeviceDAQP1603 {
 		t.Errorf("type: expected DAQ-P-1603, got %s", profile.Type)
+	}
+}
+
+// TestP1603Driver_BuildSharedProfileLeadingChannelsDisabled 验证禁用 CH1/CH2 后，
+// SDK Profile 仍输出完整 16 通道。计量业务固定请求 1..16，若在 Profile 中过滤
+// 禁用通道，CollectData 会因帧中缺少 CH1/CH2 而使自动采集进入错误状态。
+func TestP1603Driver_BuildSharedProfileLeadingChannelsDisabled(t *testing.T) {
+	config := testP1603Config()
+	config.Channels[0].Enabled = false
+	config.Channels[1].Enabled = false
+
+	profile := NewP1603Driver(config).buildSharedProfile()
+	if len(profile.Channels) != 16 {
+		t.Fatalf("expected all 16 physical channels, got %d", len(profile.Channels))
+	}
+	for i, ch := range profile.Channels {
+		if ch.Index != i {
+			t.Fatalf("shared channel %d index: expected %d, got %d", i+1, i, ch.Index)
+		}
+		if !ch.Enabled {
+			t.Fatalf("shared channel %d must remain enabled for full-frame collection", i+1)
+		}
+	}
+	if profile.Channels[0].RangeMin != 0 || profile.Channels[0].RangeMax != 10000 {
+		t.Fatalf("disabled CH1 range was not preserved: [%v,%v]", profile.Channels[0].RangeMin, profile.Channels[0].RangeMax)
+	}
+}
+
+// TestP1603Driver_LoadTareOffsetsForDisabledChannels 验证 UI/报警未选择的通道
+// 仍加载持久化归零偏移，因为计量数据帧始终包含全部 16 个物理通道。
+func TestP1603Driver_LoadTareOffsetsForDisabledChannels(t *testing.T) {
+	config := testP1603Config()
+	config.Channels[0].Enabled = false
+	config.Channels[0].TareOffset = 12.5
+	d := NewP1603Driver(config)
+	dev := sharedhw.NewDAQP1603(d.buildSharedProfile())
+
+	d.loadTareOffsets(dev)
+
+	if got := d.tareOffsets[1]; got != 12.5 {
+		t.Fatalf("disabled CH1 tare offset: expected 12.5, got %v", got)
 	}
 }
 
@@ -200,6 +242,75 @@ func TestP1603Driver_CalibrateZero(t *testing.T) {
 	}
 	if values[0] != 0 {
 		t.Errorf("collected value after tare: expected 0 (1234.5-1234.5), got %v", values[0])
+	}
+}
+
+// TestP1603Driver_CalibrateZeroConcurrentCollect 校零与实时采集并发。
+//
+// 背景：真实环境下实时数据轮询（CollectData 加锁读 tareOffsets）与用户点击
+// 校零（CalibrateZero 写 tareOffsets）会并发。若 map 写在锁外，会产生数据竞争：
+// 轻则读到撕裂/空 map 导致归零偏移未生效（采集值退回原始未校零读数），重则 Go
+// 并发 map 读写直接 panic。本用例并发反复执行 CalibrateZero 与 CollectData，
+// 验证归零后采集值始终扣除偏移（≈0），且不 panic。
+func TestP1603Driver_CalibrateZeroConcurrentCollect(t *testing.T) {
+	d := NewP1603Driver(testP1603Config())
+	d.dev = sharedhw.NewDAQP1603(d.buildSharedProfile())
+	d.acquiring = true
+
+	// 固定帧：原始值恒 1234.5（0-based index 0）
+	inject := func() {
+		d.onDataFrame(d.dev, sharedcore.DataPayload{
+			Channels:       []float64{1234.5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+			ChannelIndices: []int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15},
+		})
+	}
+	inject()
+
+	ctx := context.Background()
+	stop := make(chan struct{})
+	errCh := make(chan error, 1)
+
+	// 并发采集方：模拟 100Hz 实时轮询，反复读取通道 1。
+	go func() {
+		defer close(errCh)
+		for {
+			select {
+			case <-stop:
+				return
+			default:
+			}
+			vals, err := d.CollectData(ctx, []int{1})
+			if err != nil {
+				errCh <- err
+				return
+			}
+			// 归零后采集值应始终扣除偏移（约 0），若读到原始值 1234.5 说明
+			// 归零偏移丢失（旧竞态下可稳定复现）。
+			if vals[0] != 0 {
+				errCh <- fmt.Errorf("collected raw value %v during/after zero, tare not applied", vals[0])
+				return
+			}
+		}
+	}()
+
+	// 并发校零方：反复对通道 1 校零，每次都应返回原始读数 1234.5。
+	for i := 0; i < 200; i++ {
+		inject()
+		results, err := d.CalibrateZero(ctx, []int{1})
+		if err != nil {
+			close(stop)
+			<-errCh
+			t.Fatalf("calibrate zero: %v", err)
+		}
+		if len(results) != 1 || results[0] != 1234.5 {
+			close(stop)
+			<-errCh
+			t.Fatalf("calibrate zero results: expected [1234.5], got %v", results)
+		}
+	}
+	close(stop)
+	if err := <-errCh; err != nil {
+		t.Fatalf("concurrent collect: %v", err)
 	}
 }
 

@@ -192,7 +192,7 @@ func (s *apiServer) sessionCalibrateZeroHandler(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	writeSuccess(w, http.StatusOK, map[string]any{"values": values})
+	writeSuccess(w, http.StatusOK, map[string]any{"data": values})
 }
 
 func (s *apiServer) sessionCalibrateFullScaleHandler(w http.ResponseWriter, r *http.Request) {

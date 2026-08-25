@@ -125,10 +125,13 @@ func (d *P1603Driver) Connect(_ context.Context) error {
 
 // loadTareOffsets 从设备配置加载各通道持久化的校零偏移，写入本地 tareOffsets
 // 供 CollectData 扣除，并同步到 device-sdk profile（SetTare，语义保持一致）。
+//
+// 调用方必须已持有 d.mu（Connect 在持锁状态下调用本方法）。本方法不再自行加锁，
+// 否则会与 Connect 已持有的锁形成不可重入的自死锁（Go sync.Mutex 不可重入）。
 func (d *P1603Driver) loadTareOffsets(dev *sharedhw.DAQP1603) {
 	offsets := make(map[int]float64)
 	for _, ch := range d.effectiveChannels() {
-		if !ch.Enabled || ch.TareOffset == 0 {
+		if ch.TareOffset == 0 {
 			continue
 		}
 		offsets[ch.Index] = ch.TareOffset
@@ -137,10 +140,8 @@ func (d *P1603Driver) loadTareOffsets(dev *sharedhw.DAQP1603) {
 		}
 	}
 	// 始终以持久化配置为准（即使全为 0 也重置），避免重连后残留上次连接的
-	// 内存偏移导致错误扣除。
-	d.mu.Lock()
+	// 内存偏移导致错误扣除。调用方已持有 d.mu，此处直接写入。
 	d.tareOffsets = offsets
-	d.mu.Unlock()
 }
 
 // Disconnect 停止采集并释放设备连接。
@@ -313,9 +314,12 @@ func (d *P1603Driver) CalibrateZero(ctx context.Context, channels []int) ([]floa
 	if d.tareOffsets == nil {
 		d.tareOffsets = make(map[int]float64)
 	}
-	tareOffsets := d.tareOffsets
-	d.mu.Unlock()
+	// 关键：整个校零循环（含 tareOffsets 写）都在锁内完成，与 CollectData 的
+	// 加锁读一致。若把 map 写放到锁外，实时采集轮询（CollectData 加锁读同一 map）
+	// 会与这里的写形成数据竞争——Go map 并发读写可能 panic，或读到撕裂/空 map
+	// 导致归零偏移未被应用，采集值退回原始（未校零）读数。
 	if !valid || len(frame) == 0 {
+		d.mu.Unlock()
 		return nil, fmt.Errorf("DAQ-P-1603 calibrate zero: no valid frame cached")
 	}
 
@@ -323,16 +327,20 @@ func (d *P1603Driver) CalibrateZero(ctx context.Context, channels []int) ([]floa
 	for _, ch := range channels {
 		current, ok := frame[ch]
 		if !ok {
+			d.mu.Unlock()
 			return nil, fmt.Errorf("DAQ-P-1603 calibrate zero: channel %d not in frame", ch)
 		}
-		// device-sdk SetTare 使用 0-based 通道索引（持久化到 profile）
+		// device-sdk SetTare 使用 0-based 通道索引（持久化到 profile）。
+		// SetTare 为纯内存操作（只写 profile.Channels），不触碰 DLL，可安全持锁。
 		if err := dev.SetTare(ch-1, current); err != nil {
+			d.mu.Unlock()
 			return nil, fmt.Errorf("DAQ-P-1603 calibrate zero channel %d: %w", ch, err)
 		}
 		// 本地记录归零偏移，CollectData 时扣除（展示值 = 原始值 - offset）
-		tareOffsets[ch] = current
+		d.tareOffsets[ch] = current
 		results = append(results, current)
 	}
+	d.mu.Unlock()
 	return results, nil
 }
 
@@ -376,12 +384,11 @@ func (d *P1603Driver) buildSharedProfile() sharedcore.Profile {
 	channels := d.effectiveChannels()
 	sharedChannels := make([]sharedcore.ChannelConfig, 0, len(channels))
 	for _, ch := range channels {
-		if !ch.Enabled {
-			continue
-		}
 		sharedChannels = append(sharedChannels, sharedcore.ChannelConfig{
-			Index:      ch.Index - 1, // 1-based → 0-based
-			Name:       ch.Name,
+			Index: ch.Index - 1, // 1-based → 0-based
+			Name:  ch.Name,
+			// 计量工作流固定读取 1..16；设备配置的 Enabled 只表示 UI/报警选择，
+			// 不能在 SDK Profile 中过滤，否则禁用通道会从帧中消失并导致整次采集失败。
 			Enabled:    true,
 			Unit:       ch.Unit,
 			Precision:  ch.Precision,
@@ -392,7 +399,7 @@ func (d *P1603Driver) buildSharedProfile() sharedcore.Profile {
 		})
 	}
 	if len(sharedChannels) == 0 {
-		// 全部禁用时兜底：至少保留 16 通道（防御，避免 device-sdk nChans=0）
+		// 无有效配置时兜底：至少保留 16 通道（防御，避免 device-sdk nChans=0）
 		sharedChannels = make([]sharedcore.ChannelConfig, 16)
 		for i := range sharedChannels {
 			sharedChannels[i] = sharedcore.ChannelConfig{
