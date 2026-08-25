@@ -78,6 +78,7 @@ func (s *Service) ResolveTemplatePath(points int, mode string) (string, error) {
 //   - 单设备（或旧数据）：outputPath 作为报告文件路径。
 //   - 多设备：outputPath 作为基路径，在文件名中插入设备 ID，例如
 //     "报告.xlsx" → "报告_dev-a.xlsx"，避免静默把用户指定的文件路径改造成目录。
+//
 // 返回实际生成的报告文件路径列表（多设备时每台一个，顺序与设备集合一致）。
 // 优先使用模板文件填充数据，无模板时创建默认工作簿。
 // ExportReport 根据 CalibrationSession 生成校准报告并保存到 outputPath。
@@ -198,6 +199,9 @@ func (s *Service) exportWithTemplate(templatePath, outputPath string, standardVa
 			}
 		}
 	}
+
+	// 改写模板主单位格并联动全部公式引用（结果分析表头、通道块 Unit 等）
+	applyReportTemplateUnit(f, unit)
 
 	if err := f.SaveAs(outputPath); err != nil {
 		return fmt.Errorf("%w: save report: %v", apperrors.ErrReportExport, err)
@@ -392,6 +396,13 @@ func detectDeviceIDs(points []domain.PressurePoint) []string {
 // exportMeasurementReportForDevice 为单台计量设备生成计量报告。
 // deviceID 为空时回退单设备字段。
 func (s *Service) exportMeasurementReportForDevice(ctx context.Context, points []domain.PressurePoint, config domain.WorkflowConfig, outputPath, deviceID, unit string) error {
+	// 多设备场景：报告「设备编号」元数据按设备分别派生（spec per-device-report）。
+	// 设备配置无独立编号字段，以设备 ID 作为该台报告的编号；
+	// 单设备场景保留会话配置的 DeviceNumber（兼容旧行为）。
+	if deviceID != "" {
+		config.DeviceNumber = deviceID
+	}
+
 	// 始终输出全部16通道
 	numChannels := 16
 
@@ -423,8 +434,10 @@ func (s *Service) exportMeasurementReportForDevice(ctx context.Context, points [
 
 // exportMeasurementWithTemplate 使用模板文件导出计量报告。
 // 计量模板列映射：
-//   单程模板 *s.xlsx：A=标准压力，B=设备显示值，C=示值误差(公式)，D=不确定度
-//   回程模板 *m.xlsx：A=标准压力，B=正程显示值(Forward stroke)，C=回程显示值(Return stroke)，D=示值误差(公式)，E=回差(公式)
+//
+//	单程模板 *s.xlsx：A=标准压力，B=设备显示值，C=示值误差(公式)，D=不确定度
+//	回程模板 *m.xlsx：A=标准压力，B=正程显示值(Forward stroke)，C=回程显示值(Return stroke)，D=示值误差(公式)，E=回差(公式)
+//
 // backwardByTarget 按 (通道, 标准压力) 索引，确保 C 列严格按 A 列标准值对齐，
 // 即便部分回程点未完成也不会发生静默错位。
 func (s *Service) exportMeasurementWithTemplate(ctx context.Context, templatePath, outputPath string, standardValues []float64, forwardChannels [][]float64, backwardByTarget []map[float64]float64, unit string, points []domain.PressurePoint, config domain.WorkflowConfig, deviceID ...string) error {
@@ -507,8 +520,11 @@ func (s *Service) exportMeasurementFallback(outputPath string, standardValues []
 	return nil
 }
 
-// fillMeasurementWorksheetMetadata 扫描工作表填写元数据字段（日期、单位等）。
+// fillMeasurementWorksheetMetadata 扫描工作表填写元数据字段（日期、量程等）。
+// 单位字段由 applyReportTemplateUnit 单独处理（模板单位为主格+公式联动结构，不能逐格覆盖）。
 func fillMeasurementWorksheetMetadata(f *excelize.File, unit string, points []domain.PressurePoint, config domain.WorkflowConfig) {
+	applyReportTemplateUnit(f, unit)
+
 	if len(f.GetSheetList()) == 0 {
 		return
 	}
@@ -543,16 +559,6 @@ func fillMeasurementWorksheetMetadata(f *excelize.File, unit string, points []do
 				continue
 			}
 
-			// 匹配"单位"标签→右侧单元格填充单位
-			if strings.Contains(text, "单位") || strings.Contains(strings.ToLower(text), "unit") {
-				if col+1 <= 12 {
-					rightCell := cellName(col+1, row)
-					// 模板中的单位只是占位值，必须始终以本次设备读取结果为准。
-					f.SetCellValue(sheet, rightCell, unit)
-				}
-				continue
-			}
-
 			// 匹配"Min(Range)"标签→右侧单元格填充最小量程
 			if strings.Contains(text, "Min(Range)") || strings.Contains(text, "Min（Range）") {
 				rightCell := cellName(col+1, row)
@@ -584,6 +590,47 @@ func fillMeasurementWorksheetMetadata(f *excelize.File, unit string, points []do
 			}
 		}
 	}
+}
+
+// applyReportTemplateUnit 将报告模板的主单位格替换为设备真实单位。
+//
+// 模板设计：元数据区 "Unit"/“单位” 标签右侧只有一个字面量主单位格
+// （如 6s 模板 K5、6m 模板 N5），其余单位格（各通道块 Unit、结果分析
+// 表头 “（psi）” 等）均为引用主格的公式（=$K$5、"（"&$K$5&"）"）。
+// 因此只需改写主格，再设置 FullCalcOnLoad 让 Excel/WPS 打开文件时
+// 强制重算全部公式，所有引用处即联动更新。
+//
+// 注意：公式引用格不可直接 SetCellValue 覆盖，否则会把公式变成静态值、
+// 破坏模板联动；判断依据是右侧格存在公式则跳过。
+func applyReportTemplateUnit(f *excelize.File, unit string) {
+	if unit == "" || len(f.GetSheetList()) == 0 {
+		return
+	}
+	sheet := f.GetSheetList()[0]
+
+	// 主单位格位于元数据区（第 5 行附近）；扫描前 10 行 × 30 列，
+	// 覆盖单程（K5）与回程（N5）两种模板布局。通道块内的 Unit 标签
+	// （第 17 行起）右格均为公式，天然被跳过。
+	for row := 1; row <= 10; row++ {
+		for col := 1; col <= 30; col++ {
+			cell := cellName(col, row)
+			text, _ := f.GetCellValue(sheet, cell)
+			text = strings.TrimSpace(text)
+			if !strings.Contains(text, "单位") && !strings.Contains(strings.ToLower(text), "unit") {
+				continue
+			}
+			right := cellName(col+1, row)
+			if formula, _ := f.GetCellFormula(sheet, right); formula != "" {
+				continue
+			}
+			f.SetCellValue(sheet, right, unit)
+		}
+	}
+
+	// 主格改写后，公式格的缓存结果仍是模板旧单位（如 “（psi）”），
+	// 必须设置打开时重算，否则用户看到的仍是旧缓存值。
+	fullCalc := true
+	_ = f.SetCalcProps(&excelize.CalcPropsOptions{FullCalcOnLoad: &fullCalc})
 }
 
 // matchDirection 按指定方向过滤压力点。
