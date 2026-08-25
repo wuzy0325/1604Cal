@@ -53,17 +53,6 @@ func pressureUnitToCodeSPC4000(unit string) (string, bool) {
 	return code, ok
 }
 
-func parseSPC4000UnitCode(code string) string {
-	m := map[string]string{
-		"1": "psi", "13": "atm", "14": "bar", "15": "mbar", "19": "mmHg",
-		"22": "kPa", "23": "Pa", "26": "kgf/cm2", "36": "MPa",
-	}
-	if unit, ok := m[strings.TrimSpace(code)]; ok {
-		return unit
-	}
-	return "MPa"
-}
-
 // parseConSTGeneralUnit 解析 ConST 811A/860 等通用型号的单位查询响应。
 // 支持 SCPI 标准单位代码（1132=MPa 等）和字符串格式。
 func parseConSTGeneralUnit(resp string) string {
