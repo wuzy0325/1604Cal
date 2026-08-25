@@ -277,7 +277,8 @@ async function handleFormSave(device: DeviceDTO) {
       host: device.host,
       port: device.port,
       localAddr: device.localAddr || undefined,
-      status: device.status
+      status: device.status,
+      channels: device.channels
     })
     dialogVisible.value = false
     await refreshAll()

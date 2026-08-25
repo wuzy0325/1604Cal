@@ -12,7 +12,7 @@
         <el-icon v-else-if="device.status === 'error'"><CircleClose /></el-icon>
         <el-icon v-else-if="device.status === 'connecting'"><Loading /></el-icon>
         <el-icon v-else><Remove /></el-icon>
-        {{ statusLabel }}
+        {{ statusLabel(device.status) }}
       </span>
     </div>
 

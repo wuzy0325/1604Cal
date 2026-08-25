@@ -4,6 +4,7 @@
     title="计量报警"
     width="520px"
     :close-on-click-modal="false"
+    :close-on-press-escape="false"
     :show-close="false"
     draggable
     class="measurement-alarm-dialog"

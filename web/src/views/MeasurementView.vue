@@ -648,16 +648,26 @@ const alarmPoint = computed(() => {
   return measurementStore.points.find(p => p.id === d.pointId)
 })
 
-// 非确认模式：通知后自动继续采集，避免后端阻塞等待
-watch(() => measurementStore.alarmPending, async (pending) => {
-  if (pending && !measurementStore.alarmConfig.confirmOnAlarm && measurementStore.alarmData) {
-    const a = measurementStore.alarmData
-    ElMessage.warning(`报警：${a.overLimitChannels.length} 个通道精度超限，最大偏差 ${(a.maxDeviation * 100).toFixed(2)}%`)
-    await measurementStore.resolveAlarm('continue')
+// 非确认模式：通知后自动继续采集，避免后端阻塞等待。
+// 必须同时监听 confirmOnAlarm：报警挂起期间用户关闭"报警确认"开关时，
+// 弹窗会消失但 alarmPending 不变，后端仍阻塞等待决策——若只监听
+// alarmPending，watcher 不触发，自动流程卡死（只能重新开开关弹窗才能继续）。
+watch(
+  () => [measurementStore.alarmPending, measurementStore.alarmConfig.confirmOnAlarm] as const,
+  async ([pending, confirmOn]) => {
+    if (pending && !confirmOn && measurementStore.alarmData) {
+      const a = measurementStore.alarmData
+      ElMessage.warning(`报警：${a.overLimitChannels.length} 个通道精度超限，最大偏差 ${(a.maxDeviation * 100).toFixed(2)}%`)
+      await measurementStore.resolveAlarm('continue')
+    }
   }
-})
+)
 
-// 稳定超时弹窗：让用户选择继续等待或跳过当前点
+// 稳定超时弹窗：让用户选择继续等待或跳过当前点。
+// 关闭路径（Esc/X/遮罩）一律兜底按"继续等待"放行：后端收到 continue 会重置
+// 超时倒计时，再次超时会重新发布事件、弹窗再次弹出；若不发送任何决策，
+// 后端将永久阻塞在等待通道上，且 stabilityTimeoutPending 已复位导致弹窗
+// 无法再次触发，自动流程卡死（与报警确认取消后卡死同构）。
 watch(() => measurementStore.stabilityTimeoutPending, async (pending) => {
   if (!pending) return
   measurementStore.stabilityTimeoutPending = false
@@ -669,14 +679,19 @@ watch(() => measurementStore.stabilityTimeoutPending, async (pending) => {
         confirmButtonText: '继续等待',
         cancelButtonText: '跳过此点',
         distinguishCancelAndClose: true,
+        closeOnClickModal: false,
+        closeOnPressEscape: false,
+        showClose: false,
         type: 'warning'
       }
     )
     await resolveStabilityTimeout('continue')
   } catch (action: unknown) {
-    const actionStr = typeof action === 'string' ? action : ''
-    if (actionStr === 'cancel') {
+    if (typeof action === 'string' && action === 'cancel') {
       await resolveStabilityTimeout('skip')
+    } else {
+      // 异常关闭兜底（如路由切换强制关闭弹窗）：继续等待，可恢复
+      await resolveStabilityTimeout('continue')
     }
   }
 })

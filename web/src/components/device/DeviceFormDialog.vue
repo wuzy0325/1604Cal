@@ -99,6 +99,60 @@
       <div class="channel-config-header">
         <span>通道量程配置（4mA → rangeMin，20mA → rangeMax）</span>
       </div>
+      <div class="bulk-bar">
+        <span class="bulk-label">总设置：</span>
+        <select
+          v-model="bulkUnit"
+          data-test="bulk-unit"
+        >
+          <option
+            v-for="u in p1603UnitOptions"
+            :key="u"
+            :value="u"
+          >
+            {{ u }}
+          </option>
+        </select>
+        <input
+          v-model.number="bulkRangeMin"
+          data-test="bulk-rangeMin"
+          type="number"
+          step="any"
+          placeholder="量程下限"
+        >
+        <input
+          v-model.number="bulkRangeMax"
+          data-test="bulk-rangeMax"
+          type="number"
+          step="any"
+          placeholder="量程上限"
+        >
+        <el-button
+          size="small"
+          type="primary"
+          data-test="bulk-apply"
+          @click="applyBulkConfig"
+        >
+          <el-icon><Check /></el-icon>
+          应用到全部
+        </el-button>
+        <el-button
+          size="small"
+          type="success"
+          data-test="bulk-enable-all"
+          @click="setAllEnabled(true)"
+        >
+          全部启用
+        </el-button>
+        <el-button
+          size="small"
+          type="warning"
+          data-test="bulk-disable-all"
+          @click="setAllEnabled(false)"
+        >
+          全部禁用
+        </el-button>
+      </div>
       <div class="channel-config-body">
         <table class="channel-table">
           <thead>
@@ -240,6 +294,33 @@ const errorMessage = ref('')
 // P1603 通道单位选项（与设备面板单位下拉一致；4-20mA 传感器工程量单位）
 const p1603UnitOptions = ['Pa', 'kPa', 'MPa', 'psi', 'kgf/cm2', 'bar', 'mbar']
 
+// ---- P1603 总设置（一键应用到全部 16 通道）----
+// 背景：16 通道逐一填写量程/单位易出错且繁琐，批量设置后仍可逐行微调。
+const bulkUnit = ref('Pa')
+const bulkRangeMin = ref<number | undefined>(-5000)
+const bulkRangeMax = ref<number | undefined>(5000)
+
+/** 将单位/量程批量写入全部通道（仅 P1603 通道配置使用） */
+function applyBulkConfig() {
+  if (form.channels.length === 0) return
+  for (const ch of form.channels) {
+    ch.unit = bulkUnit.value
+    if (typeof bulkRangeMin.value === 'number' && !Number.isNaN(bulkRangeMin.value)) {
+      ch.rangeMin = bulkRangeMin.value
+    }
+    if (typeof bulkRangeMax.value === 'number' && !Number.isNaN(bulkRangeMax.value)) {
+      ch.rangeMax = bulkRangeMax.value
+    }
+  }
+}
+
+/** 批量启用/禁用全部通道 */
+function setAllEnabled(enabled: boolean) {
+  for (const ch of form.channels) {
+    ch.enabled = enabled
+  }
+}
+
 // P1603 固定 16 通道，型号归一化与后端 factory normalizeModel 语义一致
 const isP1603Model = computed(() => {
   const model = (form.model || '').replace(/\s+/g, '').toLowerCase()
@@ -335,7 +416,18 @@ function initEdit(device: DeviceDTO) {
   form.channels = device.channels?.length
     ? device.channels.map(c => ({ ...c }))
     : (isP1603Model.value ? defaultP1603Channels() : [])
+  // 总设置栏用当前通道实际值填充（取首个启用通道），避免显示误导性的默认值。
+  syncBulkFromChannels()
   errorMessage.value = ''
+}
+
+/** 用首个启用通道的实际单位/量程回填总设置栏，使批量工具与通道表一致 */
+function syncBulkFromChannels() {
+  const ref = form.channels.find(c => c.enabled) ?? form.channels[0]
+  if (!ref) return
+  if (ref.unit) bulkUnit.value = ref.unit
+  if (typeof ref.rangeMin === 'number') bulkRangeMin.value = ref.rangeMin
+  if (typeof ref.rangeMax === 'number') bulkRangeMax.value = ref.rangeMax
 }
 
 // ---- 内部方法 ----
@@ -469,6 +561,48 @@ function handleClosed() {
   font-size: 12px;
   font-weight: 600;
   color: $slate-600;
+}
+
+/* ---- P1603 总设置栏：批量填写单位/量程 ---- */
+.bulk-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  padding: 6px 10px;
+  border-bottom: 1px solid $slate-300;
+  background: #fff;
+
+  .bulk-label {
+    color: $slate-500;
+    font-size: 12px;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+
+  select,
+  input[type='number'] {
+    background: #fff;
+    border: 1px solid $slate-300;
+    border-radius: 4px;
+    padding: 3px 6px;
+    font-size: 12px;
+    font-family: $font-sans;
+    color: $slate-700;
+    outline: none;
+
+    &:focus {
+      border-color: $mint;
+    }
+  }
+
+  input[type='number'] {
+    width: 90px;
+  }
+
+  .el-button {
+    font-size: 12px;
+  }
 }
 
 .channel-config-body {

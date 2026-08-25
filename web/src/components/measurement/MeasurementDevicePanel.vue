@@ -7,10 +7,10 @@
         </el-icon>
         <div>
           <div class="device-name">
-            1604设备
+            {{ device?.name || '计量设备' }}
           </div>
           <div class="device-type">
-            计量采集设备
+            {{ device?.model || '计量采集设备' }}
           </div>
         </div>
       </div>
@@ -116,7 +116,6 @@
       <el-button
         size="small"
         type="primary"
-        plain
         :loading="zeroCalibPending"
         :disabled="zeroCalibPending"
         @click="handleZeroCalibrate"
