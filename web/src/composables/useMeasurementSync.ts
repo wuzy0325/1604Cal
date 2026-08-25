@@ -29,12 +29,17 @@ export function useMeasurementSync() {
   const { subscribe, registerPoll } = useEventHub()
   const unsubs: (() => void)[] = []
   const unregPolls: (() => void)[] = []
+  let disposed = false
 
   onMounted(async () => {
     await Promise.all([
       store.loadAlarmConfig(),
-      store.fetchCurrentState()
+      store.fetchCurrentState(),
+      store.loadPoints(),
+      store.refreshData(),
+      store.refreshAlarmPending()
     ])
+    if (disposed) return
 
     unsubs.push(subscribe(EVENT_MEASUREMENT_STATE_CHANGED, (payload) => {
       const newState = (payload.data as { state: MeasurementState }).state
@@ -46,8 +51,8 @@ export function useMeasurementSync() {
     }))
 
     unsubs.push(subscribe(EVENT_MEASUREMENT_DATA_UPDATED, (payload) => {
-      const data = payload.data as { timestamp: string; channels: Record<string, number> }
-      store.rows.push({ timestamp: data.timestamp, channels: data.channels })
+      const data = payload.data as { timestamp: string; deviceId?: string; channels: Record<string, number> }
+      store.rows.push({ timestamp: data.timestamp, deviceId: data.deviceId, channels: data.channels })
       if (store.rows.length > MEASUREMENT_MAX_ROWS) store.rows.splice(0, store.rows.length - MEASUREMENT_MAX_ROWS)
     }))
 
@@ -76,10 +81,26 @@ export function useMeasurementSync() {
     }))
 
     unsubs.push(subscribe(EVENT_MEASUREMENT_DATA_COLLECTED, (payload) => {
-      const collected = payload.data as { pointIndex: number; channels: number[]; data: number[] }
+      const collected = payload.data as {
+        pointIndex: number
+        channels: number[]
+        deviceId?: string
+        data: number[]
+      }
       const ptIdx = store.points.findIndex(p => p.index === collected.pointIndex)
-      if (ptIdx >= 0) {
-        store.points[ptIdx] = { ...store.points[ptIdx], collectedData: collected.data, status: 'completed' }
+      if (ptIdx < 0) return
+      const pt = store.points[ptIdx]
+      // 多设备：按设备写入 collectedByDevice；单设备回退 collectedData（兼容旧字段）。
+      if (collected.deviceId) {
+        const byDevice = { ...(pt.collectedByDevice ?? {}) }
+        byDevice[collected.deviceId] = {
+          deviceId: collected.deviceId,
+          collected: collected.data,
+          status: 'completed'
+        }
+        store.points[ptIdx] = { ...pt, collectedByDevice: byDevice, status: 'completed' }
+      } else {
+        store.points[ptIdx] = { ...pt, collectedData: collected.data, status: 'completed' }
       }
     }))
 
@@ -116,6 +137,7 @@ export function useMeasurementSync() {
   })
 
   onUnmounted(() => {
+    disposed = true
     for (const unsub of unsubs) unsub()
     for (const unreg of unregPolls) unreg()
   })

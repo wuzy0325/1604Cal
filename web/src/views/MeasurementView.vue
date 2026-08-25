@@ -318,6 +318,11 @@
       :alarm="measurementStore.alarmData"
       @decision="handleAlarmDecision"
     />
+    <SkipDeviceDialog
+      v-model="showSkipDeviceDialog"
+      :device-name="skipDeviceName"
+      @confirm="handleSkipDeviceConfirm"
+    />
   </PageLayout>
 </template>
 
@@ -343,6 +348,7 @@ import MeasurementControl from '@/components/measurement/MeasurementControl.vue'
 import MeasurementParamsPanel from '@/components/measurement/MeasurementParamsPanel.vue'
 import MeasurementDataView from '@/components/measurement/MeasurementDataView.vue'
 import AlarmConfirmDialog from '@/components/measurement/AlarmConfirmDialog.vue'
+import SkipDeviceDialog from '@/components/common/SkipDeviceDialog.vue'
 import BatchToolbar from '@/components/measurement/BatchToolbar.vue'
 import BatchRangeInput from '@/components/measurement/BatchRangeInput.vue'
 import BatchGroupView from '@/components/measurement/BatchGroupView.vue'
@@ -696,8 +702,35 @@ watch(() => measurementStore.stabilityTimeoutPending, async (pending) => {
   }
 })
 
-async function handleAlarmDecision(decision: 'continue' | 'recollect') {
+async function handleAlarmDecision(decision: 'continue' | 'recollect' | 'skip-device') {
+  if (decision === 'skip-device') {
+    // 设备级报警：打开跳过设备弹窗，由用户选择原因后永久跳过该设备。
+    const deviceId = measurementStore.alarmData?.deviceId
+    if (!deviceId) return
+    skipDeviceId.value = deviceId
+    showSkipDeviceDialog.value = true
+    return
+  }
   await measurementStore.resolveAlarm(decision)
+}
+
+// ── 跳过设备（设备级报警入口） ──
+const showSkipDeviceDialog = ref(false)
+const skipDeviceId = ref('')
+const skipDeviceName = computed(() => {
+  const dev = deviceStore.measureDevices.find(d => d.id === skipDeviceId.value)
+  return dev?.name || dev?.model || skipDeviceId.value
+})
+
+async function handleSkipDeviceConfirm(reason: string) {
+  const deviceId = skipDeviceId.value
+  if (!deviceId) return
+  try {
+    await measurementStore.skipDevice(deviceId, reason)
+    ElMessage.success(`已跳过设备 ${skipDeviceName.value}`)
+  } catch (e) {
+    ElMessage.error(e instanceof Error ? e.message : '跳过设备失败')
+  }
 }
 
 /* ── 导出 ── */
@@ -706,8 +739,12 @@ async function handleExport() {
   if (!path) return
   isExporting.value = true
   try {
-    await exportMeasurementReport(path)
-    ElMessage.success('报告导出成功')
+    const paths = await exportMeasurementReport(path)
+    if (paths.length > 1) {
+      ElMessage.success(`报告导出成功，共 ${paths.length} 个文件（每台设备一个）`)
+    } else {
+      ElMessage.success('报告导出成功')
+    }
   } catch (e) {
     ElMessage.error(e instanceof Error ? e.message : '报告导出失败')
   } finally {

@@ -140,6 +140,8 @@ func newRouterWithServer(
 	mux.HandleFunc("POST /api/v1/config/alarm", server.alarmSaveConfigHandler)
 	// 启动门禁开关：让前端与后端配置同源，避免前端硬编码短路后端配置。
 	mux.HandleFunc("GET /api/v1/config/gates", server.gatesConfigHandler)
+	// 上次绑定的设备集合：前端页面加载时恢复勾选（多设备按勾选顺序）。
+	mux.HandleFunc("GET /api/v1/config/last-devices", server.lastDevicesReadHandler)
 
 	// 设备管理
 	mux.HandleFunc("GET /api/v1/devices", server.listDevicesHandler)

@@ -64,6 +64,8 @@ func (s *apiServer) calibrationSetDevicesHandler(w http.ResponseWriter, r *http.
 		writeError(w, err)
 		return
 	}
+	// 绑定成功后记录设备集合，供下次启动恢复勾选。
+	s.persistLastDevices(measureDevIDs, req.PressureDeviceID)
 
 	writeSuccess(w, http.StatusOK, map[string]string{"status": "ok"})
 }
@@ -142,13 +144,20 @@ func (s *apiServer) calibrationCollectHandler(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	data, err := s.calibrationService.Collect(r.Context(), pointIndex)
+	// devices 为设备维度完整结果（deviceID -> 通道数据）；
+	// data 保留首个绑定设备数据，兼容旧前端单设备字段。
+	devices, err := s.calibrationService.CollectDevices(r.Context(), pointIndex)
 	if err != nil {
 		writeError(w, err)
 		return
 	}
 
-	writeSuccess(w, http.StatusOK, map[string]any{"data": data})
+	var data []float64
+	if ids := s.calibrationService.MeasureDeviceIDs(); len(ids) > 0 {
+		data = devices[ids[0]]
+	}
+
+	writeSuccess(w, http.StatusOK, map[string]any{"data": data, "devices": devices})
 }
 
 func (s *apiServer) calibrationFitHandler(w http.ResponseWriter, r *http.Request) {

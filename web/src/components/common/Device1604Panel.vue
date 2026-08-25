@@ -18,41 +18,35 @@
     </div>
 
     <div class="selection-control">
-      <el-select
-        v-model="selectedDeviceId"
-        placeholder="选择计量设备"
+      <!-- 多设备勾选：选 1 台时行为与旧单选一致；多台时整批连接/断开 -->
+      <el-checkbox-group
+        v-model="selectedDeviceIds"
         :disabled="isConnected"
-        size="small"
-        class="device-select"
+        class="device-checkbox-group"
       >
-        <el-option
+        <el-checkbox
           v-for="dev in measureDevices"
           :key="dev.id"
-          :label="dev.name || dev.model || '未命名设备'"
           :value="dev.id"
+          class="device-checkbox"
         >
-          <div class="device-option">
-            <span class="device-option-name">{{ dev.name || dev.model || '未命名设备' }}</span>
-            <span :class="['device-option-status', `status-${dev.status}`]">
-              {{ statusLabel(dev.status) }}
-            </span>
-          </div>
-        </el-option>
-        <template #empty>
-          <div class="empty-hint">
-            暂无设备，请先在设备管理中添加
-          </div>
-        </template>
-      </el-select>
-      <el-button
-        :type="isConnected ? 'danger' : 'primary'"
-        :loading="isConnecting"
-        :disabled="!selectedDeviceId && !isConnected"
-        size="small"
-        @click="toggleConnection"
-      >
-        {{ isConnected ? '断开' : '连接' }}
-      </el-button>
+          <span class="device-option-name">{{ dev.name || dev.model || '未命名设备' }}</span>
+          <span :class="['device-option-status', `status-${dev.status}`]">
+            {{ statusLabel(dev.status) }}
+          </span>
+        </el-checkbox>
+      </el-checkbox-group>
+      <div class="selection-actions">
+        <el-button
+          :type="isConnected ? 'danger' : 'primary'"
+          :loading="isConnecting"
+          :disabled="selectedDeviceIds.length === 0 && !isConnected"
+          size="small"
+          @click="toggleConnection"
+        >
+          {{ isConnected ? '断开' : '连接' }}
+        </el-button>
+      </div>
     </div>
 
     <div
@@ -151,15 +145,16 @@ import {
 } from '@/types/valve'
 
 const emit = defineEmits<{
-  connect: [deviceId: string]
-  disconnect: [deviceId: string]
+  connect: [deviceIds: string[]]
+  disconnect: [deviceIds: string[]]
 }>()
 
 const deviceStore = useDeviceInventoryStore()
 const calibrationStore = useCalibrationStore()
 const { measureDevices } = storeToRefs(deviceStore)
 
-const selectedDeviceId = ref('')
+// 多设备勾选列表（保持勾选顺序）；单设备场景与旧 selectedDeviceId 行为一致。
+const selectedDeviceIds = ref<string[]>([])
 const selectedMeasureUnit = ref('')
 
 // 阀门切换交互（pending / 写后回读 / toast 四态反馈）统一由 composable 提供，
@@ -181,9 +176,9 @@ const measureUnitOptions = [
   { value: 'atm', label: 'atm' }
 ]
 
-// 获取选中的计量设备
+// 获取首个勾选的计量设备（设备状态区展示其信息，与 store 单设备字段语义一致）
 const device = computed(() =>
-  measureDevices.value.find(d => d.id === selectedDeviceId.value)
+  measureDevices.value.find(d => d.id === selectedDeviceIds.value[0])
 )
 
 // 优先显示后端读取的设备信息，降级为本地 store 数据
@@ -194,9 +189,14 @@ const displayChannels = computed(() =>
   calibrationStore.deviceInfo['channels'] || device.value?.channels || 16
 )
 
-// 计算状态
-const isConnected = computed(() => device.value?.status === 'connected')
-const isConnecting = computed(() => device.value?.status === 'connecting')
+// 已连接设备集合：勾选列表中处于 connected 状态的设备。
+const connectedDeviceIds = computed(() =>
+  selectedDeviceIds.value.filter(id => measureDevices.value.find(d => d.id === id)?.status === 'connected')
+)
+const isConnected = computed(() => connectedDeviceIds.value.length > 0)
+const isConnecting = computed(() =>
+  selectedDeviceIds.value.some(id => measureDevices.value.find(d => d.id === id)?.status === 'connecting')
+)
 const deviceStatus = computed(() => {
   if (!device.value) return 'disconnected'
   if (device.value.status === 'connected') return 'connected'
@@ -215,16 +215,17 @@ const valveStatusLabel = computed(() => {
   return toValveStatusLabel(normalizedValveStatus.value, raw)
 })
 
-// 自动选中第一个可用设备
+// 自动勾选第一个可用设备（与旧单选自动选中行为一致）
 watch(
   measureDevices,
   (devices) => {
-    if (!selectedDeviceId.value && devices.length > 0) {
-      selectedDeviceId.value = devices[0].id
+    // 设备列表变化时清理已失效的勾选，并保留仍存在的勾选。
+    const valid = selectedDeviceIds.value.filter(id => devices.find(d => d.id === id))
+    if (valid.length !== selectedDeviceIds.value.length) {
+      selectedDeviceIds.value = valid
     }
-    // 如果选中设备已不存在，清空选择
-    if (selectedDeviceId.value && !devices.find(d => d.id === selectedDeviceId.value)) {
-      selectedDeviceId.value = devices.length > 0 ? devices[0].id : ''
+    if (selectedDeviceIds.value.length === 0 && devices.length > 0) {
+      selectedDeviceIds.value = [devices[0].id]
     }
   },
   { immediate: true }
@@ -262,12 +263,11 @@ function statusLabel(status: string): string {
 }
 
 const toggleConnection = async () => {
-  if (!selectedDeviceId.value) return
-
   if (isConnected.value) {
-    emit('disconnect', selectedDeviceId.value)
+    emit('disconnect', [...connectedDeviceIds.value])
   } else {
-    emit('connect', selectedDeviceId.value)
+    if (selectedDeviceIds.value.length === 0) return
+    emit('connect', [...selectedDeviceIds.value])
   }
 }
 
@@ -277,7 +277,7 @@ const handleMeasureUnitChange = async (unit: string) => {
   // 同步单位到设备配置，确保 CheckUnitConsistency 比较的是实际单位
   try {
     const devices = await fetchDevices()
-    const dto = devices.find(d => d.id === selectedDeviceId.value)
+    const dto = devices.find(d => d.id === selectedDeviceIds.value[0])
     if (dto) {
       await upsertDevice({ ...dto, unit })
     }
@@ -336,11 +336,35 @@ const handleMeasureUnitChange = async (unit: string) => {
   /* 连接控制区 */
   .selection-control {
     display: flex;
+    flex-direction: column;
     gap: 8px;
-    align-items: center;
+    align-items: stretch;
 
-    .device-select {
-      flex: 1;
+    .device-checkbox-group {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      max-height: 180px;
+      overflow-y: auto;
+    }
+
+    .device-checkbox {
+      display: flex;
+      align-items: center;
+      margin-right: 0;
+      height: 28px;
+
+      .el-checkbox__label {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        min-width: 0;
+      }
+    }
+
+    .selection-actions {
+      display: flex;
+      justify-content: flex-end;
     }
   }
 

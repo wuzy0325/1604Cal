@@ -162,6 +162,17 @@ func (s *Service) getMeasureDriver() device.MeasureDriver {
 	return s.measureDrivers[s.measureDevIDs[0]]
 }
 
+// MeasureDeviceIDs 返回本批次绑定的全部计量设备 ID（保持绑定顺序）。
+// 供 HTTP 层从设备维度结果中提取首个设备数据（兼容字段）使用。
+func (s *Service) MeasureDeviceIDs() []string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.sessionService != nil {
+		return s.sessionService.MeasureDeviceIDs()
+	}
+	return append([]string(nil), s.measureDevIDs...)
+}
+
 // getMeasureDrivers 返回全部计量驱动（设备 ID → 驱动）。
 // 优先从 session 服务获取，session 为 nil 时回退到本地字段。
 // 注意：调用方必须持有 s.mu（或保证字段不被并发修改）。
@@ -199,6 +210,30 @@ func (s *Service) getPressureDriver() device.PressureDriver {
 	return s.pressureDriver
 }
 
+// checkValveCalibrationGate 校验所有已绑定计量设备的阀门均处于校准模式。
+// 多设备场景下任一设备未达标即整体门禁失败（错误携带 deviceId 便于定位）；
+// 单设备场景的错误文案保持原有 "valve must be in calibration state" 语义。
+// 按设备 ID 排序遍历，保证多台设备同时不达标时报错可复现。
+func checkValveCalibrationGate(ctx context.Context, drivers map[string]device.MeasureDriver) error {
+	devIDs := make([]string, 0, len(drivers))
+	for devID := range drivers {
+		devIDs = append(devIDs, devID)
+	}
+	sort.Strings(devIDs)
+
+	for _, devID := range devIDs {
+		valveStatus, err := drivers[devID].ReadValveStatus(ctx)
+		if err != nil {
+			return fmt.Errorf("%w: read valve status on %s: %v", apperrors.ErrPrerequisiteNotMet, devID, err)
+		}
+		if valveStatus != string(domain.ValveStateCalibration) {
+			return fmt.Errorf("%w: valve must be in calibration state on %s, current: %s",
+				apperrors.ErrPrerequisiteNotMet, devID, valveStatus)
+		}
+	}
+	return nil
+}
+
 // StartCalibration 开始校准流程（WTN1604 多点校准模式）。
 // 若 ControlMode 为 auto，则在准备完成后自动启动采集循环。
 // 是否校验阀门状态由 startPrerequisiteConfig.EnforceValveCalibration 控制。
@@ -218,7 +253,6 @@ func (s *Service) StartCalibration(ctx context.Context) error {
 
 	// 在锁内提取所需配置
 	enforceValveGate := s.startPrerequisiteConfig.EnforceValveCalibration
-	measureDriver := s.getMeasureDriver()
 	measureDrivers := s.getMeasureDrivers()
 	measureDevIDs := append([]string(nil), s.measureDevIDs...)
 	avgCount := s.config.AverageCount
@@ -241,15 +275,9 @@ func (s *Service) StartCalibration(ctx context.Context) error {
 	// 影响其他并发请求。失败 / 非校准态都要回滚 coordinator，
 	// 并统一 wrap ErrPrerequisiteNotMet，让 HTTP 层映射到 409 PREREQUISITE_NOT_MET。
 	if enforceValveGate {
-		valveStatus, err := measureDriver.ReadValveStatus(ctx)
-		if err != nil {
+		if err := checkValveCalibrationGate(ctx, measureDrivers); err != nil {
 			s.coordinator.End()
-			return fmt.Errorf("%w: read valve status: %v", apperrors.ErrPrerequisiteNotMet, err)
-		}
-		if valveStatus != string(domain.ValveStateCalibration) {
-			s.coordinator.End()
-			return fmt.Errorf("%w: valve must be in calibration state, current: %s",
-				apperrors.ErrPrerequisiteNotMet, valveStatus)
+			return err
 		}
 	}
 
@@ -295,15 +323,15 @@ func (s *Service) StartCalibration(ctx context.Context) error {
 // 用于 session/start 端点在状态迁移前进行门禁拦截。
 func (s *Service) ValidateStartPrerequisites(ctx context.Context) error {
 	s.mu.Lock()
-	
-	measureDriver := s.getMeasureDriver()
+
+	measureDrivers := s.getMeasureDrivers()
 	pressureDriver := s.getPressureDriver()
 	channels := s.config.Channels
 	config := s.config
 	enforceValveGate := s.startPrerequisiteConfig.EnforceValveCalibration
 	s.mu.Unlock()
 
-	if measureDriver == nil {
+	if len(measureDrivers) == 0 {
 		return fmt.Errorf("measure device not bound")
 	}
 
@@ -321,13 +349,8 @@ func (s *Service) ValidateStartPrerequisites(ctx context.Context) error {
 	}
 
 	if enforceValveGate {
-		valveStatus, err := measureDriver.ReadValveStatus(ctx)
-		if err != nil {
-			return fmt.Errorf("%w: read valve status: %v", apperrors.ErrPrerequisiteNotMet, err)
-		}
-		if valveStatus != string(domain.ValveStateCalibration) {
-			return fmt.Errorf("%w: valve must be in calibration state, current: %s",
-				apperrors.ErrPrerequisiteNotMet, valveStatus)
+		if err := checkValveCalibrationGate(ctx, measureDrivers); err != nil {
+			return err
 		}
 	}
 

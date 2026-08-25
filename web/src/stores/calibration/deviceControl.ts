@@ -90,11 +90,75 @@ export const useDeviceControlStore = defineStore('deviceControl', () => {
     }
   }
 
+  // 连接多台1604设备：逐台连接，全部成功后整批绑定到会话。
+  // 与 connectDevice1604 的区别：连接阶段不逐台绑定，避免后端绑定集合被反复覆盖，
+  // 全部连接成功后再一次性绑定整批设备。
+  const connectMeasureDevices = async (deviceIds: string[]): Promise<ActionResult> => {
+    try {
+      for (const deviceId of deviceIds) {
+        const result = await deviceStore.connectMeasureDevice(deviceId)
+        if (!result.ok) {
+          return result
+        }
+      }
+
+      // 全部连接成功后整批绑定到设备会话，使其能读取阀门/单位/设备信息
+      try {
+        await bindMeasureDevices(deviceIds, '', 'calibration')
+      } catch (err) {
+        console.error('bindMeasureDevices failed:', err)
+        return { ok: false, error: 'BIND_FAILED', detail: '绑定计量设备会话失败，无法读取阀门/单位信息' }
+      }
+
+      // 读取设备信息、阀门状态和单位（连接后增加重试，避免设备刚建链时读数失败）
+      const loaded = await refreshDeviceInfo({ retries: 3, retryDelayMs: 500 })
+      if (!loaded) {
+        console.warn('设备已连接，但阀门/单位信息读取失败，请稍后重试')
+      }
+
+      // 把从硬件读取到的实际单位同步到设备配置，确保 CheckUnitConsistency 比较的是真实单位
+      if (measureUnit.value) {
+        try {
+          const devices = await fetchDevices()
+          for (const deviceId of deviceIds) {
+            const dto = devices.find(d => d.id === deviceId)
+            if (dto) {
+              await upsertDevice({ ...dto, unit: measureUnit.value })
+            }
+          }
+        } catch (syncErr) {
+          console.warn('同步计量设备单位到配置失败:', syncErr)
+        }
+      }
+
+      return { ok: true }
+    } catch (error) {
+      console.error('连接1604设备失败:', error)
+      return { ok: false, error: 'CONNECT_FAILED', detail: String(error) }
+    }
+  }
+
   // 断开1604设备
   const disconnectDevice1604 = async (deviceId: string): Promise<ActionResult> => {
     try {
       const result = await deviceStore.disconnectMeasureDevice(deviceId)
       return result
+    } catch (error) {
+      console.error('断开1604设备失败:', error)
+      return { ok: false, error: 'DISCONNECT_FAILED', detail: String(error) }
+    }
+  }
+
+  // 断开多台1604设备：逐台断开。
+  const disconnectMeasureDevices = async (deviceIds: string[]): Promise<ActionResult> => {
+    try {
+      for (const deviceId of deviceIds) {
+        const result = await deviceStore.disconnectMeasureDevice(deviceId)
+        if (!result.ok) {
+          return result
+        }
+      }
+      return { ok: true }
     } catch (error) {
       console.error('断开1604设备失败:', error)
       return { ok: false, error: 'DISCONNECT_FAILED', detail: String(error) }
@@ -315,7 +379,9 @@ export const useDeviceControlStore = defineStore('deviceControl', () => {
     pressDeviceConnected,
     // Actions
     connectDevice1604,
+    connectMeasureDevices,
     disconnectDevice1604,
+    disconnectMeasureDevices,
     connectPressDevice,
     disconnectPressDevice,
     setDevices,

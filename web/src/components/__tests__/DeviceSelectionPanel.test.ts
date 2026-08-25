@@ -47,11 +47,15 @@ describe('DeviceSelectionPanel', () => {
 
     await flushPromises()
 
-    const selects = wrapper.findAll('select')
-    expect(selects.length).toBeGreaterThanOrEqual(2)
+    // 计量设备为多选 checkbox 列表，打压设备为下拉 select。
+    const checkboxes = wrapper.findAll('input[type="checkbox"]')
+    expect(checkboxes.length).toBeGreaterThanOrEqual(1)
 
-    await selects[0].setValue('m1')
-    await selects[1].setValue('p1')
+    const selects = wrapper.findAll('select')
+    expect(selects.length).toBeGreaterThanOrEqual(1)
+
+    await checkboxes[0].setValue()
+    await selects[0].setValue('p1')
 
     expect(wrapper.text()).toContain('measure-1')
     expect(wrapper.text()).toContain('pressure-1')

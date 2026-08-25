@@ -285,8 +285,12 @@ async function handleExport() {
   if (!path) return
   isExporting.value = true
   try {
-    await exportCalibrationReport(path)
-    ElMessage.success('报告导出成功')
+    const paths = await exportCalibrationReport(path)
+    if (paths.length > 1) {
+      ElMessage.success(`报告导出成功，共 ${paths.length} 个文件（每台设备一个）`)
+    } else {
+      ElMessage.success('报告导出成功')
+    }
   } catch (e) {
     ElMessage.error(e instanceof Error ? e.message : '报告导出失败')
   } finally {

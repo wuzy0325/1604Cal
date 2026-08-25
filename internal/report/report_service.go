@@ -22,7 +22,7 @@ import (
 
 // Service 封装报告模板路径拼装逻辑与报告导出。
 type Service struct {
-	templateDir         string
+	templateDir           string
 	embedTemplateProvider *EmbedTemplateProvider
 }
 
@@ -78,10 +78,16 @@ func (s *Service) ResolveTemplatePath(points int, mode string) (string, error) {
 //   - 单设备（或旧数据）：outputPath 作为报告文件路径。
 //   - 多设备：outputPath 作为基路径，在文件名中插入设备 ID，例如
 //     "报告.xlsx" → "报告_dev-a.xlsx"，避免静默把用户指定的文件路径改造成目录。
+// 返回实际生成的报告文件路径列表（多设备时每台一个，顺序与设备集合一致）。
 // 优先使用模板文件填充数据，无模板时创建默认工作簿。
-func (s *Service) ExportReport(ctx context.Context, session *calibration.CalibrationSession, outputPath string) error {
+// ExportReport 根据 CalibrationSession 生成校准报告并保存到 outputPath。
+// unit 为报告压力单位（来自计量设备真实单位，如 "psi"/"kPa"），不再写死。
+func (s *Service) ExportReport(ctx context.Context, session *calibration.CalibrationSession, outputPath, unit string) ([]string, error) {
 	if session == nil {
-		return fmt.Errorf("%w: calibration session is nil", apperrors.ErrNoActiveSession)
+		return nil, fmt.Errorf("%w: calibration session is nil", apperrors.ErrNoActiveSession)
+	}
+	if unit == "" {
+		unit = "kPa"
 	}
 
 	// 多设备：每台设备生成独立报告
@@ -90,15 +96,20 @@ func (s *Service) ExportReport(ctx context.Context, session *calibration.Calibra
 		devIDs = []string{session.MeasureDeviceID}
 	}
 	if len(devIDs) > 1 {
+		paths := make([]string, 0, len(devIDs))
 		for _, devID := range devIDs {
 			devPath := perDeviceReportPath(outputPath, devID)
-			if err := s.exportReportForDevice(ctx, session, devID, devPath); err != nil {
-				return err
+			if err := s.exportReportForDevice(ctx, session, devID, devPath, unit); err != nil {
+				return nil, err
 			}
+			paths = append(paths, devPath)
 		}
-		return nil
+		return paths, nil
 	}
-	return s.exportReportForDevice(ctx, session, "", outputPath)
+	if err := s.exportReportForDevice(ctx, session, "", outputPath, unit); err != nil {
+		return nil, err
+	}
+	return []string{outputPath}, nil
 }
 
 // perDeviceReportPath 为多设备场景生成单台设备的报告文件路径。
@@ -114,7 +125,7 @@ func perDeviceReportPath(outputPath, deviceID string) string {
 
 // exportReportForDevice 为单台计量设备生成报告。
 // deviceID 为空时回退单设备字段（兼容旧数据）。
-func (s *Service) exportReportForDevice(ctx context.Context, session *calibration.CalibrationSession, deviceID, outputPath string) error {
+func (s *Service) exportReportForDevice(ctx context.Context, session *calibration.CalibrationSession, deviceID, outputPath, unit string) error {
 	// 收集标准压力值（仅正程）
 	standardValues := make([]float64, 0, len(session.Points))
 	for _, p := range session.Points {
@@ -126,8 +137,7 @@ func (s *Service) exportReportForDevice(ctx context.Context, session *calibratio
 	// 收集通道数据
 	channels := collectChannelData(session, deviceID)
 
-	// 确定压力单位
-	unit := "kPa"
+	// 确定压力单位（由调用方传入，来自计量设备真实单位）
 
 	// 尝试加载模板
 	templatePath, err := s.ResolveTemplatePath(
@@ -333,25 +343,35 @@ func parseTemplateFileName(filename string) (ReportTemplate, bool) {
 }
 
 // ExportMeasurementReport 根据计量采集数据生成报告并保存到 outputPath。
+// unit 为报告压力单位（来自计量设备真实单位，如 "psi"/"kPa"），不再写死。
 // 多设备场景：为每台设备分别生成独立报告文件，outputPath 作为基路径，
 // 在文件名中插入设备 ID（如 "报告.xlsx" → "报告_dev-a.xlsx"）。
-func (s *Service) ExportMeasurementReport(ctx context.Context, points []domain.PressurePoint, config domain.WorkflowConfig, outputPath string) error {
+// 返回实际生成的报告文件路径列表（多设备时每台一个，顺序与设备集合一致）。
+func (s *Service) ExportMeasurementReport(ctx context.Context, points []domain.PressurePoint, config domain.WorkflowConfig, outputPath, unit string) ([]string, error) {
 	if len(points) == 0 {
-		return fmt.Errorf("%w: no measurement points", apperrors.ErrNoActiveSession)
+		return nil, fmt.Errorf("%w: no measurement points", apperrors.ErrNoActiveSession)
+	}
+	if unit == "" {
+		unit = "kPa"
 	}
 
 	// 探测设备 ID 集合（多设备场景）
 	deviceIDs := detectDeviceIDs(points)
 	if len(deviceIDs) > 1 {
+		paths := make([]string, 0, len(deviceIDs))
 		for _, devID := range deviceIDs {
 			devPath := perDeviceReportPath(outputPath, devID)
-			if err := s.exportMeasurementReportForDevice(ctx, points, config, devPath, devID); err != nil {
-				return err
+			if err := s.exportMeasurementReportForDevice(ctx, points, config, devPath, devID, unit); err != nil {
+				return nil, err
 			}
+			paths = append(paths, devPath)
 		}
-		return nil
+		return paths, nil
 	}
-	return s.exportMeasurementReportForDevice(ctx, points, config, outputPath, "")
+	if err := s.exportMeasurementReportForDevice(ctx, points, config, outputPath, "", unit); err != nil {
+		return nil, err
+	}
+	return []string{outputPath}, nil
 }
 
 // detectDeviceIDs 从压力点的设备维度数据中探测参与计量设备 ID 集合。
@@ -371,7 +391,7 @@ func detectDeviceIDs(points []domain.PressurePoint) []string {
 
 // exportMeasurementReportForDevice 为单台计量设备生成计量报告。
 // deviceID 为空时回退单设备字段。
-func (s *Service) exportMeasurementReportForDevice(ctx context.Context, points []domain.PressurePoint, config domain.WorkflowConfig, outputPath, deviceID string) error {
+func (s *Service) exportMeasurementReportForDevice(ctx context.Context, points []domain.PressurePoint, config domain.WorkflowConfig, outputPath, deviceID, unit string) error {
 	// 始终输出全部16通道
 	numChannels := 16
 
@@ -385,7 +405,8 @@ func (s *Service) exportMeasurementReportForDevice(ctx context.Context, points [
 	if config.PressureMode == domain.PressureModeRoundTrip {
 		backwardByTarget = collectMeasurementChannelByTarget(points, numChannels, config.AverageCount, "backward", deviceID)
 	}
-	unit := "kPa"
+
+	// 压力单位由调用方传入（来自计量设备真实单位），不再写死
 
 	// 尝试加载模板
 	templatePath, err := s.ResolveTemplatePath(
@@ -526,10 +547,8 @@ func fillMeasurementWorksheetMetadata(f *excelize.File, unit string, points []do
 			if strings.Contains(text, "单位") || strings.Contains(strings.ToLower(text), "unit") {
 				if col+1 <= 12 {
 					rightCell := cellName(col+1, row)
-					val, _ := f.GetCellValue(sheet, rightCell)
-					if val == "" || val == "kPa" {
-						f.SetCellValue(sheet, rightCell, unit)
-					}
+					// 模板中的单位只是占位值，必须始终以本次设备读取结果为准。
+					f.SetCellValue(sheet, rightCell, unit)
 				}
 				continue
 			}

@@ -7,7 +7,7 @@ import {
   getPressurePoints as apiGetPoints,
   updatePointTargetPressure as apiUpdateTargetPressure,
   pressurize as apiPressurize,
-  collectData as apiCollectData
+  collectDataByDevice as apiCollectData
 } from "@/api/calibration"
 import type { FittingResultDTO } from "@/types/calibration"
 import { ControlMode } from "@/types/calibration"
@@ -22,7 +22,7 @@ function loadSavedPoints(): PressurePoint[] {
     const raw = localStorage.getItem(POINTS_KEY)
     if (raw) {
       const saved = JSON.parse(raw) as PressurePoint[]
-      return saved.map(p => ({ ...p, status: 'pending' as const, collectedData: undefined, actualPressure: undefined }))
+      return saved.map(p => ({ ...p, status: 'pending' as const, collectedData: undefined, collectedByDevice: undefined, actualPressure: undefined }))
     }
   } catch { /* ignore */ }
   return []
@@ -82,6 +82,7 @@ export const usePressurePointStore = defineStore('pressurePoint', () => {
         targetPressure: p.targetPressure,
         status: p.status as PressurePoint['status'],
         collectedData: p.collectedData,
+        collectedByDevice: p.collectedByDevice,
         actualPressure: p.actualPressure
       }))
 
@@ -170,9 +171,18 @@ export const usePressurePointStore = defineStore('pressurePoint', () => {
 
     try {
       point.status = 'collecting'
-      const data = await apiCollectData(point.index)
+      // 多设备采集：devices 为每台设备通道数据，data 为首个设备数据（兼容旧字段）
+      const { data, devices } = await apiCollectData(point.index)
 
       point.collectedData = data
+      if (devices && Object.keys(devices).length > 0) {
+        point.collectedByDevice = Object.fromEntries(
+          Object.entries(devices).map(([deviceId, collected]) => [
+            deviceId,
+            { deviceId, collected, status: 'completed' as const }
+          ])
+        )
+      }
       point.status = 'completed'
 
       return { ok: true }
@@ -190,6 +200,7 @@ export const usePressurePointStore = defineStore('pressurePoint', () => {
       ...p,
       status: 'pending' as PressurePoint['status'],
       collectedData: undefined,
+      collectedByDevice: undefined,
       actualPressure: undefined
     }))
   }

@@ -14,6 +14,8 @@ export type MeasurementState =
 export interface CollectedRow {
   timestamp: string
   channels: Record<string, number>
+  /** 所属计量设备（多设备场景区分设备；单设备可能为空） */
+  deviceId?: string
 }
 
 /** 稳定性监控更新载荷 */
@@ -30,6 +32,8 @@ export interface StabilityUpdate {
 /** 报警数据载荷 */
 export interface AlarmData {
   pointId: string
+  /** 触发报警的计量设备（多设备场景定位故障设备；单设备可能为空） */
+  deviceId?: string
   targetPressure: number
   actualPressure: number
   threshold: number

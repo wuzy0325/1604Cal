@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"sort"
 	"sync"
 	"time"
 
@@ -135,6 +136,29 @@ func (s *Service) State() domain.SessionState {
 	return s.coordinator.State()
 }
 
+// checkValveCalibrationGate 校验所有已绑定计量设备的阀门均处于校准模式。
+// 多设备场景下任一设备未达标即整体门禁失败（错误携带 deviceId 便于定位）；
+// 按设备 ID 排序遍历，保证多台设备同时不达标时报错可复现。
+func checkValveCalibrationGate(ctx context.Context, drivers map[string]device.MeasureDriver) error {
+	devIDs := make([]string, 0, len(drivers))
+	for devID := range drivers {
+		devIDs = append(devIDs, devID)
+	}
+	sort.Strings(devIDs)
+
+	for _, devID := range devIDs {
+		valveStatus, err := drivers[devID].ReadValveStatus(ctx)
+		if err != nil {
+			return fmt.Errorf("%w: read valve status on %s: %v", apperrors.ErrPrerequisiteNotMet, devID, err)
+		}
+		if domain.ValveState(valveStatus) != domain.ValveStateCalibration {
+			return fmt.Errorf("%w: valve must be in calibration state on %s, current: %s",
+				apperrors.ErrPrerequisiteNotMet, devID, valveStatus)
+		}
+	}
+	return nil
+}
+
 // Start 启动计量采集。
 func (s *Service) Start(ctx context.Context, channels []int) error {
 	s.mu.Lock()
@@ -144,20 +168,15 @@ func (s *Service) Start(ctx context.Context, channels []int) error {
 		return session.ErrMeasureDeviceNotSet
 	}
 	enforceValveGate := s.startPrerequisiteConfig.EnforceValveCalibration
-	measureDriver := s.sess.MeasureDriver()
+	measureDrivers := s.sess.MeasureDrivers()
 	s.mu.Unlock()
 
-	// 阀门门禁：阀门=校准模式是计量启动的必要条件。
+	// 阀门门禁：所有已绑定计量设备的阀门均须处于校准模式。
 	// 必须在 coordinator.Begin 之前校验，避免占用工作流锁后又因门禁失败回滚。
 	// 锁外读阀（最长 3s I/O），不阻塞会话锁。
 	if enforceValveGate {
-		valveStatus, err := measureDriver.ReadValveStatus(ctx)
-		if err != nil {
-			return fmt.Errorf("%w: read valve status: %v", apperrors.ErrPrerequisiteNotMet, err)
-		}
-		if domain.ValveState(valveStatus) != domain.ValveStateCalibration {
-			return fmt.Errorf("%w: valve must be in calibration state, current: %s",
-				apperrors.ErrPrerequisiteNotMet, valveStatus)
+		if err := checkValveCalibrationGate(ctx, measureDrivers); err != nil {
+			return err
 		}
 	}
 

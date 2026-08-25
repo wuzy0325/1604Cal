@@ -65,6 +65,13 @@
         </button>
       </div>
     </div>
+
+    <!-- 跳过设备弹窗：预设原因 + 备注 -->
+    <SkipDeviceDialog
+      v-model="showSkipDeviceDialog"
+      :device-name="skipDeviceName"
+      @confirm="handleSkipDeviceConfirm"
+    />
   </section>
 </template>
 
@@ -85,13 +92,23 @@ import { useCalibrationStore } from '@/stores/calibration'
 import type { SecondaryAction } from '@/stores/calibration/types'
 import { useCalibrationUI } from '@/composables/useCalibrationUI'
 import { alarmEventKey, type AlarmEventData } from '@/composables/useCalibrationSync'
+import SkipDeviceDialog from '@/components/common/SkipDeviceDialog.vue'
+import { useDeviceInventoryStore } from '@/stores/device/inventoryStore'
 
 const calibrationStore = useCalibrationStore()
 const calibrationUI = useCalibrationUI()
+const deviceStore = useDeviceInventoryStore()
 
 // 当前报警事件：携带 deviceId 时表示设备级报警（采集失败/超限），可提供"跳过该设备"动作
 const alarmEvent = inject(alarmEventKey, ref<AlarmEventData | null>(null))
 const alarmDeviceId = computed(() => alarmEvent?.value?.deviceId || '')
+
+// 跳过设备弹窗状态
+const showSkipDeviceDialog = ref(false)
+const skipDeviceName = computed(() => {
+  const dev = deviceStore.measureDevices.find(d => d.id === alarmDeviceId.value)
+  return dev?.name || dev?.model || alarmDeviceId.value
+})
 
 // 图标名 → 组件映射，与 primaryAction.icon 字符串对应
 const iconMap: Record<string, unknown> = {
@@ -176,20 +193,16 @@ async function dispatchSecondary(action: SecondaryAction) {
   }
 }
 
-// 设备级报警时跳过指定设备：确认后永久从本批次剩余流程移除该设备。
-async function handleSkipDevice() {
+// 设备级报警时跳过指定设备：打开原因选择弹窗，确认后永久从本批次剩余流程移除该设备。
+function handleSkipDevice() {
+  if (!alarmDeviceId.value) return
+  showSkipDeviceDialog.value = true
+}
+
+async function handleSkipDeviceConfirm(reason: string) {
   const deviceId = alarmDeviceId.value
   if (!deviceId) return
-  try {
-    await ElMessageBox.confirm(
-      `确认永久跳过该计量设备？后续压力点将不再采集该设备，已完成数据将保留。`,
-      '跳过设备',
-      { confirmButtonText: '跳过', cancelButtonText: '取消', type: 'warning' }
-    )
-  } catch {
-    return
-  }
-  await calibrationUI.skipDevice(deviceId, '人工放弃')
+  await calibrationUI.skipDevice(deviceId, reason)
 }
 </script>
 

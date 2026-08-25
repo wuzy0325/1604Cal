@@ -1,12 +1,18 @@
 import { apiGet, apiPost } from './client'
 
-/** 绑定计量设备和打压设备到会话 */
+/** 绑定计量设备（支持多台）和打压设备到会话 */
 export async function bindDevices(
-  measureDeviceId: string,
+  measureDeviceId: string | string[],
   pressureDeviceId: string,
   moduleName = 'measurement'
 ): Promise<void> {
-  await apiPost('/session/devices', { measureDeviceId, pressureDeviceId, moduleName })
+  const ids = Array.isArray(measureDeviceId) ? measureDeviceId : [measureDeviceId]
+  await apiPost('/session/devices', {
+    measureDeviceId: ids[0] ?? '',
+    measureDeviceIds: ids,
+    pressureDeviceId,
+    moduleName
+  })
 }
 
 /** 绑定多台计量设备与打压设备到会话 */
@@ -18,9 +24,17 @@ export async function bindMeasureDevices(
   await apiPost('/session/devices', { measureDeviceIds, pressureDeviceId, moduleName })
 }
 
-/** 仅绑定计量设备 */
-export async function bindMeasureDevice(measureDeviceId: string, moduleName = 'measurement'): Promise<void> {
-  await apiPost('/session/measure-device', { measureDeviceId, moduleName })
+/** 仅绑定计量设备（保留当前打压设备绑定）；支持多设备 */
+export async function bindMeasureDevice(
+  measureDeviceId: string | string[],
+  moduleName = 'measurement'
+): Promise<void> {
+  const ids = Array.isArray(measureDeviceId) ? measureDeviceId : [measureDeviceId]
+  await apiPost('/session/measure-device', {
+    measureDeviceId: ids[0] ?? '',
+    measureDeviceIds: ids,
+    moduleName
+  })
 }
 
 /** 读取当前压力 */
@@ -33,9 +47,14 @@ export async function readStability(): Promise<boolean> {
   return (await apiGet<{ stable: boolean }>('/session/stability')).stable
 }
 
-/** 读取计量设备实时数据 */
+/** 读取计量设备实时数据（首个绑定设备，兼容单设备场景） */
 export async function readMeasureData(): Promise<number[]> {
   return (await apiGet<{ data: number[] }>('/session/measure-data')).data
+}
+
+/** 读取所有已绑定计量设备的实时数据（deviceID -> 通道数据），供多设备展示 */
+export async function readMeasureDataAllDevices(): Promise<Record<string, number[]>> {
+  return (await apiGet<{ data: number[]; devices: Record<string, number[]> }>('/session/measure-data')).devices
 }
 
 /** 读取阀门状态 */

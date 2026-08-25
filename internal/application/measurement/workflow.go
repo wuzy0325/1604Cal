@@ -34,19 +34,15 @@ func (s *Service) StartWorkflow(ctx context.Context, channels []int) error {
 	}
 
 	enforceValveGate := s.startPrerequisiteConfig.EnforceValveCalibration
-	measureDriver := s.sess.MeasureDriver()
+	measureDrivers := s.sess.MeasureDrivers()
 	s.mu.Unlock()
 
-	// 阀门门禁：在状态迁移与 coordinator.Begin 之前完成，
-	// 避免门禁失败时还要回滚工作流。读阀 I/O 不持有 s.mu。
+	// 阀门门禁：所有已绑定计量设备的阀门均须处于校准模式。
+	// 在状态迁移与 coordinator.Begin 之前完成，避免门禁失败时还要回滚工作流。
+	// 读阀 I/O 不持有 s.mu。
 	if enforceValveGate {
-		valveStatus, err := measureDriver.ReadValveStatus(ctx)
-		if err != nil {
-			return fmt.Errorf("%w: read valve status: %v", apperrors.ErrPrerequisiteNotMet, err)
-		}
-		if domain.ValveState(valveStatus) != domain.ValveStateCalibration {
-			return fmt.Errorf("%w: valve must be in calibration state, current: %s",
-				apperrors.ErrPrerequisiteNotMet, valveStatus)
+		if err := checkValveCalibrationGate(ctx, measureDrivers); err != nil {
+			return err
 		}
 	}
 

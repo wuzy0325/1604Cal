@@ -24,6 +24,29 @@
           </span>
         </div>
       </div>
+      <!-- 多设备 tab：绑定多台计量设备时按设备切换查看各设备通道数据；
+           单设备场景不显示，行为与改造前一致 -->
+      <div
+        v-if="deviceTabs.length > 1"
+        class="device-tabs"
+      >
+        <button
+          v-for="tab in deviceTabs"
+          :key="tab.deviceId"
+          type="button"
+          class="device-tab"
+          :class="{ active: tab.deviceId === activeDeviceId }"
+          @click="activeDeviceId = tab.deviceId"
+        >
+          {{ tab.name }}
+          <span
+            v-if="tab.skipped"
+            class="skipped-badge"
+          >
+            已跳过
+          </span>
+        </button>
+      </div>
       <div class="table-body">
         <!-- 改用 el-table 与标定模块统一表格实现（共用 calibration-table mixin）。
              超限高亮策略保持计量模块原有红色背景方案，与标定的文字颜色方案有意区分。 -->
@@ -103,10 +126,10 @@
           >
             <template #default="{ row }">
               <div
-                v-if="row.collectedData && row.collectedData[ch - 1] !== undefined"
+                v-if="channelValue(row, ch) !== undefined"
                 :class="['channel-value', { 'channel-over-limit': isChannelOverLimit(row, ch) }]"
               >
-                {{ row.collectedData[ch - 1].toFixed(precisionForDisplay) }}
+                {{ (channelValue(row, ch) as number).toFixed(precisionForDisplay) }}
               </div>
               <div
                 v-else
@@ -178,6 +201,16 @@
             width="70"
           />
           <el-table-column
+            v-if="deviceTabs.length > 1"
+            label="设备"
+            width="90"
+            class-name="col-device"
+          >
+            <template #default="{ row }">
+              {{ deviceNameById(row.deviceId) }}
+            </template>
+          </el-table-column>
+          <el-table-column
             label="平均压力"
             width="100"
             class-name="col-pressure"
@@ -215,9 +248,10 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { DataLine, Aim } from '@element-plus/icons-vue'
 import { useMeasurementStore } from '@/stores/measurement'
+import { useMeasurementDeviceStore } from '@/stores/measurement/deviceStore'
 import type { CollectedRow } from '@/stores/measurement'
 import type { MeasurementPoint } from '@/api/measurement'
 import { ControlMode, PressureMode } from '@/types/calibration'
@@ -233,10 +267,54 @@ defineEmits<{
 }>()
 
 const measurementStore = useMeasurementStore()
+const deviceStore = useMeasurementDeviceStore()
 
 const rows = computed(() => props.rows ?? measurementStore.rows)
 const channels = computed(() => props.channels ?? measurementStore.channels)
 const points = computed<MeasurementPoint[]>(() => measurementStore.points)
+
+// ── 多设备 tab ──
+// 当前查看的设备（默认首个绑定设备）；单设备场景恒为首个设备，不影响旧行为。
+const activeDeviceId = ref('')
+
+// 设备 tab 列表：绑定多台计量设备时展示；含已跳过标记与原因。
+const deviceTabs = computed(() => {
+  const ids = measurementStore.measureDeviceIds
+  if (ids.length <= 1) return []
+  return ids.map(deviceId => {
+    const dev = deviceStore.measureDevices.find(d => d.id === deviceId)
+    const reason = measurementStore.skippedDevices[deviceId]
+    return {
+      deviceId,
+      name: dev?.name || dev?.model || deviceId,
+      skipped: Boolean(reason),
+      skipReason: reason || ''
+    }
+  })
+})
+
+// 当前设备在某压力点的采集数据：多设备取 collectedByDevice[activeDeviceId]，
+// 单设备回退 collectedData（兼容旧字段）。
+function displayCollectedData(point: MeasurementPoint): number[] | undefined {
+  if (activeDeviceId.value && point.collectedByDevice?.[activeDeviceId.value]) {
+    return point.collectedByDevice[activeDeviceId.value].collected
+  }
+  return point.collectedData
+}
+
+// 设备 ID → 显示名（实时采样表设备列）。
+function deviceNameById(deviceId?: string): string {
+  if (!deviceId) return '--'
+  const dev = deviceStore.measureDevices.find(d => d.id === deviceId)
+  return dev?.name || dev?.model || deviceId
+}
+
+// 当前设备在某压力点指定通道的采集值（undefined 表示未采集）。
+function channelValue(point: MeasurementPoint, ch: number): number | undefined {
+  const data = displayCollectedData(point)
+  if (!data) return undefined
+  return data[ch - 1]
+}
 
 const isRoundTrip = computed(() => measurementStore.measurementParams.pressureMode === PressureMode.RoundTrip)
 const precisionForDisplay = computed(() => measurementStore.measurementParams.precision)
@@ -259,13 +337,14 @@ function calculateAllowance(target: number): number {
 
 function getPointOverLimitChannels(pt: MeasurementPoint): number[] {
   if (!alarmEnabled.value) return []
-  if (!pt.collectedData || pt.collectedData.length === 0) return []
+  const data = displayCollectedData(pt)
+  if (!data || data.length === 0) return []
 
   const allowance = calculateAllowance(pt.targetPressure)
   const overLimit: number[] = []
   // 仅对已选通道做超限判定，未选通道不显示也不参与报警（与后端 EnabledChannels 一致）。
   for (const ch of visibleChannels.value) {
-    const collectedVal = pt.collectedData[ch - 1]
+    const collectedVal = data[ch - 1]
     if (collectedVal === undefined || collectedVal === null) continue
     if (Math.abs(collectedVal - pt.targetPressure) > allowance) {
       overLimit.push(ch)
@@ -369,20 +448,27 @@ const visibleChannels = computed(() => {
 
 interface DisplayRow {
   index: number
+  deviceId?: string
   actualPressure: string
   channelValues: Record<number, string>
   collectTime: string
 }
 
+// 采样数据仍在 store 中保留最近 2000 条，但表格只渲染最近 500 条，
+// 避免高频采样时大量 DOM 节点和格式化对象造成浏览器内存峰值。
+const MAX_VISIBLE_SAMPLE_ROWS = 500
+
 const tableRows = computed<DisplayRow[]>(() => {
-  return rows.value.map((row, index) => {
+  const startIndex = Math.max(0, rows.value.length - MAX_VISIBLE_SAMPLE_ROWS)
+  return rows.value.slice(startIndex).map((row, offset) => {
     const channelValues: Record<number, string> = {}
     for (const ch of visibleChannels.value) {
       const raw = row.channels[String(ch)]
       channelValues[ch] = (typeof raw === 'number' && !isNaN(raw)) ? raw.toFixed(3) : '--'
     }
     return {
-      index: index + 1,
+      index: startIndex + offset + 1,
+      deviceId: row.deviceId,
       actualPressure: estimateActualPressure(row),
       channelValues,
       collectTime: formatTime(row.timestamp)
@@ -515,6 +601,55 @@ $amber: #f59e0b;
 .toolbar-actions {
   display: flex;
   gap: 8px;
+}
+
+/* 多设备 tab：按设备切换查看各设备通道数据 */
+.device-tabs {
+  display: flex;
+  gap: 6px;
+  padding: 8px 20px;
+  border-bottom: 1px solid $slate-100;
+  background: rgba(249, 250, 251, 0.5);
+  flex-shrink: 0;
+  flex-wrap: wrap;
+}
+
+.device-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  border: 1px solid $slate-200;
+  border-radius: 6px;
+  background: #fff;
+  color: $slate-600;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  font-family: $font-sans;
+
+  &:hover {
+    border-color: $mint;
+    color: $mint-dark;
+  }
+
+  &.active {
+    background: rgba(16, 185, 129, 0.1);
+    border-color: $mint;
+    color: $mint-dark;
+    font-weight: 600;
+  }
+}
+
+.skipped-badge {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  color: #dc2626;
 }
 
 /* 表格主体：让 el-table 撑满剩余空间 */

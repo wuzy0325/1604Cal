@@ -79,6 +79,8 @@ func (s *apiServer) sessionSetDevicesHandler(w http.ResponseWriter, r *http.Requ
 		writeError(w, err)
 		return
 	}
+	// 绑定成功后记录设备集合，供下次启动恢复勾选。
+	s.persistLastDevices(measureDevIDs, req.PressureDeviceID)
 
 	writeSuccess(w, http.StatusOK, map[string]string{"status": "ok"})
 }
@@ -104,11 +106,14 @@ func (s *apiServer) sessionSetMeasureDeviceHandler(w http.ResponseWriter, r *htt
 		moduleName = "measurement"
 	}
 
-	_, err = s.sessionService.BindMeasureDevices(measureDevIDs, s.sessionService.PressureDeviceID(), moduleName)
+	pressureDevID := s.sessionService.PressureDeviceID()
+	_, err = s.sessionService.BindMeasureDevices(measureDevIDs, pressureDevID, moduleName)
 	if err != nil {
 		writeError(w, err)
 		return
 	}
+	// 绑定成功后记录设备集合，供下次启动恢复勾选（保留当前打压设备绑定）。
+	s.persistLastDevices(measureDevIDs, pressureDevID)
 
 	writeSuccess(w, http.StatusOK, map[string]string{"status": "ok"})
 }
@@ -134,13 +139,20 @@ func (s *apiServer) sessionReadStabilityHandler(w http.ResponseWriter, r *http.R
 }
 
 func (s *apiServer) sessionReadMeasureDataHandler(w http.ResponseWriter, r *http.Request) {
-	data, err := s.sessionService.ReadMeasureData(r.Context(), s.currentToken())
+	// devices 为设备维度完整结果（deviceID -> 通道数据）；
+	// data 保留首个绑定设备数据，兼容旧前端单设备字段。
+	devices, err := s.sessionService.ReadMeasureDataAllDevices(r.Context(), s.currentToken())
 	if err != nil {
 		writeError(w, err)
 		return
 	}
 
-	writeSuccess(w, http.StatusOK, map[string]any{"data": data})
+	var data []float64
+	if ids := s.sessionService.MeasureDeviceIDs(); len(ids) > 0 {
+		data = devices[ids[0]]
+	}
+
+	writeSuccess(w, http.StatusOK, map[string]any{"data": data, "devices": devices})
 }
 
 func (s *apiServer) sessionGetValveHandler(w http.ResponseWriter, r *http.Request) {
@@ -165,7 +177,9 @@ func (s *apiServer) sessionSetValveHandler(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	if err := s.sessionService.SetValveStatus(r.Context(), s.currentToken(), normalizedStatus); err != nil {
+	// 多设备批次阀门状态必须整批一致（启动门禁校验所有设备），
+	// 因此阀门写命令下发到全部已绑定计量设备；单设备行为不变。
+	if err := s.sessionService.SetValveStatusAllDevices(r.Context(), s.currentToken(), normalizedStatus); err != nil {
 		writeError(w, err)
 		return
 	}

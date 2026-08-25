@@ -159,6 +159,29 @@ func (s *apiServer) persistConfig() {
 	}
 }
 
+// lastDevicesReadHandler 返回上次成功绑定的设备 ID 集合。
+// 前端页面加载时拉取该接口，恢复上次的设备勾选（多设备按勾选顺序）。
+func (s *apiServer) lastDevicesReadHandler(w http.ResponseWriter, _ *http.Request) {
+	if s.appConfig != nil {
+		writeSuccess(w, http.StatusOK, s.appConfig.LastDevices)
+		return
+	}
+	writeSuccess(w, http.StatusOK, config.Default().LastDevices)
+}
+
+// persistLastDevices 记录本次成功绑定的设备集合并落盘，供下次启动恢复勾选。
+// 只在绑定成功后调用；绑定失败不覆盖上次记录。
+func (s *apiServer) persistLastDevices(measureDevIDs []string, pressureDevID string) {
+	if s.appConfig == nil {
+		return
+	}
+	s.appConfig.LastDevices = config.LastDevicesConfig{
+		PressureDeviceID: pressureDevID,
+		MeasureDeviceIDs: append([]string(nil), measureDevIDs...),
+	}
+	s.persistConfig()
+}
+
 // calibrationConfigFromParams 将持久化参数转换为校准服务配置。
 func calibrationConfigFromParams(params config.CalibrationParamsConfig) domain.WorkflowConfig {
 	return domain.WorkflowConfig{

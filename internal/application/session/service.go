@@ -361,6 +361,42 @@ func (s *Service) ReadMeasureDataForDevice(ctx context.Context, token BindingTok
 	return drv.CollectData(ctx, allChannels)
 }
 
+// ReadMeasureDataAllDevices 从所有已绑定计量设备读取实时数据，返回 deviceID -> 通道数据。
+// 供前端实时数据轮询的多设备展示使用。单台失败只跳过该设备（记日志），
+// 不让个别设备故障导致整批实时数据不可用；按绑定顺序逐台读取。
+func (s *Service) ReadMeasureDataAllDevices(ctx context.Context, token BindingToken) (map[string][]float64, error) {
+	if err := s.validateToken(token); err != nil {
+		return nil, err
+	}
+
+	s.mu.Lock()
+	devIDs := append([]string(nil), s.measureDevIDs...)
+	drivers := make(map[string]device.MeasureDriver, len(s.measureDrivers))
+	for k, v := range s.measureDrivers {
+		drivers[k] = v
+	}
+	s.mu.Unlock()
+
+	if len(drivers) == 0 {
+		return nil, ErrMeasureDeviceNotSet
+	}
+
+	results := make(map[string][]float64, len(drivers))
+	for _, devID := range devIDs {
+		drv := drivers[devID]
+		if drv == nil {
+			continue
+		}
+		data, err := drv.CollectData(ctx, allChannels)
+		if err != nil {
+			log.Printf("[session] read measure data on %s failed: %v", devID, err)
+			continue
+		}
+		results[devID] = data
+	}
+	return results, nil
+}
+
 // ReadValveStatus 读取首个计量设备阀门状态（兼容入口）。
 func (s *Service) ReadValveStatus(ctx context.Context, token BindingToken) (string, error) {
 	return s.ReadValveStatusForDevice(ctx, token, "")
@@ -385,6 +421,40 @@ func (s *Service) ReadValveStatusForDevice(ctx context.Context, token BindingTok
 // SetValveStatus 设置首个计量设备阀门状态（兼容入口）。
 func (s *Service) SetValveStatus(ctx context.Context, token BindingToken, status string) error {
 	return s.SetValveStatusForDevice(ctx, token, "", status)
+}
+
+// SetValveStatusAllDevices 对所有已绑定计量设备下发阀门写命令。
+// 多设备批次要求整批阀门状态一致（启动门禁校验所有设备同处校准态），
+// 因此阀门模式切换必须逐台下发；任一设备失败即返回错误并携带 deviceId，
+// 已成功的设备保持新状态，由调用方决定是否整批重试。
+// 按 measureDevIDs（用户勾选顺序）遍历，单设备场景与 SetValveStatus 行为一致。
+func (s *Service) SetValveStatusAllDevices(ctx context.Context, token BindingToken, status string) error {
+	if err := s.validateToken(token); err != nil {
+		return err
+	}
+
+	s.mu.Lock()
+	devIDs := append([]string(nil), s.measureDevIDs...)
+	drivers := make(map[string]device.MeasureDriver, len(s.measureDrivers))
+	for k, v := range s.measureDrivers {
+		drivers[k] = v
+	}
+	s.mu.Unlock()
+
+	if len(drivers) == 0 {
+		return ErrMeasureDeviceNotSet
+	}
+
+	for _, devID := range devIDs {
+		drv := drivers[devID]
+		if drv == nil {
+			continue
+		}
+		if err := drv.SetValveStatus(ctx, status); err != nil {
+			return fmt.Errorf("set valve status on %s: %w", devID, err)
+		}
+	}
+	return nil
 }
 
 // SetValveStatusForDevice 设置指定计量设备阀门状态。

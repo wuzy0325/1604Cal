@@ -150,16 +150,24 @@ export const useCalibrationStore = defineStore('calibration', () => {
     } catch (error) { console.error('获取会话状态失败:', error) }
   }
 
-  const connectDevice1604 = async (deviceId: string): Promise<ActionResult> => {
-    const result = await deviceControlStore.connectDevice1604(deviceId)
+  // 连接1604计量设备：单台走原逻辑；多台整批连接并绑定。
+  const connectDevice1604 = async (deviceId: string | string[]): Promise<ActionResult> => {
+    const ids = Array.isArray(deviceId) ? deviceId : [deviceId]
+    const result = ids.length > 1
+      ? await deviceControlStore.connectMeasureDevices(ids)
+      : await deviceControlStore.connectDevice1604(ids[0])
     if (result.ok && deviceControlStore.device1604Connected) {
       setStep(CalibrationStep.CHANNEL_SELECT)
     }
     return result
   }
 
-  const disconnectDevice1604 = async (deviceId: string): Promise<ActionResult> => {
-    const result = await deviceControlStore.disconnectDevice1604(deviceId)
+  // 断开1604计量设备：单台走原逻辑；多台逐台断开。
+  const disconnectDevice1604 = async (deviceId: string | string[]): Promise<ActionResult> => {
+    const ids = Array.isArray(deviceId) ? deviceId : [deviceId]
+    const result = ids.length > 1
+      ? await deviceControlStore.disconnectMeasureDevices(ids)
+      : await deviceControlStore.disconnectDevice1604(ids[0])
     if (!deviceControlStore.device1604Connected) {
       setStep(CalibrationStep.DEVICE_CONNECT)
     }

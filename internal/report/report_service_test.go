@@ -145,7 +145,7 @@ func TestExportMeasurementReportRoundTripFillsReturnStroke(t *testing.T) {
 		MaxPressure:    40,
 		PrecisionLevel: 0.001,
 	}
-	if err := svc.ExportMeasurementReport(context.Background(), points, cfg, outPath); err != nil {
+	if _, err := svc.ExportMeasurementReport(context.Background(), points, cfg, outPath, "kPa"); err != nil {
 		t.Fatalf("ExportMeasurementReport: %v", err)
 	}
 
@@ -200,7 +200,7 @@ func TestExportMeasurementReportSkipsMissingBackwardPoints(t *testing.T) {
 		MaxPressure:    40,
 		PrecisionLevel: 0.001,
 	}
-	if err := svc.ExportMeasurementReport(context.Background(), points, cfg, outPath); err != nil {
+	if _, err := svc.ExportMeasurementReport(context.Background(), points, cfg, outPath, "kPa"); err != nil {
 		t.Fatalf("ExportMeasurementReport: %v", err)
 	}
 

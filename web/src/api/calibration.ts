@@ -13,9 +13,10 @@ export async function selectReportTemplate(points: number, mode: 'single' | 'ret
   return apiGet<ReportTemplateDTO>(`/reports/templates/select?points=${points}&mode=${mode}`)
 }
 
-/** 导出标定报告 */
-export async function exportCalibrationReport(outputPath: string): Promise<string> {
-  return (await apiPost<{ status: string; path: string }>('/reports/export', { outputPath })).path
+/** 导出标定报告；多设备时每台设备各生成一个文件，返回全部路径 */
+export async function exportCalibrationReport(outputPath: string): Promise<string[]> {
+  const resp = await apiPost<{ path: string; paths?: string[] }>('/reports/export', { outputPath })
+  return resp.paths?.length ? resp.paths : [resp.path]
 }
 
 // ---------------------------------------------------------------------------
@@ -57,9 +58,16 @@ export async function pressurize(pointIndex: number): Promise<void> {
   await apiPost('/calibration/pressurize', { pointIndex })
 }
 
-/** 采集数据 */
+/** 采集数据（首个绑定设备，兼容单设备场景） */
 export async function collectData(pointIndex: number): Promise<number[]> {
   return (await apiPost<{ data: number[] }>('/calibration/collect', { pointIndex })).data
+}
+
+/** 采集数据（多设备维度结果：deviceID -> 通道数据；data 为首个设备数据） */
+export async function collectDataByDevice(
+  pointIndex: number
+): Promise<{ data: number[]; devices: Record<string, number[]> }> {
+  return apiPost<{ data: number[]; devices: Record<string, number[]> }>('/calibration/collect', { pointIndex })
 }
 
 /** 永久跳过指定计量设备（从本批次剩余压力点移除） */

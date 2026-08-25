@@ -173,22 +173,25 @@ const checkUnitConsistency = async () => {
   }
 }
 
-const handleMeasureDeviceConnect = async (deviceId: string) => {
-  const ok = await deviceStore.connectMeasureDevice(deviceId)
-  if (!ok) {
-    return
+// 连接多台计量设备：逐台连接，全部成功后整批绑定到会话。
+const handleMeasureDeviceConnect = async (deviceIds: string[]) => {
+  for (const deviceId of deviceIds) {
+    const ok = await deviceStore.connectMeasureDevice(deviceId)
+    if (!ok) {
+      return
+    }
   }
 
-  moduleDeviceStore.setModuleSelection('measurement', { measureDeviceId: deviceId })
+  moduleDeviceStore.setModuleSelection('measurement', { measureDeviceIds: deviceIds })
 
   const connectedPressure = deviceStore.pressureDevices.find(d => d.status === 'connected')
   if (connectedPressure) {
-    await measurementStore.bindDevices(deviceId, connectedPressure.id)
+    await measurementStore.bindDevices(deviceIds, connectedPressure.id)
   } else {
     unitConsistent.value = true
     unitConflicts.value = []
     emitUnitCheck()
-    await measurementStore.bindMeasureDevice(deviceId)
+    await measurementStore.bindMeasureDevice(deviceIds)
   }
 
   await Promise.all([
@@ -197,12 +200,15 @@ const handleMeasureDeviceConnect = async (deviceId: string) => {
     measurementStore.refreshMeasureUnit()
   ])
 
+  // 同步各设备单位到后端配置（多设备逐台同步）
   if (measurementStore.measureUnit) {
     try {
       const devices = await fetchDevices()
-      const dto = devices.find(d => d.id === deviceId)
-      if (dto) {
-        await upsertDevice({ ...dto, unit: measurementStore.measureUnit })
+      for (const deviceId of deviceIds) {
+        const dto = devices.find(d => d.id === deviceId)
+        if (dto) {
+          await upsertDevice({ ...dto, unit: measurementStore.measureUnit })
+        }
       }
     } catch (syncErr) {
       console.warn('同步计量设备单位到配置失败:', syncErr)
@@ -215,14 +221,25 @@ const handleMeasureDeviceConnect = async (deviceId: string) => {
   }
 }
 
-const handleMeasureDeviceDisconnect = async (deviceId: string) => {
-  await deviceStore.disconnectMeasureDevice(deviceId)
-  if (measurementStore.measureDeviceId === deviceId) {
+const handleMeasureDeviceDisconnect = async (deviceIds: string[]) => {
+  for (const deviceId of deviceIds) {
+    await deviceStore.disconnectMeasureDevice(deviceId)
+  }
+  // 断开后从绑定列表移除已断开设备；若全部断开则整体解绑。
+  const remaining = measurementStore.measureDeviceIds.filter(id => !deviceIds.includes(id))
+  if (remaining.length === 0) {
     measurementStore.unbindMeasureDevice()
+  } else {
+    const connectedPressure = deviceStore.pressureDevices.find(d => d.status === 'connected')
+    if (connectedPressure) {
+      await measurementStore.bindDevices(remaining, connectedPressure.id)
+    } else {
+      await measurementStore.bindMeasureDevice(remaining)
+    }
   }
 
   moduleDeviceStore.setModuleSelection('measurement', {
-    measureDeviceId: '',
+    measureDeviceIds: remaining,
     pressureDeviceId: measurementStore.pressureDeviceId
   })
 
@@ -239,8 +256,8 @@ const handlePressDeviceConnect = async (deviceId: string) => {
 
   moduleDeviceStore.setModuleSelection('measurement', { pressureDeviceId: deviceId })
 
-  if (measurementStore.measureDeviceId) {
-    await measurementStore.bindDevices(measurementStore.measureDeviceId, deviceId)
+  if (measurementStore.measureDeviceIds.length > 0) {
+    await measurementStore.bindDevices(measurementStore.measureDeviceIds, deviceId)
   }
 
   await checkUnitConsistency()
@@ -253,7 +270,7 @@ const handlePressDeviceDisconnect = async (deviceId: string) => {
   }
 
   moduleDeviceStore.setModuleSelection('measurement', {
-    measureDeviceId: measurementStore.measureDeviceId,
+    measureDeviceIds: measurementStore.measureDeviceIds,
     pressureDeviceId: ''
   })
 
@@ -286,23 +303,23 @@ onMounted(() => {
   emitUnitCheck()
 })
 
-// 从标定画面切入时，自动绑定设备存储中已连接的计量设备
+// 从标定画面切入时，自动绑定设备存储中已连接的计量设备（多设备整批绑定）
 watch(
   () => deviceStore.measureDevices,
   async (devices) => {
-    if (measurementStore.measureDeviceId) return
-    const connectedDevice = devices.find(d => d.status === 'connected')
-    if (!connectedDevice) return
+    if (measurementStore.measureDeviceIds.length > 0) return
+    const connectedDevices = devices.filter(d => d.status === 'connected')
+    if (connectedDevices.length === 0) return
 
     try {
-      const deviceId = connectedDevice.id
-      moduleDeviceStore.setModuleSelection('measurement', { measureDeviceId: deviceId })
+      const deviceIds = connectedDevices.map(d => d.id)
+      moduleDeviceStore.setModuleSelection('measurement', { measureDeviceIds: deviceIds })
 
       const connectedPressure = deviceStore.pressureDevices.find(d => d.status === 'connected')
       if (connectedPressure) {
-        await measurementStore.bindDevices(deviceId, connectedPressure.id)
+        await measurementStore.bindDevices(deviceIds, connectedPressure.id)
       } else {
-        await measurementStore.bindMeasureDevice(deviceId)
+        await measurementStore.bindMeasureDevice(deviceIds)
         unitConsistent.value = true
         unitConflicts.value = []
         emitUnitCheck()
@@ -318,9 +335,11 @@ watch(
       if (measurementStore.measureUnit) {
         try {
           const devices = await fetchDevices()
-          const dto = devices.find(d => d.id === deviceId)
-          if (dto) {
-            await upsertDevice({ ...dto, unit: measurementStore.measureUnit })
+          for (const deviceId of deviceIds) {
+            const dto = devices.find(d => d.id === deviceId)
+            if (dto) {
+              await upsertDevice({ ...dto, unit: measurementStore.measureUnit })
+            }
           }
         } catch (syncErr) {
           console.warn('同步计量设备单位到配置失败:', syncErr)

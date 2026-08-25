@@ -18,41 +18,35 @@
     </div>
 
     <div class="selection-control">
-      <el-select
-        v-model="selectedDeviceId"
-        placeholder="选择计量设备"
+      <!-- 多设备勾选：选 1 台时行为与旧单选一致；多台时整批连接/断开 -->
+      <el-checkbox-group
+        v-model="selectedDeviceIds"
         :disabled="isConnected"
-        size="small"
-        class="device-select"
+        class="device-checkbox-group"
       >
-        <el-option
+        <el-checkbox
           v-for="dev in measureDevices"
           :key="dev.id"
-          :label="dev.name || dev.model || '未命名设备'"
           :value="dev.id"
+          class="device-checkbox"
         >
-          <div class="device-option">
-            <span class="device-option-name">{{ dev.name || dev.model || '未命名设备' }}</span>
-            <span :class="['device-option-status', `status-${dev.status}`]">
-              {{ statusLabel(dev.status) }}
-            </span>
-          </div>
-        </el-option>
-        <template #empty>
-          <div class="empty-hint">
-            暂无设备，请先在设备管理中添加
-          </div>
-        </template>
-      </el-select>
-      <el-button
-        :type="isConnected ? 'danger' : 'primary'"
-        :loading="isConnecting"
-        :disabled="!selectedDeviceId && !isConnected"
-        size="small"
-        @click="toggleConnection"
-      >
-        {{ isConnected ? '断开' : '连接' }}
-      </el-button>
+          <span class="device-option-name">{{ dev.name || dev.model || '未命名设备' }}</span>
+          <span :class="['device-option-status', `status-${dev.status}`]">
+            {{ statusLabel(dev.status) }}
+          </span>
+        </el-checkbox>
+      </el-checkbox-group>
+      <div class="selection-actions">
+        <el-button
+          :type="isConnected ? 'danger' : 'primary'"
+          :loading="isConnecting"
+          :disabled="selectedDeviceIds.length === 0 && !isConnected"
+          size="small"
+          @click="toggleConnection"
+        >
+          {{ isConnected ? '断开' : '连接' }}
+        </el-button>
+      </div>
     </div>
 
     <div
@@ -178,8 +172,8 @@ import {
 } from '@/types/valve'
 
 const emit = defineEmits<{
-  connect: [deviceId: string]
-  disconnect: [deviceId: string]
+  connect: [deviceIds: string[]]
+  disconnect: [deviceIds: string[]]
   'unit-change': [payload: { deviceId: string; unit: string }]
 }>()
 
@@ -187,7 +181,8 @@ const deviceStore = useDeviceInventoryStore()
 const measurementStore = useMeasurementStore()
 const { measureDevices } = storeToRefs(deviceStore)
 
-const selectedDeviceId = ref('')
+// 多设备勾选列表（保持勾选顺序）；单设备场景与旧 selectedDeviceId 行为一致。
+const selectedDeviceIds = ref<string[]>([])
 const selectedMeasureUnit = ref('')
 const zeroCalibPending = ref(false)
 
@@ -209,8 +204,9 @@ const measureUnitOptions = [
   { value: 'atm', label: 'atm' }
 ]
 
+// 设备状态区展示首个勾选设备的信息（与 store.measureDeviceId 语义一致）。
 const device = computed(() =>
-  measureDevices.value.find(d => d.id === selectedDeviceId.value)
+  measureDevices.value.find(d => d.id === selectedDeviceIds.value[0])
 )
 
 // DAQ-P-1603 无阀门协议命令（DLL FFI 路径）：隐藏阀门控件。
@@ -220,8 +216,14 @@ const isValvelessDevice = computed(() => {
   return model === 'daq-p-1603' || model === 'p1603'
 })
 
-const isConnected = computed(() => device.value?.status === 'connected')
-const isConnecting = computed(() => device.value?.status === 'connecting')
+// 已连接设备集合：勾选列表中处于 connected 状态的设备。
+const connectedDeviceIds = computed(() =>
+  selectedDeviceIds.value.filter(id => measureDevices.value.find(d => d.id === id)?.status === 'connected')
+)
+const isConnected = computed(() => connectedDeviceIds.value.length > 0)
+const isConnecting = computed(() =>
+  selectedDeviceIds.value.some(id => measureDevices.value.find(d => d.id === id)?.status === 'connecting')
+)
 const deviceStatus = computed(() => {
   if (!device.value) return 'disconnected'
   if (device.value.status === 'connected') return 'connected'
@@ -243,11 +245,14 @@ const valveStatusLabel = computed(() => {
 watch(
   measureDevices,
   (devices) => {
-    if (!selectedDeviceId.value && devices.length > 0) {
-      selectedDeviceId.value = devices[0].id
+    // 设备列表变化时清理已失效的勾选，并保留仍存在的勾选。
+    const valid = selectedDeviceIds.value.filter(id => devices.find(d => d.id === id))
+    if (valid.length !== selectedDeviceIds.value.length) {
+      selectedDeviceIds.value = valid
     }
-    if (selectedDeviceId.value && !devices.find(d => d.id === selectedDeviceId.value)) {
-      selectedDeviceId.value = devices.length > 0 ? devices[0].id : ''
+    // 首次加载且无勾选时，默认勾选第一台（与旧单选自动选中行为一致）。
+    if (selectedDeviceIds.value.length === 0 && devices.length > 0) {
+      selectedDeviceIds.value = [devices[0].id]
     }
   },
   { immediate: true }
@@ -294,12 +299,11 @@ function statusLabel(status: string): string {
 }
 
 const toggleConnection = async () => {
-  if (!selectedDeviceId.value) return
-
   if (isConnected.value) {
-    emit('disconnect', selectedDeviceId.value)
+    emit('disconnect', [...connectedDeviceIds.value])
   } else {
-    emit('connect', selectedDeviceId.value)
+    if (selectedDeviceIds.value.length === 0) return
+    emit('connect', [...selectedDeviceIds.value])
   }
 }
 
@@ -308,25 +312,26 @@ const handleMeasureUnitChange = async (unit: string) => {
   await measurementStore.setMeasureUnit(unit)
   try {
     const devices = await fetchDevices()
-    const dto = devices.find(d => d.id === selectedDeviceId.value)
+    const dto = devices.find(d => d.id === selectedDeviceIds.value[0])
     if (dto) {
       await upsertDevice({ ...dto, unit })
     }
   } catch (syncErr) {
     console.warn('同步计量设备单位到配置失败:', syncErr)
   }
-  emit('unit-change', { deviceId: selectedDeviceId.value, unit })
+  emit('unit-change', { deviceId: selectedDeviceIds.value[0], unit })
 }
 
 // 1603 校零：对设备所有启用通道执行软件归零，偏移持久化到本地并自动扣除。
 const handleZeroCalibrate = async () => {
   if (zeroCalibPending.value) return
-  if (!selectedDeviceId.value) return
+  const deviceId = selectedDeviceIds.value[0]
+  if (!deviceId) return
   // 从后端设备配置取启用通道（P1603 各通道带量程配置，启用通道才参与采集）。
   let channels: number[] = []
   try {
     const devices = await fetchDevices()
-    const dto = devices.find(d => d.id === selectedDeviceId.value)
+    const dto = devices.find(d => d.id === deviceId)
     channels = (dto?.channels ?? [])
       .filter(c => c.enabled)
       .map(c => c.index)
@@ -403,11 +408,35 @@ const handleZeroCalibrate = async () => {
   /* 连接控制区 */
   .selection-control {
     display: flex;
+    flex-direction: column;
     gap: 8px;
-    align-items: center;
+    align-items: stretch;
 
-    .device-select {
-      flex: 1;
+    .device-checkbox-group {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      max-height: 180px;
+      overflow-y: auto;
+    }
+
+    .device-checkbox {
+      display: flex;
+      align-items: center;
+      margin-right: 0;
+      height: 28px;
+
+      .el-checkbox__label {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        min-width: 0;
+      }
+    }
+
+    .selection-actions {
+      display: flex;
+      justify-content: flex-end;
     }
   }
 

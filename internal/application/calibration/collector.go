@@ -12,10 +12,35 @@ import (
 	"cal1604/internal/events"
 )
 
-// Collect 从计量设备采集数据。
-// 单设备场景：与改造前逻辑一致，结果同时写入 CollectedData 与 CollectedByDevice。
-// 多设备场景：并行采集所有参与设备，结果按设备 ID 写入 CollectedByDevice。
+// Collect 从计量设备采集数据，返回首个绑定设备的数据（兼容入口）。
+// 多设备场景请使用 CollectDevices 获取按设备维度的完整结果。
 func (s *Service) Collect(ctx context.Context, pointIndex int) ([]float64, error) {
+	devices, err := s.CollectDevices(ctx, pointIndex)
+	if err != nil {
+		return nil, err
+	}
+	// 首个设备数据保持兼容：按绑定顺序（用户勾选顺序）取第一台
+	s.mu.Lock()
+	firstID := ""
+	if len(s.measureDevIDs) > 0 {
+		firstID = s.measureDevIDs[0]
+	}
+	s.mu.Unlock()
+	if firstID == "" {
+		for id := range devices {
+			firstID = id
+			break
+		}
+	}
+	return devices[firstID], nil
+}
+
+// CollectDevices 从所有参与计量设备采集数据（已跳过设备除外），返回 deviceID -> 通道数据。
+// 单设备场景：与改造前逻辑一致，结果同时写入 CollectedData 与 CollectedByDevice。
+// 多设备场景：并行采集所有参与设备，结果按设备 ID 写入 CollectedByDevice；
+// 设备级失败不直接报错，而是写入设备错误状态，由 checkAlarm 触发设备维度报警。
+// 所有设备均被跳过时，该点整体标记 skipped 并返回空 map。
+func (s *Service) CollectDevices(ctx context.Context, pointIndex int) (map[string][]float64, error) {
 	s.mu.Lock()
 	if s.sessionService != nil && s.sessionService.MeasureDriver() == nil {
 		s.mu.Unlock()
@@ -43,6 +68,16 @@ func (s *Service) Collect(ctx context.Context, pointIndex int) ([]float64, error
 	prec := s.config.Precision
 	s.mu.Unlock()
 
+	// 全部设备被跳过：该点整体标记 skipped，不再打压采集
+	if len(measureDrivers) == 0 {
+		s.updatePointStatus(pointIndex, domain.PointStatusSkipped)
+		s.publish(events.EventPointSkipped, map[string]any{
+			"pointIndex": pointIndex,
+			"reason":     "all devices skipped",
+		})
+		return map[string][]float64{}, nil
+	}
+
 	s.updatePointStatus(pointIndex, domain.PointStatusCollecting)
 
 	// 状态迁移: -> collecting
@@ -52,15 +87,15 @@ func (s *Service) Collect(ctx context.Context, pointIndex int) ([]float64, error
 	s.publishSessionState()
 
 	// 单设备路径：保持原逻辑
-	if len(measureDrivers) <= 1 {
-		var averaged []float64
+	if len(measureDrivers) == 1 {
+		results := make(map[string][]float64, 1)
 		for devID, measureDriver := range measureDrivers {
-			var err error
-			averaged, err = s.collectFromDriver(ctx, pointIndex, measureDriver, targetPressure, channels, avgCount, prec)
+			averaged, err := s.collectFromDriver(ctx, pointIndex, measureDriver, targetPressure, channels, avgCount, prec)
 			if err != nil {
 				return nil, err
 			}
 			s.persistCollectedData(pointIndex, devID, averaged)
+			results[devID] = averaged
 		}
 		s.mu.Lock()
 		s.currentPoint = pointIndex
@@ -73,13 +108,16 @@ func (s *Service) Collect(ctx context.Context, pointIndex int) ([]float64, error
 		}
 		s.publishSessionState()
 
-		s.publish(events.EventDataCollected, map[string]any{
-			"pointIndex": pointIndex,
-			"channels":   channels,
-			"data":       averaged,
-		})
+		for devID, averaged := range results {
+			s.publish(events.EventDataCollected, map[string]any{
+				"pointIndex": pointIndex,
+				"channels":   channels,
+				"deviceId":   devID,
+				"data":       averaged,
+			})
+		}
 
-		return averaged, nil
+		return results, nil
 	}
 
 	// 多设备路径：并行采集
@@ -109,19 +147,6 @@ func (s *Service) Collect(ctx context.Context, pointIndex int) ([]float64, error
 	}
 	s.publishSessionState()
 
-	// 首个设备数据保持兼容（单设备字段只回填单设备场景，多设备场景由前端读设备维度数据）
-	var firstData []float64
-	firstID := ""
-	for id := range results {
-		if firstID == "" {
-			firstID = id
-		}
-		break
-	}
-	if d, ok := results[firstID]; ok {
-		firstData = d
-	}
-
 	for devID, data := range results {
 		s.publish(events.EventDataCollected, map[string]any{
 			"pointIndex": pointIndex,
@@ -131,7 +156,7 @@ func (s *Service) Collect(ctx context.Context, pointIndex int) ([]float64, error
 		})
 	}
 
-	return firstData, nil
+	return results, nil
 }
 
 // collectFromDriver 从单个计量驱动采集数据（多样本平均 + 精度截断）。

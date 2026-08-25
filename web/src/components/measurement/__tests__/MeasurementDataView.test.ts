@@ -10,6 +10,21 @@ const ElIconStub = defineComponent({
   template: '<i><slot /></i>'
 })
 
+const ElTableStub = defineComponent({
+  name: 'ElTable',
+  template: '<div><slot /></div>'
+})
+
+const ElTableColumnStub = defineComponent({
+  name: 'ElTableColumn',
+  template: '<div><slot :row="{ actualPressure: \'10.100\', channelValues: { 1: \'10.100\', 2: \'10.200\' }, collectTime: \'10:00:01\' }" /></div>'
+})
+
+const ElEmptyStub = defineComponent({
+  name: 'ElEmpty',
+  template: '<div><slot /></div>'
+})
+
 describe('MeasurementDataView', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
@@ -31,7 +46,10 @@ describe('MeasurementDataView', () => {
       },
       global: {
         stubs: {
-          ElIcon: ElIconStub
+          ElIcon: ElIconStub,
+          ElTable: ElTableStub,
+          ElTableColumn: ElTableColumnStub,
+          ElEmpty: ElEmptyStub
         }
       }
     })

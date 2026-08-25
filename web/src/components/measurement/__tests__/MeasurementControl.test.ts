@@ -34,7 +34,7 @@ describe('MeasurementControl', () => {
 
   it('shows pause button enabled while running', () => {
     const store = useMeasurementStore()
-    store.measureDeviceId = 'measure-1'
+    store.measureDeviceIds = ['measure-1']
     store.syncState('pressurizing')
 
     const wrapper = mountControl()
@@ -47,7 +47,7 @@ describe('MeasurementControl', () => {
   it('shows export primary button enabled when completed and device bound', () => {
     // 主按钮在 completed 状态文案为「导出报告」，启用即可。
     const store = useMeasurementStore()
-    store.measureDeviceId = 'measure-1'
+    store.measureDeviceIds = ['measure-1']
     store.syncState('completed')
 
     const wrapper = mountControl()

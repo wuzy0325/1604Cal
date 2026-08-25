@@ -63,6 +63,15 @@
 
     <template #footer>
       <div class="dialog-footer">
+        <!-- 设备级报警（多设备采集失败/超限）：提供"跳过该设备"动作 -->
+        <el-button
+          v-if="alarm?.deviceId"
+          type="danger"
+          plain
+          @click="decide('skip-device')"
+        >
+          跳过该设备
+        </el-button>
         <el-button
           type="warning"
           plain
@@ -90,6 +99,7 @@ defineProps<{
   point?: Partial<MeasurementPoint>
   alarm?: {
     pointId: string
+    deviceId?: string
     targetPressure: number
     actualPressure: number
     threshold: number
@@ -99,10 +109,10 @@ defineProps<{
 }>()
 
 const emit = defineEmits<{
-  decision: [action: 'continue' | 'recollect']
+  decision: [action: 'continue' | 'recollect' | 'skip-device']
 }>()
 
-function decide(action: 'continue' | 'recollect') {
+function decide(action: 'continue' | 'recollect' | 'skip-device') {
   emit('decision', action)
   visible.value = false
 }

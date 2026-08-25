@@ -49,9 +49,10 @@ export async function fetchMeasurementData(): Promise<MeasurementDataResponse> {
   return apiGet<MeasurementDataResponse>('/measurement/data')
 }
 
-/** 导出 xlsx 报告（模板方式） */
-export async function exportMeasurementReport(outputPath: string): Promise<string> {
-  return (await apiPost<{ path: string }>('/measurement/export', { outputPath })).path
+/** 导出 xlsx 报告（模板方式）；多设备时每台设备各生成一个文件，返回全部路径 */
+export async function exportMeasurementReport(outputPath: string): Promise<string[]> {
+  const resp = await apiPost<{ path: string; paths?: string[] }>('/measurement/export', { outputPath })
+  return resp.paths?.length ? resp.paths : [resp.path]
 }
 
 /** 获取计量模块参数配置 */
@@ -86,6 +87,8 @@ export interface MeasurementAlarmConfig {
 
 export interface MeasurementAlarm {
   pointId: string
+  /** 触发报警的计量设备（多设备场景定位故障设备；单设备可能为空） */
+  deviceId?: string
   targetPressure: number
   actualPressure: number
   threshold: number

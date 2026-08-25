@@ -6,7 +6,6 @@ import {
   bindMeasureDevice as apiBindMeasureDevice,
   readPressure as apiReadPressure,
   readStability as apiReadStability,
-  readMeasureData as apiReadMeasureData,
   readValveStatus as apiReadValveStatus,
   setValveStatus as apiSetValveStatus,
   readMeasureUnit as apiReadMeasureUnit,
@@ -26,6 +25,7 @@ import {
   saveMeasurementAlarmConfig,
   checkMeasurementAlarmPending,
   resolveMeasurementAlarm,
+  skipMeasurementDevice,
   getMeasurementParamsConfig,
   saveMeasurementParamsConfig,
   autoCollectMeasurement,
@@ -37,6 +37,9 @@ import {
   type MeasurementParamsPayload,
   type AlarmDecision
 } from '@/api/measurement'
+import {
+  readMeasureDataAllDevices as apiReadMeasureDataAllDevices
+} from '@/api/session'
 import type { MeasurementState, CollectedRow, StabilityUpdate, AlarmData, PrimaryAction, SecondaryAction } from './types'
 import { ControlMode, PressureMode } from '@/types/calibration'
 import { useMeasurementDeviceStore } from '@/stores/measurement/deviceStore'
@@ -57,13 +60,19 @@ export const useMeasurementStore = defineStore('measurement', () => {
   const state = ref<MeasurementState>('idle')
   const rows = ref<CollectedRow[]>([])
   const channels = ref<number[]>(Array.from({ length: 16 }, (_, i) => i + 1))
-  const measureDeviceId = ref('')
+  // 多设备绑定列表（保持勾选顺序）；measureDeviceId 为首个设备的兼容视图
+  const measureDeviceIds = ref<string[]>([])
+  const measureDeviceId = computed(() => measureDeviceIds.value[0] ?? '')
   const pressureDeviceId = ref('')
 
   // 设备实时数据
   const currentPressure = ref(0)
   const isStable = ref(false)
   const channelData = ref<number[]>([])
+  // 各绑定设备实时通道数据（deviceID -> 通道数据），多设备展示用
+  const channelDataByDevice = ref<Record<string, number[]>>({})
+  // 已跳过设备（deviceID -> 跳过原因），剩余压力点不再采集这些设备
+  const skippedDevices = ref<Record<string, string>>({})
   const valveStatus = ref('')
   const measureUnit = ref('')
   const deviceInfo = ref<Record<string, string>>({})
@@ -184,23 +193,34 @@ export const useMeasurementStore = defineStore('measurement', () => {
 
   // ── 设备绑定 ──
 
-  const bindDevices = async (measureDevId: string, pressureDevId: string) => {
-    await apiBindDevices(measureDevId, pressureDevId, 'measurement')
-    measureDeviceId.value = measureDevId
+  const normalizeMeasureDeviceIds = (ids: string | string[]): string[] => {
+    const values = Array.isArray(ids) ? ids : [ids]
+    return [...new Set(values.map(id => id.trim()).filter(Boolean))]
+  }
+
+  // 绑定多台计量设备 + 打压设备；兼容旧调用方传入单个设备 ID。
+  const bindDevices = async (measureDevIds: string | string[], pressureDevId: string) => {
+    const normalizedIds = normalizeMeasureDeviceIds(measureDevIds)
+    await apiBindDevices(normalizedIds, pressureDevId, 'measurement')
+    measureDeviceIds.value = normalizedIds
     pressureDeviceId.value = pressureDevId
     await refreshUnitConsistency()
   }
 
-  const bindMeasureDevice = async (measureDevId: string) => {
-    await apiBindMeasureDevice(measureDevId, 'measurement')
-    measureDeviceId.value = measureDevId
+  // 仅绑定计量设备（保留当前打压设备绑定）；兼容旧调用方传入单个设备 ID。
+  const bindMeasureDevice = async (measureDevIds: string | string[]) => {
+    const normalizedIds = normalizeMeasureDeviceIds(measureDevIds)
+    await apiBindMeasureDevice(normalizedIds, 'measurement')
+    measureDeviceIds.value = normalizedIds
     await refreshUnitConsistency()
   }
 
   const unbindMeasureDevice = () => {
-    measureDeviceId.value = ''
+    measureDeviceIds.value = []
     pressureDeviceId.value = ''
     channelData.value = []
+    channelDataByDevice.value = {}
+    skippedDevices.value = {}
     valveStatus.value = ''
     measureUnit.value = ''
     deviceInfo.value = {}
@@ -223,8 +243,12 @@ export const useMeasurementStore = defineStore('measurement', () => {
   }
 
   const refreshMeasureData = async () => {
-    try { channelData.value = await apiReadMeasureData() }
-    catch { /* 静默 */ }
+    try {
+      // 多设备：读取所有绑定设备实时数据；channelData 保留首个设备数据（兼容旧字段）
+      const devices = await apiReadMeasureDataAllDevices()
+      channelDataByDevice.value = devices
+      channelData.value = devices[measureDeviceId.value] ?? []
+    } catch { /* 静默 */ }
   }
 
   const refreshValveStatus = async () => {
@@ -354,6 +378,10 @@ export const useMeasurementStore = defineStore('measurement', () => {
   const refreshData = async () => {
     try {
       const resp = await fetchMeasurementData()
+      if (!Array.isArray(resp?.rows)) {
+        rows.value = []
+        return
+      }
       // 后端已限制 s.rows 上限，此处再兜底截断：保留最近 MEASUREMENT_MAX_ROWS 行，
       // 确保任何异常返回都不会撑爆前端响应式 store 与表格 DOM。
       rows.value = resp.rows.length > MEASUREMENT_MAX_ROWS
@@ -408,7 +436,8 @@ export const useMeasurementStore = defineStore('measurement', () => {
 
   const loadPoints = async () => {
     try {
-      points.value = await fetchMeasurementPoints()
+      const loadedPoints = await fetchMeasurementPoints()
+      points.value = Array.isArray(loadedPoints) ? loadedPoints : []
     } catch { /* 静默 */ }
   }
 
@@ -455,13 +484,20 @@ export const useMeasurementStore = defineStore('measurement', () => {
     pointsConfigKey.value = currentConfigKey
   }
 
+  // 启动前确保所有已勾选计量设备已绑定到会话（多设备整批绑定）。
   const ensureDevicesBound = async () => {
-    if (!measureDeviceId.value) return
+    if (measureDeviceIds.value.length === 0) return
     if (pressureDeviceId.value) {
-      await apiBindDevices(measureDeviceId.value, pressureDeviceId.value)
+      await apiBindDevices(measureDeviceIds.value, pressureDeviceId.value)
       return
     }
-    await apiBindMeasureDevice(measureDeviceId.value)
+    await apiBindMeasureDevice(measureDeviceIds.value)
+  }
+
+  // 永久跳过指定计量设备（从本批次剩余压力点移除），并记录原因。
+  const skipDevice = async (deviceId: string, reason: string) => {
+    await skipMeasurementDevice(deviceId, reason)
+    skippedDevices.value[deviceId] = reason
   }
 
   const measurementParamsKey = (p: typeof measurementParams.value): string => JSON.stringify({
@@ -559,12 +595,15 @@ export const useMeasurementStore = defineStore('measurement', () => {
     state,
     rows,
     channels,
+    measureDeviceIds,
     measureDeviceId,
     pressureDeviceId,
     measurementParams,
     currentPressure,
     isStable,
     channelData,
+    channelDataByDevice,
+    skippedDevices,
     valveStatus,
     measureUnit,
     deviceInfo,
@@ -589,6 +628,7 @@ export const useMeasurementStore = defineStore('measurement', () => {
     bindMeasureDevice,
     unbindMeasureDevice,
     unbindPressureDevice,
+    skipDevice,
     // 实时数据
     refreshPressure,
     refreshStability,

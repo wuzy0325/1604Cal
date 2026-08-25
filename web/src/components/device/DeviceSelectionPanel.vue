@@ -13,24 +13,32 @@
     </header>
 
     <div class="selector-grid">
-      <label>
-        <span>计量设备</span>
-        <div class="select-wrapper">
-          <select v-model="selectedMeasureDeviceId">
-            <option value="">
-              请选择计量设备
-            </option>
-            <option
-              v-for="device in measureDevices"
-              :key="device.id"
+      <div class="selector-field">
+        <span>计量设备（可多选）</span>
+        <div class="checkbox-list">
+          <label
+            v-for="device in measureDevices"
+            :key="device.id"
+            class="checkbox-item"
+          >
+            <input
+              v-model="selectedMeasureDeviceIds"
+              type="checkbox"
               :value="device.id"
             >
-              {{ device.name || device.id }} ({{ statusLabel(device.status) }})
-            </option>
-          </select>
-          <el-icon class="select-icon"><ArrowDown /></el-icon>
+            <span>{{ device.name || device.id }}</span>
+            <span :class="['checkbox-status', `status-${device.status}`]">
+              {{ statusLabel(device.status) }}
+            </span>
+          </label>
+          <div
+            v-if="measureDevices.length === 0"
+            class="empty-hint"
+          >
+            暂无计量设备
+          </div>
         </div>
-      </label>
+      </div>
 
       <label>
         <span>打压设备</span>
@@ -57,9 +65,12 @@
         <el-icon><Tools /></el-icon>
         <div>
           <span class="summary-label">计量设备</span>
-          <span class="summary-value">{{ selectedMeasureDeviceName }}</span>
-          <span :class="['summary-status', `status-${selectedMeasureDevice?.status || 'disconnected'}`]">
-            {{ statusLabel(selectedMeasureDevice?.status || 'disconnected') }}
+          <span class="summary-value">{{ selectedMeasureDeviceNames }}</span>
+          <span
+            v-if="selectedMeasureDeviceIds.length > 0"
+            class="summary-count"
+          >
+            {{ selectedMeasureDeviceIds.length }} 台
           </span>
         </div>
       </div>
@@ -108,10 +119,10 @@ const errorMessage = ref('')
 const measureDevices = computed(() => devices.value.filter((item) => item.type === 'measure'))
 const pressureDevices = computed(() => devices.value.filter((item) => item.type === 'pressure'))
 
-const selectedMeasureDeviceId = computed({
-  get: () => deviceStore.selectionByModule(props.moduleKey).measureDeviceId,
-  set: (value: string) => {
-    deviceStore.setModuleSelection(props.moduleKey, { measureDeviceId: value })
+const selectedMeasureDeviceIds = computed({
+  get: () => deviceStore.selectionByModule(props.moduleKey).measureDeviceIds,
+  set: (value: string[]) => {
+    deviceStore.setModuleSelection(props.moduleKey, { measureDeviceIds: value })
   }
 })
 
@@ -122,18 +133,15 @@ const selectedPressureDeviceId = computed({
   }
 })
 
-const selectedMeasureDeviceName = computed(() => {
-  const selected = measureDevices.value.find((item) => item.id === selectedMeasureDeviceId.value)
-  return selected?.name || selected?.id || '未选择'
+const selectedMeasureDeviceNames = computed(() => {
+  const names = selectedMeasureDeviceIds.value
+    .map(id => measureDevices.value.find(item => item.id === id)?.name || id)
+  return names.length > 0 ? names.join('、') : '未选择'
 })
 
 const selectedPressureDeviceName = computed(() => {
   const selected = pressureDevices.value.find((item) => item.id === selectedPressureDeviceId.value)
   return selected?.name || selected?.id || '未选择'
-})
-
-const selectedMeasureDevice = computed(() => {
-  return measureDevices.value.find((item) => item.id === selectedMeasureDeviceId.value)
 })
 
 const selectedPressureDevice = computed(() => {
@@ -165,9 +173,12 @@ function statusLabel(status: string): string {
 watch(
   devices,
   (list) => {
-    const measureExists = list.some((item) => item.type === 'measure' && item.id === selectedMeasureDeviceId.value)
-    if (!measureExists) {
-      selectedMeasureDeviceId.value = ''
+    // 清理已失效的计量设备勾选
+    const validMeasure = selectedMeasureDeviceIds.value.filter(id =>
+      list.some(item => item.type === 'measure' && item.id === id)
+    )
+    if (validMeasure.length !== selectedMeasureDeviceIds.value.length) {
+      selectedMeasureDeviceIds.value = validMeasure
     }
 
     const pressureExists = list.some((item) => item.type === 'pressure' && item.id === selectedPressureDeviceId.value)
@@ -244,12 +255,54 @@ onMounted(() => {
   margin-bottom: var(--spacing-xs);
 }
 
-.selector-grid label {
+.selector-grid label,
+.selector-field {
   color: var(--text-secondary);
   display: flex;
   flex-direction: column;
   font-size: 12px;
   gap: var(--spacing-xs);
+}
+
+.checkbox-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 160px;
+  overflow-y: auto;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color-strong);
+  border-radius: 3px;
+  padding: var(--spacing-xs);
+}
+
+.checkbox-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-primary);
+  cursor: pointer;
+
+  input[type='checkbox'] {
+    accent-color: var(--accent-primary);
+    cursor: pointer;
+  }
+}
+
+.checkbox-status {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 1px 5px;
+  border-radius: 2px;
+  margin-left: auto;
+}
+
+.empty-hint {
+  color: var(--text-muted);
+  font-size: 12px;
+  text-align: center;
+  padding: 8px 0;
 }
 
 .select-wrapper {
@@ -332,6 +385,16 @@ onMounted(() => {
   padding: 1px 5px;
   border-radius: 2px;
   margin-left: var(--spacing-xs);
+}
+
+.summary-count {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 1px 5px;
+  border-radius: 2px;
+  margin-left: var(--spacing-xs);
+  background: var(--accent-primary-subtle, rgba(16, 185, 129, 0.12));
+  color: var(--accent-primary);
 }
 
 .status-connected {

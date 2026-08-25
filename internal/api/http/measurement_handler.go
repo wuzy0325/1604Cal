@@ -100,12 +100,21 @@ func (s *apiServer) measurementExportHandler(w http.ResponseWriter, r *http.Requ
 	points := s.measurementService.GetPoints()
 	config := s.measurementService.GetConfig()
 
-	if err := s.reportService.ExportMeasurementReport(r.Context(), points, config, req.OutputPath); err != nil {
+	// 多设备时每台设备生成独立报告文件，返回完整路径列表；
+	// path 保留首个文件路径，兼容旧前端单文件字段。
+	// 读取计量设备真实压力单位，保证导出文档单位与硬件一致（不再写死 kPa）。
+	unit := readSessionUnit(r.Context(), s)
+	paths, err := s.reportService.ExportMeasurementReport(r.Context(), points, config, req.OutputPath, unit)
+	if err != nil {
 		writeError(w, err)
 		return
 	}
 
-	writeSuccess(w, http.StatusOK, map[string]string{"status": "ok", "path": req.OutputPath})
+	path := req.OutputPath
+	if len(paths) > 0 {
+		path = paths[0]
+	}
+	writeSuccess(w, http.StatusOK, map[string]any{"status": "ok", "path": path, "paths": paths})
 }
 
 func (s *apiServer) measurementGetAlarmConfigHandler(w http.ResponseWriter, _ *http.Request) {

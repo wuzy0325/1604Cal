@@ -13,6 +13,7 @@ vi.mock('@/api/session', () => ({
   readPressure: vi.fn(),
   readStability: vi.fn(),
   readMeasureData: vi.fn(),
+  readMeasureDataAllDevices: vi.fn(),
   readValveStatus: vi.fn(),
   setValveStatus: vi.fn(),
   readMeasureUnit: vi.fn(),
@@ -103,14 +104,46 @@ describe('useMeasurementStore', () => {
   // ── 设备绑定 ──
 
   describe('bindDevices', () => {
+    it('keeps a legacy single device ID intact', async () => {
+      vi.mocked(sessionApi.bindDevices).mockResolvedValue(undefined)
+      const store = useMeasurementStore()
+
+      await store.bindDevices('dev-1604-01', 'p1')
+
+      expect(sessionApi.bindDevices).toHaveBeenCalledWith(['dev-1604-01'], 'p1', 'measurement')
+      expect(store.measureDeviceIds).toEqual(['dev-1604-01'])
+      expect(store.measureDeviceId).toBe('dev-1604-01')
+    })
+
     it('calls API and stores both device IDs', async () => {
       vi.mocked(sessionApi.bindDevices).mockResolvedValue(undefined)
       const store = useMeasurementStore()
-      await store.bindDevices('m1', 'p1')
-      expect(sessionApi.bindDevices).toHaveBeenCalledWith('m1', 'p1', 'measurement')
+      await store.bindDevices(['m1'], 'p1')
+      expect(sessionApi.bindDevices).toHaveBeenCalledWith(['m1'], 'p1', 'measurement')
       expect(store.measureDeviceId).toBe('m1')
+      expect(store.measureDeviceIds).toEqual(['m1'])
       expect(store.pressureDeviceId).toBe('p1')
       expect(store.deviceBound).toBe(true)
+    })
+
+    it('supports multiple measure devices', async () => {
+      vi.mocked(sessionApi.bindDevices).mockResolvedValue(undefined)
+      const store = useMeasurementStore()
+      await store.bindDevices(['m1', 'm2'], 'p1')
+      expect(sessionApi.bindDevices).toHaveBeenCalledWith(['m1', 'm2'], 'p1', 'measurement')
+      expect(store.measureDeviceIds).toEqual(['m1', 'm2'])
+      expect(store.measureDeviceId).toBe('m1')
+      expect(store.deviceBound).toBe(true)
+    })
+
+    it('removes blank and duplicate device IDs', async () => {
+      vi.mocked(sessionApi.bindDevices).mockResolvedValue(undefined)
+      const store = useMeasurementStore()
+
+      await store.bindDevices([' m1 ', '', 'm1', 'm2'], 'p1')
+
+      expect(sessionApi.bindDevices).toHaveBeenCalledWith(['m1', 'm2'], 'p1', 'measurement')
+      expect(store.measureDeviceIds).toEqual(['m1', 'm2'])
     })
   })
 
@@ -118,8 +151,8 @@ describe('useMeasurementStore', () => {
     it('calls API and stores measure device ID', async () => {
       vi.mocked(sessionApi.bindMeasureDevice).mockResolvedValue(undefined)
       const store = useMeasurementStore()
-      await store.bindMeasureDevice('m2')
-      expect(sessionApi.bindMeasureDevice).toHaveBeenCalledWith('m2', 'measurement')
+      await store.bindMeasureDevice(['m2'])
+      expect(sessionApi.bindMeasureDevice).toHaveBeenCalledWith(['m2'], 'measurement')
       expect(store.measureDeviceId).toBe('m2')
       expect(store.deviceBound).toBe(true)
     })
@@ -130,7 +163,7 @@ describe('useMeasurementStore', () => {
       vi.mocked(sessionApi.bindDevices).mockResolvedValue(undefined)
       const store = useMeasurementStore()
 
-      await store.bindDevices('m1', 'p1')
+      await store.bindDevices(['m1'], 'p1')
       expect(store.pressureDeviceId).toBe('p1')
 
       store.unbindPressureDevice()
@@ -143,11 +176,12 @@ describe('useMeasurementStore', () => {
       vi.mocked(sessionApi.bindDevices).mockResolvedValue(undefined)
       const store = useMeasurementStore()
 
-      await store.bindDevices('m1', 'p1')
+      await store.bindDevices(['m1'], 'p1')
       expect(store.deviceBound).toBe(true)
 
       store.unbindMeasureDevice()
       expect(store.measureDeviceId).toBe('')
+      expect(store.measureDeviceIds).toEqual([])
       expect(store.pressureDeviceId).toBe('')
       expect(store.deviceBound).toBe(false)
     })
@@ -181,11 +215,19 @@ describe('useMeasurementStore', () => {
   })
 
   describe('refreshMeasureData', () => {
-    it('updates channelData', async () => {
-      vi.mocked(sessionApi.readMeasureData).mockResolvedValue([1.1, 2.2, 3.3])
+    it('updates channelData from first device and channelDataByDevice from all devices', async () => {
+      vi.mocked(sessionApi.readMeasureDataAllDevices).mockResolvedValue({
+        m1: [1.1, 2.2, 3.3],
+        m2: [4.4, 5.5, 6.6]
+      })
       const store = useMeasurementStore()
+      await store.bindMeasureDevice(['m1', 'm2'])
       await store.refreshMeasureData()
       expect(store.channelData).toEqual([1.1, 2.2, 3.3])
+      expect(store.channelDataByDevice).toEqual({
+        m1: [1.1, 2.2, 3.3],
+        m2: [4.4, 5.5, 6.6]
+      })
     })
   })
 
@@ -242,7 +284,7 @@ describe('useMeasurementStore', () => {
       vi.mocked(measurementApi.generateMeasurementPoints).mockResolvedValue([])
       vi.mocked(measurementApi.startMeasurement).mockResolvedValue('collecting')
       const store = useMeasurementStore()
-      await store.bindMeasureDevice('m1')
+      await store.bindMeasureDevice(['m1'])
       // 阀门=校准模式是启动的必要条件，先把状态置为 calibration。
       store.valveStatus = 'calibration'
       store.rows = [{ timestamp: 'old', channels: { '1': 0 } }]
@@ -262,7 +304,7 @@ describe('useMeasurementStore', () => {
       vi.mocked(measurementApi.generateMeasurementPoints).mockResolvedValue([])
       vi.mocked(measurementApi.startMeasurement).mockRejectedValue(new Error('transition denied'))
       const store = useMeasurementStore()
-      await store.bindMeasureDevice('m1')
+      await store.bindMeasureDevice(['m1'])
       store.valveStatus = 'calibration'
 
       const result = await store.start([1])
@@ -274,7 +316,7 @@ describe('useMeasurementStore', () => {
     it('rejects start when valve is not in calibration mode', async () => {
       // 阀门门禁：valve != calibration 时 store 应直接拒绝，不调用 API。
       const store = useMeasurementStore()
-      await store.bindMeasureDevice('m1')
+      await store.bindMeasureDevice(['m1'])
       store.valveStatus = 'measurement'
 
       const result = await store.start([1])
