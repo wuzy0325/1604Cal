@@ -27,24 +27,33 @@ func (d *ConST820Driver) Connect(ctx context.Context) error {
 
 func (d *ConST820Driver) SetTargetPressure(ctx context.Context, target float64) error {
 	cmd := fmt.Sprintf("SOURce:PRESsure %.4f", target)
-	_, err := d.base.sendSCPICommand(ctx, cmd, 3*time.Second)
+	log.Printf("[820] SetTargetPressure → cmd=%q", cmd)
+	resp, err := d.base.sendSCPICommand(ctx, cmd, 3*time.Second)
 	if err != nil {
+		log.Printf("[820] SetTargetPressure error: %v", err)
 		return fmt.Errorf("set target pressure: %w", err)
 	}
+	log.Printf("[820] SetTargetPressure resp=%q", resp)
 	return nil
 }
 
 func (d *ConST820Driver) Stop(ctx context.Context) error {
-	_, err := d.base.sendSCPICommand(ctx, "OUTPut:PRESsure:MODE VENT", 3*time.Second)
+	cmd := "OUTPut:PRESsure:MODE VENT"
+	log.Printf("[820] Stop → cmd=%q", cmd)
+	_, err := d.base.sendSCPICommand(ctx, cmd, 3*time.Second)
 	if err != nil {
+		log.Printf("[820] Stop error: %v", err)
 		return fmt.Errorf("stop pressure: %w", err)
 	}
 	return nil
 }
 
 func (d *ConST820Driver) Exhaust(ctx context.Context) error {
-	_, err := d.base.sendSCPICommand(ctx, "OUTPut:PRESsure:MODE VENT", 3*time.Second)
+	cmd := "OUTPut:PRESsure:MODE VENT"
+	log.Printf("[820] Exhaust → cmd=%q", cmd)
+	_, err := d.base.sendSCPICommand(ctx, cmd, 3*time.Second)
 	if err != nil {
+		log.Printf("[820] Exhaust error: %v", err)
 		return fmt.Errorf("exhaust: %w", err)
 	}
 	return nil
@@ -53,6 +62,7 @@ func (d *ConST820Driver) Exhaust(ctx context.Context) error {
 func (d *ConST820Driver) ReadCurrentPressure(ctx context.Context) (float64, error) {
 	resp, err := d.base.sendSCPICommand(ctx, "MEASure:SCALar:PRESsure1?", 3*time.Second)
 	if err != nil {
+		log.Printf("[820] ReadCurrentPressure error: %v", err)
 		return 0, fmt.Errorf("read current pressure: %w", err)
 	}
 	return parseSCPIPressure(resp)
@@ -92,8 +102,11 @@ func (d *ConST820Driver) IsStable(ctx context.Context) (bool, error) {
 }
 
 func (d *ConST820Driver) StartControl(ctx context.Context) error {
-	_, err := d.base.sendSCPICommand(ctx, "OUTPut:PRESsure:MODE CONTROL", 3*time.Second)
+	cmd := "OUTPut:PRESsure:MODE CONTROL"
+	log.Printf("[820] StartControl → cmd=%q", cmd)
+	_, err := d.base.sendSCPICommand(ctx, cmd, 3*time.Second)
 	if err != nil {
+		log.Printf("[820] StartControl error: %v", err)
 		return fmt.Errorf("start pressure control: %w", err)
 	}
 	return nil

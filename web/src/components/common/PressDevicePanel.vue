@@ -248,6 +248,9 @@ const toggleConnection = async () => {
 const setPressure = async () => {
   if (!device.value) return
   try {
+    // 设定压力前必须先同步单位到设备，否则设备当前单位可能与输入值单位不一致，
+    // 导致目标值超出设备量程而被拒绝（表现为设备滴滴响、无响应）。
+    await multipressSetUnit(device.value.id, selectedUnit.value)
     await multipressSetPressure(device.value.id, targetPressure.value)
     emit('set-pressure', device.value.id, targetPressure.value)
   } catch (err) {
