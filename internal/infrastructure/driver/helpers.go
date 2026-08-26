@@ -38,8 +38,12 @@ func pressureUnitToCode(unit string) (string, bool) {
 	return code, ok
 }
 
+// pressureUnitToCode820 将压力单位映射为 LabVIEW 程序已验证的 820 单位值。
+// kgf/cm2 的枚举序号虽然是 4，但设备命令参数必须使用 10。
 func pressureUnitToCode820(unit string) (string, bool) {
-	m := map[string]string{"pa": "0", "kpa": "1", "mpa": "2", "psi": "3", "kgf/cm2": "4"}
+	m := map[string]string{
+		"pa": "0", "kpa": "1", "mpa": "2", "psi": "3", "kgf/cm2": "10",
+	}
 	code, ok := m[strings.ToLower(strings.TrimSpace(unit))]
 	return code, ok
 }
@@ -72,15 +76,10 @@ func parseConSTGeneralUnit(resp string) string {
 }
 
 // parseConST820Unit 解析 ConST 820 的单位查询响应。
-// 支持 0=Pa/1=kPa/2=MPa/3=psi/4=kgf/cm2 等代码和字符串格式。
+// 820 的 UNIT:PRESsure? 实际返回字符串单位（PA/KPA/MPA/PSI/BAR/MBAR...），
+// 而非数字码，故直接按字符串规范化即可。
 func parseConST820Unit(resp string) string {
 	trimmed := strings.TrimSpace(resp)
-	m := map[string]string{
-		"0": "Pa", "1": "kPa", "2": "MPa", "3": "psi", "4": "kgf/cm2",
-	}
-	if unit, ok := m[trimmed]; ok {
-		return unit
-	}
 	if isValidPressureUnit(trimmed) {
 		return NormalizePressureUnit(trimmed)
 	}

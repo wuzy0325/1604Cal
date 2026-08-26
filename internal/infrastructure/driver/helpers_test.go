@@ -44,17 +44,33 @@ func TestParseConSTGeneralUnit_NormalizesCase(t *testing.T) {
 }
 
 func TestParseConST820Unit_NormalizesCase(t *testing.T) {
+	// 820 的 UNIT:PRESsure? 实机返回字符串单位（大写），并非数字码。
 	cases := []struct{ input, want string }{
-		{"1", "kPa"},
-		{"2", "MPa"},
+		{"PA", "Pa"},
+		{"KPA", "kPa"},
+		{"MPA", "MPa"},
+		{"PSI", "psi"},
+		{"BAR", "bar"},
+		{"MBAR", "mbar"},
 		{"kpa", "kPa"},
 		{"mpa", "MPa"},
-		{"mmhg", "mmHg"},
 	}
 	for _, c := range cases {
 		got := parseConST820Unit(c.input)
 		if got != c.want {
 			t.Errorf("parseConST820Unit(%q) = %q, want %q", c.input, got, c.want)
+		}
+	}
+}
+
+func TestPressureUnitToCode820UsesLabVIEWValues(t *testing.T) {
+	cases := map[string]string{
+		"Pa": "0", "kPa": "1", "MPa": "2", "psi": "3", "kgf/cm2": "10",
+	}
+	for unit, want := range cases {
+		got, ok := pressureUnitToCode820(unit)
+		if !ok || got != want {
+			t.Errorf("pressureUnitToCode820(%q) = %q, %v; want %q, true", unit, got, ok, want)
 		}
 	}
 }

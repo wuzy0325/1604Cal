@@ -215,6 +215,16 @@ func IsPollContext(ctx context.Context) bool {
 }
 
 func (d *tcpConnectionDriver) sendSCPICommand(ctx context.Context, cmd string, readTimeout time.Duration) (string, error) {
+	return d.sendSCPICommandWithTerminator(ctx, cmd, "\r\n", readTimeout)
+}
+
+// sendSCPICommandWithoutTerminator 用于要求按原始字符串长度写入的设备命令。
+// 查询仍应使用 sendSCPICommand，以便设备收到明确的命令结束符。
+func (d *tcpConnectionDriver) sendSCPICommandWithoutTerminator(ctx context.Context, cmd string) (string, error) {
+	return d.sendSCPICommandWithTerminator(ctx, cmd, "", 0)
+}
+
+func (d *tcpConnectionDriver) sendSCPICommandWithTerminator(ctx context.Context, cmd, terminator string, readTimeout time.Duration) (string, error) {
 	poll := IsPollContext(ctx)
 	commandData := map[string]any{
 		"model": d.model,
@@ -252,7 +262,7 @@ func (d *tcpConnectionDriver) sendSCPICommand(ctx context.Context, cmd string, r
 		publishHardwareError(commandData, wrapped)
 		return "", wrapped
 	}
-	if _, err := fmt.Fprintf(d.conn, "%s\r\n", cmd); err != nil {
+	if _, err := fmt.Fprintf(d.conn, "%s%s", cmd, terminator); err != nil {
 		d.closeConn()
 		wrapped := fmt.Errorf("%s write SCPI command %q: %w", d.model, cmd, err)
 		publishHardwareError(commandData, wrapped)
