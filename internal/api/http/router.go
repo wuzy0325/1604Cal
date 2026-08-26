@@ -162,16 +162,21 @@ func newRouterWithServer(
 	// 设备会话（共享：设备绑定、读压、读稳定性、读计量数据、阀门、单位）
 	mux.HandleFunc("POST /api/v1/session/devices", server.sessionSetDevicesHandler)
 	mux.HandleFunc("POST /api/v1/session/measure-device", server.sessionSetMeasureDeviceHandler)
+	mux.HandleFunc("POST /api/v1/session/measure-device/unbind", server.sessionUnbindMeasureDevicesHandler)
 	mux.HandleFunc("GET /api/v1/session/pressure", server.sessionReadPressureHandler)
 	mux.HandleFunc("GET /api/v1/session/stability", server.sessionReadStabilityHandler)
 	mux.HandleFunc("GET /api/v1/session/measure-data", server.sessionReadMeasureDataHandler)
 	mux.HandleFunc("GET /api/v1/session/valve", server.sessionGetValveHandler)
+	mux.HandleFunc("GET /api/v1/session/valve/all", server.sessionGetValveAllHandler)
 	mux.HandleFunc("POST /api/v1/session/valve", server.sessionSetValveHandler)
 	mux.HandleFunc("PUT /api/v1/session/valve", server.sessionSetValveHandler)
 	mux.HandleFunc("POST /api/v1/session/calibrate-zero", server.sessionCalibrateZeroHandler)
 	mux.HandleFunc("POST /api/v1/session/calibrate-full-scale", server.sessionCalibrateFullScaleHandler)
 	mux.HandleFunc("GET /api/v1/session/measure-unit", server.sessionGetMeasureUnitHandler)
+	mux.HandleFunc("GET /api/v1/session/measure-unit/all", server.sessionGetMeasureUnitAllHandler)
 	mux.HandleFunc("POST /api/v1/session/measure-unit", server.sessionSetMeasureUnitHandler)
+	mux.HandleFunc("POST /api/v1/session/measure-unit/all", server.sessionSetMeasureUnitAllHandler)
+	mux.HandleFunc("GET /api/v1/session/unit-consistency", server.sessionUnitConsistencyHandler)
 	mux.HandleFunc("GET /api/v1/session/device-info", server.sessionReadDeviceInfoHandler)
 	mux.HandleFunc("POST /api/v1/session/reset", server.sessionResetDeviceHandler)
 
@@ -194,6 +199,8 @@ func newRouterWithServer(
 	mux.HandleFunc("POST /api/v1/measurement/manual-pressurize", server.measurementManualPressurizeHandler)
 	mux.HandleFunc("POST /api/v1/measurement/manual-collect", server.measurementManualCollectHandler)
 	mux.HandleFunc("POST /api/v1/measurement/stability-timeout/resolve", server.measurementStabilityTimeoutResolveHandler)
+	// 稳定超时挂起查询：后端阻塞等待决策期间，页面刷新/崩溃恢复后前端据此重新弹窗。
+	mux.HandleFunc("GET /api/v1/measurement/stability-timeout/pending", server.measurementStabilityTimeoutPendingHandler)
 
 	// 校准流程
 	mux.HandleFunc("POST /api/v1/calibration/devices", server.calibrationSetDevicesHandler)

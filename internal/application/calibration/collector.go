@@ -137,7 +137,21 @@ func (s *Service) CollectDevices(ctx context.Context, pointIndex int) (map[strin
 		}
 	}
 	s.currentPoint = pointIndex
+	// 设备级失败判定：任一设备已在 markDeviceError 写入 error 状态。
+	// 有失败时不置点 completed、不迁移 point_done，由 checkAlarm 转入
+	// await_alarm_resolution 等待用户决策（重试/跳过该设备/停止）。
+	hasDeviceError := false
+	for _, d := range point.CollectedByDevice {
+		if d.Status == domain.PointStatusError || d.Error != "" {
+			hasDeviceError = true
+			break
+		}
+	}
 	s.mu.Unlock()
+
+	if hasDeviceError {
+		return results, nil
+	}
 
 	s.updatePointStatus(pointIndex, domain.PointStatusCompleted)
 

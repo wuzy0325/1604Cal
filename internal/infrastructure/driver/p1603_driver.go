@@ -177,12 +177,19 @@ func (d *P1603Driver) onDataFrame(ownerDev *sharedhw.DAQP1603, payload sharedcor
 		// 旧代际的 readLoop 迟到回调：忽略，不污染新采集的缓存
 		return
 	}
-	frame := make(map[int]float64, len(payload.Channels))
-	for i, idx := range payload.ChannelIndices {
-		// ChannelIndices 为 0-based，转 1-based 与业务层一致
-		frame[idx+1] = payload.Channels[i]
+	if d.latestFrame == nil {
+		d.latestFrame = make(map[int]float64, len(payload.Channels))
 	}
-	d.latestFrame = frame
+	for ch := range d.latestFrame {
+		delete(d.latestFrame, ch)
+	}
+	for i, idx := range payload.ChannelIndices {
+		if i >= len(payload.Channels) {
+			break
+		}
+		// ChannelIndices 为 0-based，转 1-based 与业务层一致
+		d.latestFrame[idx+1] = payload.Channels[i]
+	}
 	d.frameValid = true
 	if d.firstFrame != nil {
 		close(d.firstFrame)
@@ -234,23 +241,19 @@ func (d *P1603Driver) CollectData(ctx context.Context, channels []int) ([]float6
 	}
 
 	d.mu.Lock()
-	frame := d.latestFrame
-	valid := d.frameValid
-	tareOffsets := d.tareOffsets
-	d.mu.Unlock()
-
-	if !valid || len(frame) == 0 {
+	defer d.mu.Unlock()
+	if !d.frameValid || len(d.latestFrame) == 0 {
 		return nil, fmt.Errorf("DAQ-P-1603 collect data: no valid frame cached")
 	}
 
 	values := make([]float64, 0, len(channels))
 	for _, ch := range channels {
-		v, ok := frame[ch]
+		v, ok := d.latestFrame[ch]
 		if !ok {
 			return nil, fmt.Errorf("DAQ-P-1603 collect data: channel %d not in frame (disabled?)", ch)
 		}
 		// 扣除软件归零偏移（对齐 WindLabX4：readLoop 输出原始值，展示方减 TareOffset）
-		if offset, has := tareOffsets[ch]; has {
+		if offset, has := d.tareOffsets[ch]; has {
 			v -= offset
 		}
 		values = append(values, v)

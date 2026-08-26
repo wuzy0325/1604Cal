@@ -26,12 +26,22 @@ type DevicePressureState struct {
 // StatusPublisher 广播事件到 SSE 通道。
 type StatusPublisher func(eventType string, data any)
 
+// lastPublished 上次已推送到 SSE 的 pressure.update 快照：
+// 轮询值无变化时不重复发布，避免空闲期空转事件放大前端渲染与分配压力。
+type lastPublished struct {
+	sent     bool
+	pressure float64
+	stable   bool
+	status   string
+}
+
 // deviceEntry 已注册设备的驱动实例与运行状态。
 type deviceEntry struct {
 	driver            device.PressureDriver
 	state             DevicePressureState
 	mu                sync.Mutex // 串行化单台设备的命令，多设备可并行
 	consecutiveErrors int        // 连续轮询失败次数，>=3 时自动标记断连
+	lastPub           lastPublished
 }
 
 // Service 多设备打压控制服务。
@@ -518,35 +528,9 @@ func (s *Service) processPollResults(results []pollResult) {
 			continue
 		}
 
-		entry.mu.Lock()
-		if r.err != nil {
-			entry.state.ErrorMessage = r.err.Error()
-			entry.consecutiveErrors++
-			if entry.consecutiveErrors >= 3 {
-				entry.state.Status = "error"
-				entry.mu.Unlock()
-				s.deviceManager.UpdateStatus(r.deviceID, domain.DeviceStatusError)
-				s.publish("device.status.changed", map[string]any{
-					"id":          r.deviceID,
-					"type":        "pressure",
-					"status":      string(domain.DeviceStatusError),
-					"errorReason": r.err.Error(),
-				})
-				continue
-			}
-		} else {
-			entry.consecutiveErrors = 0
-			entry.state.CurrentPressure = r.pressure
-			entry.state.Stable = r.stable
+		status, shouldPublish := s.mergePollResult(entry, r)
 
-			if entry.state.Status == "exhausting" && r.stable {
-				entry.state.Status = "idle"
-			}
-		}
-		status := entry.state.Status
-		entry.mu.Unlock()
-
-		if r.err == nil {
+		if shouldPublish {
 			s.publish("multipress.pressure.update", map[string]any{
 				"deviceId":        r.deviceID,
 				"currentPressure": r.pressure,
@@ -555,4 +539,46 @@ func (s *Service) processPollResults(results []pollResult) {
 			})
 		}
 	}
+}
+
+// mergePollResult 把单台设备的轮询结果合并进 entry 状态，
+// 返回合并后的状态与是否需要发布 pressure.update（值无变化时去重不发布）。
+func (s *Service) mergePollResult(entry *deviceEntry, r pollResult) (string, bool) {
+	entry.mu.Lock()
+	defer entry.mu.Unlock()
+
+	if r.err != nil {
+		entry.state.ErrorMessage = r.err.Error()
+		entry.consecutiveErrors++
+		if entry.consecutiveErrors >= 3 {
+			entry.state.Status = "error"
+			s.deviceManager.UpdateStatus(r.deviceID, domain.DeviceStatusError)
+			s.publish("device.status.changed", map[string]any{
+				"id":          r.deviceID,
+				"type":        "pressure",
+				"status":      string(domain.DeviceStatusError),
+				"errorReason": r.err.Error(),
+			})
+			return entry.state.Status, false
+		}
+		return entry.state.Status, false
+	}
+
+	entry.consecutiveErrors = 0
+	entry.state.CurrentPressure = r.pressure
+	entry.state.Stable = r.stable
+
+	if entry.state.Status == "exhausting" && r.stable {
+		entry.state.Status = "idle"
+	}
+
+	status := entry.state.Status
+	changed := !entry.lastPub.sent ||
+		entry.lastPub.pressure != r.pressure ||
+		entry.lastPub.stable != r.stable ||
+		entry.lastPub.status != status
+	if changed {
+		entry.lastPub = lastPublished{sent: true, pressure: r.pressure, stable: r.stable, status: status}
+	}
+	return status, changed
 }

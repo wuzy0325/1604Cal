@@ -12,7 +12,8 @@ const ElIconStub = defineComponent({
 
 const ElTableStub = defineComponent({
   name: 'ElTable',
-  template: '<div><slot /></div>'
+  props: ['data'],
+  template: '<div class="table-stub" :data-row-count="data.length"><slot /></div>'
 })
 
 const ElTableColumnStub = defineComponent({
@@ -58,5 +59,26 @@ describe('MeasurementDataView', () => {
     expect(wrapper.text()).toContain('10.100')
     expect(wrapper.text()).toContain('10.200')
     expect(wrapper.text()).not.toContain('请先配置参数并生成压力表')
+  })
+
+  it('renders only a bounded window for long-running sampling', () => {
+    const rows = Array.from({ length: 1000 }, (_, index) => ({
+      timestamp: new Date(index * 1000).toISOString(),
+      channels: { '1': index }
+    }))
+    const wrapper = mount(MeasurementDataView, {
+      props: { rows, channels: [1], targets: [], averageCount: 1, state: 'collecting' },
+      global: {
+        stubs: {
+          ElIcon: ElIconStub,
+          ElTable: ElTableStub,
+          ElTableColumn: ElTableColumnStub,
+          ElEmpty: ElEmptyStub
+        }
+      }
+    })
+
+    expect(wrapper.text()).toContain('1000 条采样')
+    expect(wrapper.find('.sample-section .table-stub').attributes('data-row-count')).toBe('100')
   })
 })

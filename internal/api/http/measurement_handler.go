@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 
+	"cal1604/internal/application/measurement"
 	"cal1604/internal/domain"
 	apperrors "cal1604/internal/errors"
 )
@@ -174,7 +175,20 @@ func (s *apiServer) measurementSkipDeviceHandler(w http.ResponseWriter, r *http.
 }
 
 func (s *apiServer) measurementAlarmPendingHandler(w http.ResponseWriter, _ *http.Request) {
-	writeSuccess(w, http.StatusOK, map[string]bool{"pending": s.measurementService.IsAlarmPending()})
+	pending := s.measurementService.IsAlarmPending()
+	var alarm *measurement.Alarm
+	if pending {
+		// 挂起时附带报警详情：页面刷新后 SSE 事件已错过，
+		// 前端据此恢复报警弹窗/自动放行判断。
+		alarm = s.measurementService.GetCurrentAlarm()
+	}
+	writeSuccess(w, http.StatusOK, map[string]any{"pending": pending, "alarm": alarm})
+}
+
+// measurementStabilityTimeoutPendingHandler 查询稳定超时是否挂起（页面刷新恢复用）。
+func (s *apiServer) measurementStabilityTimeoutPendingHandler(w http.ResponseWriter, _ *http.Request) {
+	pending, pointIndex := s.measurementService.GetStabilityTimeoutPending()
+	writeSuccess(w, http.StatusOK, map[string]any{"pending": pending, "pointIndex": pointIndex})
 }
 
 func (s *apiServer) measurementAutoCollectHandler(w http.ResponseWriter, _ *http.Request) {

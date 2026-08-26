@@ -240,6 +240,7 @@
 import { computed, reactive, ref, watch } from 'vue'
 import { Warning, Check } from '@element-plus/icons-vue'
 import type { ChannelConfigDTO, DeviceDTO } from '@/types/device'
+import { isValvelessModel } from '@/utils/deviceModels'
 
 // ---- Props & Emits ----
 
@@ -321,11 +322,8 @@ function setAllEnabled(enabled: boolean) {
   }
 }
 
-// P1603 固定 16 通道，型号归一化与后端 factory normalizeModel 语义一致
-const isP1603Model = computed(() => {
-  const model = (form.model || '').replace(/\s+/g, '').toLowerCase()
-  return model === 'daq-p-1603' || model === 'p1603'
-})
+// P1603 固定 16 通道；判型逻辑统一走 deviceModels 工具。
+const isP1603Model = computed(() => isValvelessModel(form.model))
 
 // 生成长度 16 的默认通道配置（对齐后端 domain.DefaultP1603Channels）
 function defaultP1603Channels(): ChannelConfigDTO[] {
@@ -370,9 +368,7 @@ watch(() => form.type, () => {
 // 创建模式下选择 P1603 时初始化 16 通道默认量程配置（用户需按传感器量程修改）
 watch(() => form.model, (model) => {
   if (props.mode !== 'create' || !model) return
-  const isP = (model || '').replace(/\s+/g, '').toLowerCase() === 'daq-p-1603' ||
-    model.toLowerCase() === 'p1603'
-  if (isP && form.channels.length === 0) {
+  if (isValvelessModel(model) && form.channels.length === 0) {
     form.channels = defaultP1603Channels()
   }
 })

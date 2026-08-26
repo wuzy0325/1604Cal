@@ -22,11 +22,18 @@
       class="sidebar-content"
     >
       <div class="sidebar-section">
-        <h3 class="sidebar-title">
+        <button
+          type="button"
+          class="device-drawer-trigger"
+          @click="deviceDrawerVisible = true"
+        >
           <el-icon><Monitor /></el-icon>
-          1604 计量设备
-        </h3>
-        <MeasurementDevicePanel
+          <span class="trigger-label">计量采集设备</span>
+          <span class="trigger-status">{{ measurementStore.measureDeviceIds.length }} 台已选</span>
+          <el-icon><ArrowRight /></el-icon>
+        </button>
+        <MeasurementDeviceDrawer
+          v-model="deviceDrawerVisible"
           @connect="handleMeasureDeviceConnect"
           @disconnect="handleMeasureDeviceDisconnect"
           @unit-change="handleMeasureUnitChange"
@@ -85,7 +92,7 @@
         :class="{ 'is-connected': hasConnectedMeasureDevice }"
         role="button"
         tabindex="0"
-        :aria-label="`1604 计量设备：${hasConnectedMeasureDevice ? '已连接' : '未连接'}，点击展开`"
+        :aria-label="`计量采集设备：${hasConnectedMeasureDevice ? '已连接' : '未连接'}，点击展开`"
         @click="emit('toggle')"
         @keydown.enter="emit('toggle')"
       >
@@ -112,9 +119,9 @@ import {
   ArrowLeft, ArrowRight, CircleCheckFilled, CircleCloseFilled,
   Monitor, FirstAidKit
 } from '@element-plus/icons-vue'
-import MeasurementDevicePanel from '@/components/measurement/MeasurementDevicePanel.vue'
+import MeasurementDeviceDrawer from '@/components/measurement/MeasurementDeviceDrawer.vue'
 import PressDevicePanel from '@/components/common/PressDevicePanel.vue'
-import { fetchUnitConsistency, fetchDevices, upsertDevice } from "@/api/device"
+import { readSessionUnitConsistency } from '@/api/session'
 import { useMeasurementStore } from '@/stores/measurement'
 import { useMeasurementDeviceStore } from '@/stores/measurement/deviceStore'
 import { useDeviceStore } from '@/stores/deviceStore'
@@ -135,6 +142,7 @@ const deviceStore = useMeasurementDeviceStore()
 const moduleDeviceStore = useDeviceStore()
 const unitConsistent = ref(true)
 const unitConflicts = ref<string[]>([])
+const deviceDrawerVisible = ref(false)
 
 const hasConnectedPressureDevice = computed(() =>
   deviceStore.pressureDevices.some(d => d.status === 'connected')
@@ -162,7 +170,7 @@ const emitUnitCheck = () => {
 
 const checkUnitConsistency = async () => {
   try {
-    const result = await fetchUnitConsistency()
+    const result = await readSessionUnitConsistency()
     unitConsistent.value = result.consistent
     unitConflicts.value = result.conflicts ?? []
     // 同步到计量 store，供"开始计量"门禁使用。
@@ -176,8 +184,8 @@ const checkUnitConsistency = async () => {
 // 连接多台计量设备：逐台连接，全部成功后整批绑定到会话。
 const handleMeasureDeviceConnect = async (deviceIds: string[]) => {
   for (const deviceId of deviceIds) {
-    const ok = await deviceStore.connectMeasureDevice(deviceId)
-    if (!ok) {
+    const result = await deviceStore.connectMeasureDevice(deviceId)
+    if (!result.ok) {
       return
     }
   }
@@ -196,26 +204,10 @@ const handleMeasureDeviceConnect = async (deviceIds: string[]) => {
 
   await Promise.all([
     measurementStore.refreshDeviceInfo(),
-    measurementStore.refreshValveStatus(),
-    measurementStore.refreshMeasureUnit()
+    measurementStore.refreshDeviceSettingsAll()
   ])
 
-  // 同步各设备单位到后端配置（多设备逐台同步）
-  if (measurementStore.measureUnit) {
-    try {
-      const devices = await fetchDevices()
-      for (const deviceId of deviceIds) {
-        const dto = devices.find(d => d.id === deviceId)
-        if (dto) {
-          await upsertDevice({ ...dto, unit: measurementStore.measureUnit })
-        }
-      }
-    } catch (syncErr) {
-      console.warn('同步计量设备单位到配置失败:', syncErr)
-    }
-  }
-
-  // 单位同步到后端后再检查一致性，确保 deviceManager 中两个设备的单位都已是最新值
+  // 批量回读已由后端逐台同步硬件实际单位，此处直接检查当前会话一致性。
   if (connectedPressure) {
     await checkUnitConsistency()
   }
@@ -223,12 +215,13 @@ const handleMeasureDeviceConnect = async (deviceIds: string[]) => {
 
 const handleMeasureDeviceDisconnect = async (deviceIds: string[]) => {
   for (const deviceId of deviceIds) {
-    await deviceStore.disconnectMeasureDevice(deviceId)
+    const result = await deviceStore.disconnectMeasureDevice(deviceId)
+    if (!result.ok) return
   }
   // 断开后从绑定列表移除已断开设备；若全部断开则整体解绑。
   const remaining = measurementStore.measureDeviceIds.filter(id => !deviceIds.includes(id))
   if (remaining.length === 0) {
-    measurementStore.unbindMeasureDevice()
+    await measurementStore.clearMeasureDeviceBinding()
   } else {
     const connectedPressure = deviceStore.pressureDevices.find(d => d.status === 'connected')
     if (connectedPressure) {
@@ -327,24 +320,8 @@ watch(
 
       await Promise.all([
         measurementStore.refreshDeviceInfo(),
-        measurementStore.refreshValveStatus(),
-        measurementStore.refreshMeasureUnit()
+        measurementStore.refreshDeviceSettingsAll()
       ])
-
-      // 同步计量设备单位到后端配置
-      if (measurementStore.measureUnit) {
-        try {
-          const devices = await fetchDevices()
-          for (const deviceId of deviceIds) {
-            const dto = devices.find(d => d.id === deviceId)
-            if (dto) {
-              await upsertDevice({ ...dto, unit: measurementStore.measureUnit })
-            }
-          }
-        } catch (syncErr) {
-          console.warn('同步计量设备单位到配置失败:', syncErr)
-        }
-      }
 
       if (connectedPressure) {
         await checkUnitConsistency()
@@ -472,6 +449,34 @@ defineExpose({ checkUnitConsistency })
   &:hover {
     box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.07), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
   }
+}
+
+.device-drawer-trigger {
+  width: 100%;
+  min-height: 40px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid $slate-200;
+  border-radius: 8px;
+  background: #fff;
+  color: $slate-700;
+  cursor: pointer;
+  font-family: $font-sans;
+  transition: border-color 0.15s ease, background 0.15s ease;
+
+  &:hover,
+  &:focus-visible {
+    border-color: $mint;
+    background: rgba(16, 185, 129, 0.05);
+    outline: none;
+  }
+
+  > .el-icon:first-child { color: $mint; font-size: 16px; }
+  > .el-icon:last-child { color: $slate-400; font-size: 13px; }
+  .trigger-label { flex: 1; min-width: 0; text-align: left; font-size: 13px; font-weight: 600; }
+  .trigger-status { color: $slate-500; font-size: 11px; white-space: nowrap; }
 }
 
 /* Section 标题：左侧 Mint 竖线 + 文字 */

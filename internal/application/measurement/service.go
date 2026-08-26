@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"log"
-	"sort"
 	"sync"
 	"time"
 
@@ -27,7 +26,7 @@ var ErrRecollectPoint = errors.New("point recollect requested by user")
 // allChannels 全部16个通道，用于始终读取全部通道数据。
 var allChannels = []int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16}
 
-// maxCollectedRows 限制 s.rows 的最大保留行数，与前端 MEASUREMENT_MAX_ROWS 对齐。
+// maxCollectedRows 限制后端恢复与导出数据窗口；前端使用更小的展示窗口。
 // 超出时从头部丢弃最旧数据，防止长时间连续采集导致后端内存与前端 DOM 无限增长。
 // 注意：startCollectLoop 当前未被生产 HTTP 路径调用（生产走 StartWorkflow+StartAutoCollect），
 // 此上限为防御性约束，避免该路径被重新启用时成为内存炸弹。
@@ -95,6 +94,11 @@ type Service struct {
 	// stabilityTimeoutCh 用于等待前端用户对稳定超时的决定。
 	stabilityTimeoutCh chan string
 
+	// 稳定超时挂起状态：后端阻塞等待用户决策期间可被 HTTP 查询，
+	// 页面刷新/崩溃恢复后前端据此重新弹窗，避免流程卡死。
+	stabilityTimeoutPending    bool
+	stabilityTimeoutPointIndex int
+
 	// sessionStore 历史会话持久化存储。
 	sessionStore *SessionStore
 
@@ -136,29 +140,6 @@ func (s *Service) State() domain.SessionState {
 	return s.coordinator.State()
 }
 
-// checkValveCalibrationGate 校验所有已绑定计量设备的阀门均处于校准模式。
-// 多设备场景下任一设备未达标即整体门禁失败（错误携带 deviceId 便于定位）；
-// 按设备 ID 排序遍历，保证多台设备同时不达标时报错可复现。
-func checkValveCalibrationGate(ctx context.Context, drivers map[string]device.MeasureDriver) error {
-	devIDs := make([]string, 0, len(drivers))
-	for devID := range drivers {
-		devIDs = append(devIDs, devID)
-	}
-	sort.Strings(devIDs)
-
-	for _, devID := range devIDs {
-		valveStatus, err := drivers[devID].ReadValveStatus(ctx)
-		if err != nil {
-			return fmt.Errorf("%w: read valve status on %s: %v", apperrors.ErrPrerequisiteNotMet, devID, err)
-		}
-		if domain.ValveState(valveStatus) != domain.ValveStateCalibration {
-			return fmt.Errorf("%w: valve must be in calibration state on %s, current: %s",
-				apperrors.ErrPrerequisiteNotMet, devID, valveStatus)
-		}
-	}
-	return nil
-}
-
 // Start 启动计量采集。
 func (s *Service) Start(ctx context.Context, channels []int) error {
 	s.mu.Lock()
@@ -175,7 +156,7 @@ func (s *Service) Start(ctx context.Context, channels []int) error {
 	// 必须在 coordinator.Begin 之前校验，避免占用工作流锁后又因门禁失败回滚。
 	// 锁外读阀（最长 3s I/O），不阻塞会话锁。
 	if enforceValveGate {
-		if err := checkValveCalibrationGate(ctx, measureDrivers); err != nil {
+		if err := device.CheckValveCalibrationGate(ctx, measureDrivers); err != nil {
 			return err
 		}
 	}
@@ -455,7 +436,10 @@ func (s *Service) startCollectLoop(_ context.Context) {
 		ticker := time.NewTicker(500 * time.Millisecond)
 		defer ticker.Stop()
 
-		consecutiveErrors := 0
+		// 每设备独立连续失败计数：单台设备故障不拖垮整批实时采样，
+		// 达到阈值后发布设备级错误事件（携带 deviceId），由前端提示可跳过该设备；
+		// 设备恢复读数后计数清零，避免误判永久断开。
+		deviceErrCount := make(map[string]int)
 
 		for {
 			select {
@@ -474,37 +458,56 @@ func (s *Service) startCollectLoop(_ context.Context) {
 				if len(deviceIDs) == 0 {
 					deviceIDs = []string{""}
 				}
-				allOK := true
+
+				// 并行读取所有绑定设备：多设备场景避免单台慢/超时拖慢整批采样。
+				type devSample struct {
+					devID string
+					data  []float64
+					err   error
+				}
+				samples := make([]devSample, 0, len(deviceIDs))
+				var samplesMu sync.Mutex
+				var wg sync.WaitGroup
 				for _, devID := range deviceIDs {
-					data, err := s.sess.ReadMeasureDataForDevice(pollCtx, s.sess.Token(), devID)
-					if err != nil {
-						allOK = false
-						consecutiveErrors++
-						if consecutiveErrors >= maxConsecutiveErrors {
-							s.publish(events.EventMeasurementStateChanged, map[string]any{
-								"state": string(domain.SessionStateError),
-								"error": fmt.Sprintf("连续%d次采集失败: %v", consecutiveErrors, err),
+					wg.Add(1)
+					go func(id string) {
+						defer wg.Done()
+						data, err := s.sess.ReadMeasureDataForDevice(pollCtx, s.sess.Token(), id)
+						samplesMu.Lock()
+						samples = append(samples, devSample{devID: id, data: data, err: err})
+						samplesMu.Unlock()
+					}(devID)
+				}
+				wg.Wait()
+
+				for _, res := range samples {
+					if res.err != nil {
+						// 单设备失败只跳过该设备采样，不影响其他设备实时数据。
+						deviceErrCount[res.devID]++
+						if deviceErrCount[res.devID] == maxConsecutiveErrors {
+							s.publish(events.EventPointError, map[string]any{
+								"pointIndex": 0,
+								"deviceId":   res.devID,
+								"error":      fmt.Sprintf("实时采样连续%d次失败: %v", maxConsecutiveErrors, res.err),
 							})
-							s.mu.Lock()
-							_ = s.coordinator.Machine().Transition(domain.SessionStateError)
-							s.mu.Unlock()
-							return
+							// 重置计数，避免持续失败时每 500ms 刷屏；设备恢复后重新计数。
+							deviceErrCount[res.devID] = 0
 						}
 						continue
 					}
-					consecutiveErrors = 0
+					deviceErrCount[res.devID] = 0
 
 					// 构建通道映射（始终包含全部16通道）
 					chMap := make(map[string]float64, 16)
 					for i, ch := range allChannels {
-						if i < len(data) {
-							chMap[fmt.Sprintf("%d", ch)] = data[i]
+						if i < len(res.data) {
+							chMap[fmt.Sprintf("%d", ch)] = res.data[i]
 						}
 					}
 
 					row := CollectedRow{
 						Timestamp: time.Now().UTC().Format(time.RFC3339),
-						DeviceID:  devID,
+						DeviceID:  res.devID,
 						Channels:  chMap,
 					}
 
@@ -520,12 +523,9 @@ func (s *Service) startCollectLoop(_ context.Context) {
 
 					s.publish(events.EventMeasurementDataUpdated, map[string]any{
 						"timestamp": row.Timestamp,
-						"deviceId":  devID,
+						"deviceId":  res.devID,
 						"channels":  chMap,
 					})
-				}
-				if !allOK {
-					continue
 				}
 			}
 		}

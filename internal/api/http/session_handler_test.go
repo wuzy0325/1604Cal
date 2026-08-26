@@ -104,6 +104,7 @@ func newSessionRouterWithMeasureDriverAndFakeDriver(t *testing.T) (http.Handler,
 	}
 
 	store := manager.NewDeviceManager()
+	store.Upsert(domain.Device{ID: "m1", Type: domain.DeviceTypeMeasure, Unit: "kPa", Status: domain.DeviceStatusConnected})
 	connector := &sessionTestConnector{
 		activeDrivers: map[string]device.ConnectionDriver{
 			"m1": fakeDriver,
@@ -270,6 +271,63 @@ func TestSessionCalibrateZeroEndpoint(t *testing.T) {
 
 	if len(fakeDriver.calibrateZeroChannels) != 2 || fakeDriver.calibrateZeroChannels[0] != 1 || fakeDriver.calibrateZeroChannels[1] != 2 {
 		t.Fatalf("expected calibrate zero channels [1 2], got %v", fakeDriver.calibrateZeroChannels)
+	}
+}
+
+func TestSessionAggregateDeviceEndpoints(t *testing.T) {
+	router, _ := newSessionRouterWithMeasureDriverAndFakeDriver(t)
+
+	get := func(path string) map[string]any {
+		t.Helper()
+		req := httptest.NewRequest(http.MethodGet, path, nil)
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("GET %s: expected 200, got %d", path, rec.Code)
+		}
+		var resp dto.Response[map[string]any]
+		if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+			t.Fatalf("decode %s: %v", path, err)
+		}
+		return resp.Data
+	}
+
+	valves := get("/api/v1/session/valve/all")
+	if _, ok := valves["devices"].(map[string]any)["m1"]; !ok {
+		t.Fatalf("expected m1 valve result, got %#v", valves)
+	}
+	units := get("/api/v1/session/measure-unit/all")
+	if _, ok := units["devices"].(map[string]any)["m1"]; !ok {
+		t.Fatalf("expected m1 unit result, got %#v", units)
+	}
+	consistency := get("/api/v1/session/unit-consistency")
+	if consistency["consistent"] != true {
+		t.Fatalf("expected consistent bound devices, got %#v", consistency)
+	}
+}
+
+func TestSessionTargetedZeroAndReset(t *testing.T) {
+	router, fakeDriver := newSessionRouterWithMeasureDriverAndFakeDriver(t)
+
+	zeroBody := bytes.NewReader([]byte(`{"deviceId":"m1","channels":[1]}`))
+	zeroReq := httptest.NewRequest(http.MethodPost, "/api/v1/session/calibrate-zero", zeroBody)
+	zeroReq.Header.Set("Content-Type", "application/json")
+	zeroRec := httptest.NewRecorder()
+	router.ServeHTTP(zeroRec, zeroReq)
+	if zeroRec.Code != http.StatusOK {
+		t.Fatalf("targeted zero: expected 200, got %d", zeroRec.Code)
+	}
+
+	resetBody := bytes.NewReader([]byte(`{"deviceId":"m1"}`))
+	resetReq := httptest.NewRequest(http.MethodPost, "/api/v1/session/reset", resetBody)
+	resetReq.Header.Set("Content-Type", "application/json")
+	resetRec := httptest.NewRecorder()
+	router.ServeHTTP(resetRec, resetReq)
+	if resetRec.Code != http.StatusOK {
+		t.Fatalf("targeted reset: expected 200, got %d", resetRec.Code)
+	}
+	if len(fakeDriver.calibrateZeroChannels) != 1 {
+		t.Fatalf("expected targeted zero call, got %v", fakeDriver.calibrateZeroChannels)
 	}
 }
 

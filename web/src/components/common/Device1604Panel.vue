@@ -135,6 +135,7 @@ import { Cpu } from '@element-plus/icons-vue'
 import DeviceStatusBadge from '@/components/common/DeviceStatusBadge.vue'
 import { useDeviceInventoryStore } from '@/stores/device/inventoryStore'
 import { useCalibrationStore } from '@/stores/calibration'
+import { useDeviceStore } from '@/stores/deviceStore'
 import { fetchDevices, upsertDevice } from '@/api/device'
 import { useValveControl } from '@/composables/useValveControl'
 import {
@@ -151,6 +152,7 @@ const emit = defineEmits<{
 
 const deviceStore = useDeviceInventoryStore()
 const calibrationStore = useCalibrationStore()
+const moduleDeviceStore = useDeviceStore()
 const { measureDevices } = storeToRefs(deviceStore)
 
 // 多设备勾选列表（保持勾选顺序）；单设备场景与旧 selectedDeviceId 行为一致。
@@ -225,7 +227,10 @@ watch(
       selectedDeviceIds.value = valid
     }
     if (selectedDeviceIds.value.length === 0 && devices.length > 0) {
-      selectedDeviceIds.value = [devices[0].id]
+      // 优先恢复上次成功绑定的设备勾选（tasks 10.1），设备不存在时回退默认勾选第一台。
+      const saved = moduleDeviceStore.selectionByModule('calibration').measureDeviceIds
+      const validSaved = saved.filter(id => devices.find(d => d.id === id))
+      selectedDeviceIds.value = validSaved.length > 0 ? validSaved : [devices[0].id]
     }
   },
   { immediate: true }

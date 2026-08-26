@@ -28,3 +28,13 @@ func decodeJSON[T any](r *http.Request) (T, error) {
 	}
 	return v, nil
 }
+
+// decodeJSONOptional 解码"请求体可省略"的端点：空请求体返回零值不报错，
+// 其余校验行为与 decodeJSON 一致（未知字段仍报错）。
+func decodeJSONOptional[T any](r *http.Request) (T, error) {
+	if r.ContentLength == 0 {
+		var zero T
+		return zero, nil
+	}
+	return decodeJSON[T](r)
+}

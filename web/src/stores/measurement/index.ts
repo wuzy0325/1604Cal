@@ -4,14 +4,20 @@ import type { ActionResult } from '@/types/api'
 import {
   bindDevices as apiBindDevices,
   bindMeasureDevice as apiBindMeasureDevice,
+  unbindMeasureDevices as apiUnbindMeasureDevices,
   readPressure as apiReadPressure,
   readStability as apiReadStability,
   readValveStatus as apiReadValveStatus,
+  readValveStatusAll as apiReadValveStatusAll,
   setValveStatus as apiSetValveStatus,
   readMeasureUnit as apiReadMeasureUnit,
+  readMeasureUnitAll as apiReadMeasureUnitAll,
   setMeasureUnit as apiSetMeasureUnit,
+  setMeasureUnitAll as apiSetMeasureUnitAll,
+  readSessionUnitConsistency as apiReadSessionUnitConsistency,
   readDeviceInfo as apiReadDeviceInfo,
-  resetDevice as apiResetDevice
+  resetDevice as apiResetDevice,
+  calibrateZero as apiCalibrateZero
 } from '@/api/session'
 import {
   fetchMeasurementState,
@@ -44,16 +50,14 @@ import type { MeasurementState, CollectedRow, StabilityUpdate, AlarmData, Primar
 import { ControlMode, PressureMode } from '@/types/calibration'
 import { useMeasurementDeviceStore } from '@/stores/measurement/deviceStore'
 import { useGatesStore } from '@/stores/app/gates'
-import { fetchUnitConsistency } from '@/api/device'
 
 export type { MeasurementState, CollectedRow, StabilityUpdate }
 
 /**
- * 实时采样行最大保留条数，与后端 measurement.maxCollectedRows 对齐。
- * 超出时丢弃最旧行，防止长时间采集导致响应式 store 与 DOM 无限增长。
- * SSE 追加路径（useMeasurementSync）与全量拉取路径（refreshData）共用此上限。
+ * 浏览器只保留最近 200 条实时遥测。完整点位结果和报告数据由后端保存，
+ * 无需把后端 2000 条恢复窗口全部放入 Vue 响应式系统。
  */
-export const MEASUREMENT_MAX_ROWS = 2000
+export const MEASUREMENT_MAX_ROWS = 200
 
 export const useMeasurementStore = defineStore('measurement', () => {
   // ── 状态 ──
@@ -63,6 +67,7 @@ export const useMeasurementStore = defineStore('measurement', () => {
   // 多设备绑定列表（保持勾选顺序）；measureDeviceId 为首个设备的兼容视图
   const measureDeviceIds = ref<string[]>([])
   const measureDeviceId = computed(() => measureDeviceIds.value[0] ?? '')
+  const activeDeviceId = ref('')
   const pressureDeviceId = ref('')
 
   // 设备实时数据
@@ -75,6 +80,10 @@ export const useMeasurementStore = defineStore('measurement', () => {
   const skippedDevices = ref<Record<string, string>>({})
   const valveStatus = ref('')
   const measureUnit = ref('')
+  const valveStatusByDevice = ref<Record<string, string>>({})
+  const valveErrorByDevice = ref<Record<string, string>>({})
+  const measureUnitByDevice = ref<Record<string, string>>({})
+  const measureUnitErrorByDevice = ref<Record<string, string>>({})
   const deviceInfo = ref<Record<string, string>>({})
   // 设备压力单位一致性（计量设备与打压设备需同单位才能开始计量）。
   // 初始视为一致，避免首次进入未加载时误拦；连接/改单位/生成点位时会刷新。
@@ -136,7 +145,14 @@ export const useMeasurementStore = defineStore('measurement', () => {
   // 阀门=校准模式是计量启动的必要条件，
   // 与标定模块共用同一规则。
   // 开关由 gate store 从后端 /api/v1/config/gates 拉取，避免前端硬编码。
-  const valveReady = computed(() => valveStatus.value === 'calibration')
+  const valveReady = computed(() => {
+    if (measureDeviceIds.value.length <= 1 || Object.keys(valveStatusByDevice.value).length === 0) {
+      return valveStatus.value === 'calibration'
+    }
+    return measureDeviceIds.value.every(id =>
+      valveStatusByDevice.value[id] === 'calibration' && !valveErrorByDevice.value[id]
+    )
+  })
   const gatesStore = useGatesStore()
   const enforceValveCalibrationGate = computed(() => gatesStore.enforceValveCalibrationGate)
   // 开始计量必须满足：阀门=校准（若启用门禁）且设备压力单位一致。
@@ -198,12 +214,25 @@ export const useMeasurementStore = defineStore('measurement', () => {
     return [...new Set(values.map(id => id.trim()).filter(Boolean))]
   }
 
+  const repairActiveDevice = () => {
+    if (!measureDeviceIds.value.includes(activeDeviceId.value)) {
+      activeDeviceId.value = measureDeviceIds.value[0] ?? ''
+    }
+  }
+
+  const setActiveDevice = (deviceId: string) => {
+    if (measureDeviceIds.value.includes(deviceId)) {
+      activeDeviceId.value = deviceId
+    }
+  }
+
   // 绑定多台计量设备 + 打压设备；兼容旧调用方传入单个设备 ID。
   const bindDevices = async (measureDevIds: string | string[], pressureDevId: string) => {
     const normalizedIds = normalizeMeasureDeviceIds(measureDevIds)
     await apiBindDevices(normalizedIds, pressureDevId, 'measurement')
     measureDeviceIds.value = normalizedIds
     pressureDeviceId.value = pressureDevId
+    repairActiveDevice()
     await refreshUnitConsistency()
   }
 
@@ -212,17 +241,25 @@ export const useMeasurementStore = defineStore('measurement', () => {
     const normalizedIds = normalizeMeasureDeviceIds(measureDevIds)
     await apiBindMeasureDevice(normalizedIds, 'measurement')
     measureDeviceIds.value = normalizedIds
+    repairActiveDevice()
     await refreshUnitConsistency()
   }
 
-  const unbindMeasureDevice = () => {
+  // resetBindingState 仅清空前端绑定相关状态（Pinia 内存态），不调用后端。
+  // 需要释放后端绑定/断开设备时走 clearMeasureDeviceBinding。
+  const resetBindingState = () => {
     measureDeviceIds.value = []
+    activeDeviceId.value = ''
     pressureDeviceId.value = ''
     channelData.value = []
     channelDataByDevice.value = {}
     skippedDevices.value = {}
     valveStatus.value = ''
     measureUnit.value = ''
+    valveStatusByDevice.value = {}
+    valveErrorByDevice.value = {}
+    measureUnitByDevice.value = {}
+    measureUnitErrorByDevice.value = {}
     deviceInfo.value = {}
   }
 
@@ -256,6 +293,19 @@ export const useMeasurementStore = defineStore('measurement', () => {
     catch { /* 静默 */ }
   }
 
+  const refreshValveStatusAll = async () => {
+    const results = await apiReadValveStatusAll()
+    const values: Record<string, string> = {}
+    const errors: Record<string, string> = {}
+    for (const [deviceId, result] of Object.entries(results)) {
+      if (result.error) errors[deviceId] = result.error
+      else values[deviceId] = result.value ?? ''
+    }
+    valveStatusByDevice.value = values
+    valveErrorByDevice.value = errors
+    valveStatus.value = values[measureDeviceId.value] ?? ''
+  }
+
   // setValveStatus 切换阀门状态：
   // 成功时本地状态先按请求值更新，调用方应再通过 refreshValveStatus 校核硬件实际状态；
   // 失败时返回结构化错误（含 N09 等设备拒绝信息），便于 UI 弹出可读提示。
@@ -284,16 +334,46 @@ export const useMeasurementStore = defineStore('measurement', () => {
     }
   }
 
+  const refreshMeasureUnitAll = async () => {
+    const results = await apiReadMeasureUnitAll()
+    const values: Record<string, string> = {}
+    const errors: Record<string, string> = {}
+    for (const [deviceId, result] of Object.entries(results)) {
+      if (result.error) errors[deviceId] = result.error
+      else values[deviceId] = result.value ?? ''
+    }
+    measureUnitByDevice.value = values
+    measureUnitErrorByDevice.value = errors
+    measureUnit.value = values[measureDeviceId.value] ?? ''
+  }
+
+  const refreshDeviceSettingsAll = async () => {
+    await Promise.all([refreshValveStatusAll(), refreshMeasureUnitAll()])
+  }
+
   const setMeasureUnit = async (unit: string) => {
     await apiSetMeasureUnit(unit)
     measureUnit.value = unit
     await refreshUnitConsistency()
   }
 
+  const setMeasureUnitAll = async (unit: string): Promise<ActionResult> => {
+    try {
+      await apiSetMeasureUnitAll(unit)
+      return { ok: true }
+    } catch (error) {
+      return {
+        ok: false,
+        error: 'UNIT_SET_FAILED',
+        detail: error instanceof Error ? error.message : '统一设备单位失败'
+      }
+    }
+  }
+
   // 刷新设备压力单位一致性状态，用于开始计量的门禁。
   const refreshUnitConsistency = async () => {
     try {
-      const check = await fetchUnitConsistency()
+      const check = await apiReadSessionUnitConsistency()
       unitConsistent.value = check?.consistent !== false
     } catch {
       // 拉取失败时不改变现有状态，避免因一次网络抖动误拦启动。
@@ -305,8 +385,17 @@ export const useMeasurementStore = defineStore('measurement', () => {
     catch { /* 静默 */ }
   }
 
-  const resetDevice = async () => {
-    await apiResetDevice()
+  const resetDevice = async (deviceId = activeDeviceId.value) => {
+    await apiResetDevice(deviceId)
+  }
+
+  const calibrateZero = async (deviceId: string, selectedChannels: number[]) => {
+    return apiCalibrateZero(selectedChannels, deviceId)
+  }
+
+  const clearMeasureDeviceBinding = async () => {
+    await apiUnbindMeasureDevices()
+    resetBindingState()
   }
 
   // ── 采集工作流 ──
@@ -438,7 +527,34 @@ export const useMeasurementStore = defineStore('measurement', () => {
     try {
       const loadedPoints = await fetchMeasurementPoints()
       points.value = Array.isArray(loadedPoints) ? loadedPoints : []
+      restoreFlowStateFromPoints()
     } catch { /* 静默 */ }
+  }
+
+  // restoreFlowStateFromPoints 从后端点位状态恢复刷新即丢的纯前端流程位置：
+  // - currentPointIndex 取首个未完成点的前一个序号（手动模式"打压下一点"以它为基准）。
+  //   按"第一个非 completed 点"推导而非"最后一个完成点"，跳过/失败/中断的点不会被
+  //   越过——刷新后从断点继续，而不是跳到失败点之后。
+  // - skippedDevices 从设备维度采集状态重建，避免刷新后重复向已跳过设备发起采集。
+  // 已知边界：分批模式（batchStore）的阶段状态仍为内存态、刷新不恢复，
+  // 需要后端批次会话查询接口支撑，见 docs/plans 后续迭代。
+  const restoreFlowStateFromPoints = () => {
+    let restoredIndex = points.value.length
+    for (const p of points.value) {
+      if (p.status !== 'completed') {
+        restoredIndex = Math.max(0, p.index - 1)
+        break
+      }
+    }
+    currentPointIndex.value = restoredIndex
+
+    const skipped: Record<string, string> = {}
+    for (const p of points.value) {
+      for (const [devID, d] of Object.entries(p.collectedByDevice ?? {})) {
+        if (d.status === 'skipped') skipped[devID] = d.skipReason ?? ''
+      }
+    }
+    skippedDevices.value = skipped
   }
 
   const buildMeasurementPayload = (p: typeof measurementParams.value, customPoints?: number[]): MeasurementParamsPayload => ({
@@ -521,7 +637,11 @@ export const useMeasurementStore = defineStore('measurement', () => {
 
   const refreshAlarmPending = async () => {
     try {
-      alarmPending.value = await checkMeasurementAlarmPending()
+      const resp = await checkMeasurementAlarmPending()
+      alarmPending.value = resp.pending
+      // 恢复报警详情：SSE 事件只在触发瞬间送达一次，
+      // 页面刷新后 alarmData 只能从这里重建，否则弹窗/自动放行无从判断。
+      alarmData.value = resp.alarm ?? null
     } catch { /* 静默 */ }
   }
 
@@ -597,6 +717,7 @@ export const useMeasurementStore = defineStore('measurement', () => {
     channels,
     measureDeviceIds,
     measureDeviceId,
+    activeDeviceId,
     pressureDeviceId,
     measurementParams,
     currentPressure,
@@ -606,6 +727,10 @@ export const useMeasurementStore = defineStore('measurement', () => {
     skippedDevices,
     valveStatus,
     measureUnit,
+    valveStatusByDevice,
+    valveErrorByDevice,
+    measureUnitByDevice,
+    measureUnitErrorByDevice,
     deviceInfo,
     unitConsistent,
     stabilityState,
@@ -626,7 +751,9 @@ export const useMeasurementStore = defineStore('measurement', () => {
     // 设备绑定
     bindDevices,
     bindMeasureDevice,
-    unbindMeasureDevice,
+    setActiveDevice,
+    resetBindingState,
+    clearMeasureDeviceBinding,
     unbindPressureDevice,
     skipDevice,
     // 实时数据
@@ -634,12 +761,17 @@ export const useMeasurementStore = defineStore('measurement', () => {
     refreshStability,
     refreshMeasureData,
     refreshValveStatus,
+    refreshValveStatusAll,
     setValveStatus,
     refreshMeasureUnit,
+    refreshMeasureUnitAll,
+    refreshDeviceSettingsAll,
     setMeasureUnit,
+    setMeasureUnitAll,
     refreshDeviceInfo,
     refreshUnitConsistency,
     resetDevice,
+    calibrateZero,
     // 采集工作流
     start,
     manualStart,

@@ -42,6 +42,7 @@ export const EVENT_POINT_RECOLLECT = 'point.recollect'
 export const EVENT_POINT_SKIPPED = 'point.skipped'
 export const EVENT_POINT_STOPPED = 'point.stopped'
 export const EVENT_POINT_RETRY = 'point.retry'
+export const EVENT_POINT_ERROR = 'point.error'
 
 // CalibrationData 标定数据事件
 export const EVENT_DATA_COLLECTED = 'data.collected'

@@ -10,14 +10,19 @@ import * as measurementApi from '@/api/measurement'
 vi.mock('@/api/session', () => ({
   bindDevices: vi.fn(),
   bindMeasureDevice: vi.fn(),
+  unbindMeasureDevices: vi.fn(),
   readPressure: vi.fn(),
   readStability: vi.fn(),
   readMeasureData: vi.fn(),
   readMeasureDataAllDevices: vi.fn(),
   readValveStatus: vi.fn(),
+  readValveStatusAll: vi.fn(),
   setValveStatus: vi.fn(),
   readMeasureUnit: vi.fn(),
+  readMeasureUnitAll: vi.fn(),
   setMeasureUnit: vi.fn(),
+  setMeasureUnitAll: vi.fn(),
+  readSessionUnitConsistency: vi.fn(),
   readDeviceInfo: vi.fn(),
   resetDevice: vi.fn()
 }))
@@ -172,14 +177,14 @@ describe('useMeasurementStore', () => {
       expect(store.deviceBound).toBe(true)
     })
 
-    it('clears both ids when unbinding measure device', async () => {
+    it('clears both ids when resetting binding state locally', async () => {
       vi.mocked(sessionApi.bindDevices).mockResolvedValue(undefined)
       const store = useMeasurementStore()
 
       await store.bindDevices(['m1'], 'p1')
       expect(store.deviceBound).toBe(true)
 
-      store.unbindMeasureDevice()
+      store.resetBindingState()
       expect(store.measureDeviceId).toBe('')
       expect(store.measureDeviceIds).toEqual([])
       expect(store.pressureDeviceId).toBe('')
@@ -356,6 +361,58 @@ describe('useMeasurementStore', () => {
       const store = useMeasurementStore()
       await store.refreshData()
       expect(store.rows).toEqual(mockRows)
+    })
+
+    it('keeps only the latest browser row window', async () => {
+      const mockRows = Array.from({ length: 250 }, (_, index) => ({
+        timestamp: String(index),
+        channels: { '1': index }
+      }))
+      vi.mocked(measurementApi.fetchMeasurementData).mockResolvedValue({
+        rows: mockRows,
+        total: mockRows.length
+      })
+      const store = useMeasurementStore()
+
+      await store.refreshData()
+
+      expect(store.rows).toHaveLength(200)
+      expect(store.rows[0].timestamp).toBe('50')
+      expect(store.rows[199].timestamp).toBe('249')
+    })
+  })
+
+  describe('aggregate device state', () => {
+    it('stores per-device valve and unit results and keeps first-device compatibility values', async () => {
+      vi.mocked(sessionApi.readValveStatusAll).mockResolvedValue({
+        m1: { value: 'calibration' },
+        m2: { value: 'measurement' }
+      })
+      vi.mocked(sessionApi.readMeasureUnitAll).mockResolvedValue({
+        m1: { value: 'kPa' },
+        m2: { value: 'MPa' }
+      })
+      const store = useMeasurementStore()
+      await store.bindMeasureDevice(['m1', 'm2'])
+
+      await store.refreshDeviceSettingsAll()
+
+      expect(store.valveStatusByDevice).toEqual({ m1: 'calibration', m2: 'measurement' })
+      expect(store.measureUnitByDevice).toEqual({ m1: 'kPa', m2: 'MPa' })
+      expect(store.valveStatus).toBe('calibration')
+      expect(store.measureUnit).toBe('kPa')
+      expect(store.activeDeviceId).toBe('m1')
+    })
+
+    it('repairs focused device when bindings change', async () => {
+      const store = useMeasurementStore()
+      await store.bindMeasureDevice(['m1', 'm2'])
+      store.setActiveDevice('m2')
+      expect(store.activeDeviceId).toBe('m2')
+
+      await store.bindMeasureDevice(['m1'])
+
+      expect(store.activeDeviceId).toBe('m1')
     })
   })
 

@@ -36,7 +36,7 @@
           type="button"
           class="device-tab"
           :class="{ active: tab.deviceId === activeDeviceId }"
-          @click="activeDeviceId = tab.deviceId"
+          @click="measurementStore.setActiveDevice(tab.deviceId)"
         >
           {{ tab.name }}
           <span
@@ -248,7 +248,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed } from 'vue'
 import { DataLine, Aim } from '@element-plus/icons-vue'
 import { useMeasurementStore } from '@/stores/measurement'
 import { useMeasurementDeviceStore } from '@/stores/measurement/deviceStore'
@@ -275,7 +275,7 @@ const points = computed<MeasurementPoint[]>(() => measurementStore.points)
 
 // ── 多设备 tab ──
 // 当前查看的设备（默认首个绑定设备）；单设备场景恒为首个设备，不影响旧行为。
-const activeDeviceId = ref('')
+const activeDeviceId = computed(() => measurementStore.activeDeviceId)
 
 // 设备 tab 列表：绑定多台计量设备时展示；含已跳过标记与原因。
 const deviceTabs = computed(() => {
@@ -299,7 +299,7 @@ function displayCollectedData(point: MeasurementPoint): number[] | undefined {
   if (activeDeviceId.value && point.collectedByDevice?.[activeDeviceId.value]) {
     return point.collectedByDevice[activeDeviceId.value].collected
   }
-  return point.collectedData
+  return measurementStore.measureDeviceIds.length <= 1 ? point.collectedData : undefined
 }
 
 // 设备 ID → 显示名（实时采样表设备列）。
@@ -454,9 +454,9 @@ interface DisplayRow {
   collectTime: string
 }
 
-// 采样数据仍在 store 中保留最近 2000 条，但表格只渲染最近 500 条，
+// 采样数据在 store 中保留最近 200 条，表格只渲染最近 100 条，
 // 避免高频采样时大量 DOM 节点和格式化对象造成浏览器内存峰值。
-const MAX_VISIBLE_SAMPLE_ROWS = 500
+const MAX_VISIBLE_SAMPLE_ROWS = 100
 
 const tableRows = computed<DisplayRow[]>(() => {
   const startIndex = Math.max(0, rows.value.length - MAX_VISIBLE_SAMPLE_ROWS)
@@ -643,8 +643,8 @@ $amber: #f59e0b;
 }
 
 .skipped-badge {
-  font-size: 10px;
-  font-weight: 600;
+  font-size: 12px;
+  font-weight: 500;
   padding: 1px 6px;
   border-radius: 4px;
   background: rgba(239, 68, 68, 0.1);

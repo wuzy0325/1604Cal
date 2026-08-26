@@ -12,7 +12,6 @@ import (
 	"cal1604/internal/application/session"
 	"cal1604/internal/device"
 	"cal1604/internal/domain"
-	apperrors "cal1604/internal/errors"
 	"cal1604/internal/events"
 	"cal1604/internal/workflow"
 )
@@ -210,30 +209,6 @@ func (s *Service) getPressureDriver() device.PressureDriver {
 	return s.pressureDriver
 }
 
-// checkValveCalibrationGate 校验所有已绑定计量设备的阀门均处于校准模式。
-// 多设备场景下任一设备未达标即整体门禁失败（错误携带 deviceId 便于定位）；
-// 单设备场景的错误文案保持原有 "valve must be in calibration state" 语义。
-// 按设备 ID 排序遍历，保证多台设备同时不达标时报错可复现。
-func checkValveCalibrationGate(ctx context.Context, drivers map[string]device.MeasureDriver) error {
-	devIDs := make([]string, 0, len(drivers))
-	for devID := range drivers {
-		devIDs = append(devIDs, devID)
-	}
-	sort.Strings(devIDs)
-
-	for _, devID := range devIDs {
-		valveStatus, err := drivers[devID].ReadValveStatus(ctx)
-		if err != nil {
-			return fmt.Errorf("%w: read valve status on %s: %v", apperrors.ErrPrerequisiteNotMet, devID, err)
-		}
-		if valveStatus != string(domain.ValveStateCalibration) {
-			return fmt.Errorf("%w: valve must be in calibration state on %s, current: %s",
-				apperrors.ErrPrerequisiteNotMet, devID, valveStatus)
-		}
-	}
-	return nil
-}
-
 // StartCalibration 开始校准流程（WTN1604 多点校准模式）。
 // 若 ControlMode 为 auto，则在准备完成后自动启动采集循环。
 // 是否校验阀门状态由 startPrerequisiteConfig.EnforceValveCalibration 控制。
@@ -275,7 +250,7 @@ func (s *Service) StartCalibration(ctx context.Context) error {
 	// 影响其他并发请求。失败 / 非校准态都要回滚 coordinator，
 	// 并统一 wrap ErrPrerequisiteNotMet，让 HTTP 层映射到 409 PREREQUISITE_NOT_MET。
 	if enforceValveGate {
-		if err := checkValveCalibrationGate(ctx, measureDrivers); err != nil {
+		if err := device.CheckValveCalibrationGate(ctx, measureDrivers); err != nil {
 			s.coordinator.End()
 			return err
 		}
@@ -349,7 +324,7 @@ func (s *Service) ValidateStartPrerequisites(ctx context.Context) error {
 	}
 
 	if enforceValveGate {
-		if err := checkValveCalibrationGate(ctx, measureDrivers); err != nil {
+		if err := device.CheckValveCalibrationGate(ctx, measureDrivers); err != nil {
 			return err
 		}
 	}
@@ -586,7 +561,12 @@ func (s *Service) collectPoint(ctx context.Context, pointIndex int) error {
 		}
 
 		// AlarmDecisionContinue — 正常完成
-		s.publish(events.EventPointCompleted, map[string]any{"pointIndex": pointIndex, "data": data})
+		// 点完成事件携带 deviceId（单设备场景取首个绑定设备，spec 要求）。
+		pointDonePayload := map[string]any{"pointIndex": pointIndex, "data": data}
+		if devIDs := s.MeasureDeviceIDs(); len(devIDs) > 0 {
+			pointDonePayload["deviceId"] = devIDs[0]
+		}
+		s.publish(events.EventPointCompleted, pointDonePayload)
 		return nil
 	}
 
@@ -735,10 +715,13 @@ func (s *Service) awaitAlarmDecision(ctx context.Context, pointIndex int, point 
 	select {
 	case deviceID2 := <-s.skipDeviceCh:
 		// 用户选择跳过指定设备：整批继续，但该设备从剩余流程移除。
+		// 当前点其余设备已采集成功，点整体标记完成（被跳设备保持 error 状态，
+		// 其已完成压力点数据保留，剩余点由 executePointLoop 过滤不再采集）。
 		s.alarmMu.Lock()
 		s.alarmPending = false
 		s.alarmCh = nil
 		s.alarmMu.Unlock()
+		s.updatePointStatus(pointIndex, domain.PointStatusCompleted)
 		_ = s.coordinator.Machine().Transition(domain.SessionStatePointDone)
 		s.publishSessionState()
 		s.publish(events.EventCalibrationAlarmResolved, map[string]any{
@@ -780,6 +763,9 @@ func (s *Service) awaitAlarmDecision(ctx context.Context, pointIndex int, point 
 			s.publishSessionState()
 			return workflow.AlarmDecisionSkip, nil
 		default:
+			// 用户确认继续（忽略设备异常）：点收尾为 completed，
+			// 失败设备保持 error 状态但不再阻断流程。
+			s.updatePointStatus(pointIndex, domain.PointStatusCompleted)
 			_ = s.coordinator.Machine().Transition(domain.SessionStatePointDone)
 			s.publishSessionState()
 			return workflow.AlarmDecisionContinue, nil

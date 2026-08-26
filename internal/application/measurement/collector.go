@@ -150,7 +150,7 @@ func (s *Service) ManualCollect(ctx context.Context, pointIndex int) error {
 
 	// 单设备路径：保持原逻辑
 	if len(measureDrivers) <= 1 {
-		for _, measureDriver := range measureDrivers {
+		for devID, measureDriver := range measureDrivers {
 			flattened, err := s.collectSamplesFromDriver(ctx, measureDriver, channels, averageCount)
 			if err != nil {
 				return err
@@ -159,6 +159,7 @@ func (s *Service) ManualCollect(ctx context.Context, pointIndex int) error {
 			s.publish(events.EventMeasurementDataCollected, map[string]any{
 				"pointIndex": point.Index,
 				"channels":   channels,
+				"deviceId":   devID,
 				"data":       flattened,
 			})
 		}
@@ -273,6 +274,11 @@ func (s *Service) finalizePointCollect(ctx context.Context, pointIndex int, poin
 			return ctx.Err()
 		}
 	}
+
+	// 点流程正常结束（无报警，或用户已确认继续/跳过整点）：
+	// 点状态收尾为 completed。多设备场景 updatePointCollectedDataForDevice
+	// 不写点状态（仅单设备兼容分支回填），这里统一补置，避免前端点表停留 collecting。
+	s.updatePointStatus(pointIndex, domain.PointStatusCompleted)
 
 	nextState := domain.SessionStateReady
 	if pointIndex >= totalPoints {
@@ -399,18 +405,49 @@ func (s *Service) updatePointCollectedData(pointIndex int, data []float64, colle
 	}
 	timestamp := collectedAt.UTC().Format(time.RFC3339)
 	clonedData := append([]float64(nil), data...)
-	s.points[pointIndex-1].CollectedData = clonedData
-	s.points[pointIndex-1].CollectTime = timestamp
-	s.points[pointIndex-1].Status = domain.PointStatusCompleted
-	if s.session != nil && pointIndex <= len(s.session.Points) {
-		s.session.Points[pointIndex-1].CollectedData = append([]float64(nil), data...)
-		s.session.Points[pointIndex-1].CollectTime = timestamp
-		s.session.Points[pointIndex-1].Status = domain.PointStatusCompleted
+
+	// 单设备路径双写：旧字段 CollectedData 保持兼容，同时写入设备维度数据
+	// （spec：单设备路径 MUST 同时写入设备维度数据与原有单设备字段）。
+	devID := ""
+	if devIDs := s.sess.MeasureDeviceIDs(); len(devIDs) > 0 {
+		devID = devIDs[0]
 	}
-	point := s.points[pointIndex-1]
+	point := &s.points[pointIndex-1]
+	point.CollectedData = clonedData
+	point.CollectTime = timestamp
+	point.Status = domain.PointStatusCompleted
+	if devID != "" {
+		if point.CollectedByDevice == nil {
+			point.CollectedByDevice = make(map[string]domain.DevicePointData)
+		}
+		point.CollectedByDevice[devID] = domain.DevicePointData{
+			DeviceID:    devID,
+			Collected:   append([]float64(nil), clonedData...),
+			Status:      domain.PointStatusCompleted,
+			CollectTime: timestamp,
+		}
+	}
+	if s.session != nil && pointIndex <= len(s.session.Points) {
+		sp := &s.session.Points[pointIndex-1]
+		sp.CollectedData = append([]float64(nil), data...)
+		sp.CollectTime = timestamp
+		sp.Status = domain.PointStatusCompleted
+		if devID != "" {
+			if sp.CollectedByDevice == nil {
+				sp.CollectedByDevice = make(map[string]domain.DevicePointData)
+			}
+			sp.CollectedByDevice[devID] = domain.DevicePointData{
+				DeviceID:    devID,
+				Collected:   append([]float64(nil), clonedData...),
+				Status:      domain.PointStatusCompleted,
+				CollectTime: timestamp,
+			}
+		}
+	}
+	snapshot := *point
 	s.mu.Unlock()
 
-	s.publish(events.EventMeasurementPointStatus, point)
+	s.publish(events.EventMeasurementPointStatus, snapshot)
 }
 
 // updatePointCollectedDataForDevice 把指定计量设备的采集结果写入压力点的设备维度数据。
@@ -515,30 +552,24 @@ func (s *Service) waitForMeasurementStability(
 	// 标记是否已从 pressurizing 切换到 stabilizing
 	transitionedToStabilizing := false
 
+	// 进度事件降频：状态翻转立即推送，其余最多 stabilityPublishInterval 一次，
+	// 避免 200ms 判稳节拍持续制造 SSE 事件放大前端渲染压力。
+	var lastPublish time.Time
+	lastIsStable, lastIsInRange := false, false
+	const stabilityPublishInterval = 1000 * time.Millisecond
+
 	for {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
 		case <-ticker.C:
 			if time.Now().After(deadline) {
-				// 超时：发布事件并等待前端用户决定
-				s.publish(events.EventMeasurementStabilityTimeout, map[string]any{
-					"pointIndex": pointIndex,
-				})
-
-				select {
-				case decision := <-s.stabilityTimeoutCh:
-					switch decision {
-					case "continue":
-						// 用户选择继续等待，重置超时倒计时
-						deadline = time.Now().Add(time.Duration(stabilityTimeoutMs) * time.Millisecond)
-						continue
-					case "skip":
-						return ErrPointSkipped
-					}
-				case <-ctx.Done():
-					return ctx.Err()
+				if err := s.awaitStabilityTimeoutDecision(ctx, pointIndex); err != nil {
+					return err
 				}
+				// 用户选择继续等待，重置超时倒计时
+				deadline = time.Now().Add(time.Duration(stabilityTimeoutMs) * time.Millisecond)
+				continue
 			}
 
 			var status workflow.StabilityStatus
@@ -572,19 +603,58 @@ func (s *Service) waitForMeasurementStability(
 				}
 			}
 
-			s.publish(events.EventMeasurementStabilityUpdate, map[string]any{
-				"pointIndex":         pointIndex,
-				"isStable":           status.IsStable,
-				"isInRange":          status.IsInRange,
-				"currentValue":       status.CurrentValue,
-				"stableDurationMs":   status.StableDurationMs,
-				"requiredDurationMs": status.RequiredDurationMs,
-				"progress":           status.Progress,
-			})
+			stateChanged := status.IsStable != lastIsStable || status.IsInRange != lastIsInRange
+			if stateChanged || time.Since(lastPublish) >= stabilityPublishInterval {
+				s.publish(events.EventMeasurementStabilityUpdate, map[string]any{
+					"pointIndex":         pointIndex,
+					"isStable":           status.IsStable,
+					"isInRange":          status.IsInRange,
+					"currentValue":       status.CurrentValue,
+					"stableDurationMs":   status.StableDurationMs,
+					"requiredDurationMs": status.RequiredDurationMs,
+					"progress":           status.Progress,
+				})
+				lastPublish = time.Now()
+				lastIsStable = status.IsStable
+				lastIsInRange = status.IsInRange
+			}
 
 			if status.IsStable {
 				return nil
 			}
 		}
+	}
+}
+
+// awaitStabilityTimeoutDecision 发布稳定超时事件并阻塞等待前端用户决定。
+// 等待期间挂起状态可被 GET /measurement/stability-timeout/pending 查询，
+// 页面刷新后前端据此重新弹窗，避免后端永久等待、流程卡死。
+func (s *Service) awaitStabilityTimeoutDecision(ctx context.Context, pointIndex int) error {
+	s.mu.Lock()
+	s.stabilityTimeoutPending = true
+	s.stabilityTimeoutPointIndex = pointIndex
+	s.mu.Unlock()
+
+	s.publish(events.EventMeasurementStabilityTimeout, map[string]any{
+		"pointIndex": pointIndex,
+	})
+
+	select {
+	case decision := <-s.stabilityTimeoutCh:
+		s.mu.Lock()
+		s.stabilityTimeoutPending = false
+		s.mu.Unlock()
+		switch decision {
+		case "skip":
+			return ErrPointSkipped
+		default:
+			// continue：由调用方重置超时倒计时后继续等待
+			return nil
+		}
+	case <-ctx.Done():
+		s.mu.Lock()
+		s.stabilityTimeoutPending = false
+		s.mu.Unlock()
+		return ctx.Err()
 	}
 }

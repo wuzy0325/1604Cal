@@ -199,6 +199,21 @@ func (s *Service) IsAlarmPending() bool {
 	return s.alarmPending
 }
 
+// GetCurrentAlarm 返回当前挂起报警的快照；无挂起报警时返回 nil。
+// 用于页面刷新后通过 HTTP 恢复报警详情（SSE 事件已错过）。
+func (s *Service) GetCurrentAlarm() *Alarm {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if !s.alarmPending || s.currentAlarm == nil {
+		return nil
+	}
+	snapshot := *s.currentAlarm
+	if s.currentAlarm.OverLimitChannels != nil {
+		snapshot.OverLimitChannels = append([]int(nil), s.currentAlarm.OverLimitChannels...)
+	}
+	return &snapshot
+}
+
 func (s *Service) ResolveAlarm(decision string) error {
 	s.mu.Lock()
 	if !s.alarmPending {
@@ -228,9 +243,28 @@ func (s *Service) ResolveAlarm(decision string) error {
 	return nil
 }
 
+// GetStabilityTimeoutPending 返回稳定超时挂起状态与对应压力点序号。
+func (s *Service) GetStabilityTimeoutPending() (bool, int) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.stabilityTimeoutPending, s.stabilityTimeoutPointIndex
+}
+
+// ResolveStabilityTimeout 接收前端用户对稳定超时的决定。
+// 仅在确实存在挂起时投递，防止无人等待时决策滞留通道，
+// 被下一次超时误消费（跳过点未弹窗）。
 func (s *Service) ResolveStabilityTimeout(decision string) {
+	s.mu.Lock()
+	pending := s.stabilityTimeoutPending
+	ch := s.stabilityTimeoutCh
+	s.mu.Unlock()
+
+	if !pending || ch == nil {
+		return
+	}
+
 	select {
-	case s.stabilityTimeoutCh <- decision:
+	case ch <- decision:
 	default:
 	}
 }

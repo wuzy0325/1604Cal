@@ -5,8 +5,9 @@ package events
 
 // Session 会话生命周期事件
 const (
-	EventSessionDeviceBound  = "session.device_bound"
-	EventSessionStateChanged = "session.state.changed"
+	EventSessionDeviceBound   = "session.device_bound"
+	EventSessionDeviceUnbound = "session.device_unbound"
+	EventSessionStateChanged  = "session.state.changed"
 )
 
 // Device 设备状态事件

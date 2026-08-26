@@ -153,6 +153,41 @@ func TestP1603Driver_CollectDataFromCache(t *testing.T) {
 	}
 }
 
+// TestP1603Driver_OnDataFrameReusesCache 验证 100Hz 回调复用帧缓存，
+// 避免长时间采集时每帧分配 map 造成持续 GC 压力。
+func TestP1603Driver_OnDataFrameReusesCache(t *testing.T) {
+	d := NewP1603Driver(testP1603Config())
+	d.dev = sharedhw.NewDAQP1603(d.buildSharedProfile())
+	payload := sharedcore.DataPayload{
+		Channels:       []float64{1, 2},
+		ChannelIndices: []int{0, 1},
+	}
+
+	d.onDataFrame(d.dev, payload)
+	first := d.latestFrame
+	d.onDataFrame(d.dev, sharedcore.DataPayload{
+		Channels:       []float64{3, 4},
+		ChannelIndices: []int{0, 1},
+	})
+
+	if first == nil || d.latestFrame == nil {
+		t.Fatal("expected frame cache to be initialized")
+	}
+	if fmt.Sprintf("%p", first) != fmt.Sprintf("%p", d.latestFrame) {
+		t.Fatal("expected frame cache map to be reused")
+	}
+	if d.latestFrame[1] != 3 || d.latestFrame[2] != 4 {
+		t.Fatalf("expected latest values [3 4], got %v", d.latestFrame)
+	}
+	d.onDataFrame(d.dev, sharedcore.DataPayload{
+		Channels:       []float64{5},
+		ChannelIndices: []int{0},
+	})
+	if _, ok := d.latestFrame[2]; ok {
+		t.Fatalf("expected channels absent from latest frame to be removed, got %v", d.latestFrame)
+	}
+}
+
 // TestP1603Driver_CollectDataNotConnected 未连接时 CollectData 返回明确错误。
 func TestP1603Driver_CollectDataNotConnected(t *testing.T) {
 	d := NewP1603Driver(testP1603Config())

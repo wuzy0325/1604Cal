@@ -4,7 +4,6 @@ import type { ActionResult } from '@/types/api'
 import {
   bindMeasureDevice,
   bindDevices,
-  bindMeasureDevices,
   readPressure,
   readStability,
   readMeasureData,
@@ -57,8 +56,9 @@ export const useDeviceControlStore = defineStore('deviceControl', () => {
       }
 
       // 连接成功后立即绑定到设备会话，使其能读取阀门/单位/设备信息
+      // 显式传 moduleName='calibration'，与计量模块区分（防冲突覆盖）。
       try {
-        await bindMeasureDevice(deviceId)
+        await bindMeasureDevice(deviceId, 'calibration')
       } catch (err) {
         console.error('bindMeasureDevice failed:', err)
         return { ok: false, error: 'BIND_FAILED', detail: '绑定计量设备会话失败，无法读取阀门/单位信息' }
@@ -104,9 +104,9 @@ export const useDeviceControlStore = defineStore('deviceControl', () => {
 
       // 全部连接成功后整批绑定到设备会话，使其能读取阀门/单位/设备信息
       try {
-        await bindMeasureDevices(deviceIds, '', 'calibration')
+        await bindDevices(deviceIds, '', 'calibration')
       } catch (err) {
-        console.error('bindMeasureDevices failed:', err)
+        console.error('bindDevices failed:', err)
         return { ok: false, error: 'BIND_FAILED', detail: '绑定计量设备会话失败，无法读取阀门/单位信息' }
       }
 
@@ -215,9 +215,11 @@ export const useDeviceControlStore = defineStore('deviceControl', () => {
   }
 
   // 设置校准设备（通知后端）
+  // 显式传 moduleName='calibration'：与计量模块（默认 'measurement'）区分，
+  // 避免绑定冲突检查（后端 boundBy）因同 moduleName 而静默互相覆盖。
   const setDevices = async (measureDeviceId: string, pressureDeviceId: string): Promise<ActionResult> => {
     try {
-      await bindDevices(measureDeviceId, pressureDeviceId)
+      await bindDevices(measureDeviceId, pressureDeviceId, 'calibration')
       return { ok: true }
     } catch (error) {
       console.error('绑定设备会话失败:', error)
@@ -228,7 +230,7 @@ export const useDeviceControlStore = defineStore('deviceControl', () => {
   // 设置多台校准计量设备（选 1 台时行为与 setDevices 一致）
   const setMeasureDevices = async (measureDeviceIds: string[], pressureDeviceId: string): Promise<ActionResult> => {
     try {
-      await bindMeasureDevices(measureDeviceIds, pressureDeviceId)
+      await bindDevices(measureDeviceIds, pressureDeviceId, 'calibration')
       return { ok: true }
     } catch (error) {
       console.error('绑定多设备会话失败:', error)

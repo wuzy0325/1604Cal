@@ -24,6 +24,9 @@ type fakeMeasureDriver struct {
 	info        map[string]string
 	infoErr     error
 	resetErr    error
+	setUnit     string
+	zeroCalls   int
+	resetCalls  int
 }
 
 func (f *fakeMeasureDriver) Connect(_ context.Context) error    { return nil }
@@ -33,15 +36,22 @@ func (f *fakeMeasureDriver) ReadValveStatus(_ context.Context) (string, error) {
 }
 func (f *fakeMeasureDriver) SetValveStatus(_ context.Context, _ string) error { return nil }
 func (f *fakeMeasureDriver) ReadUnit(_ context.Context) (string, error)       { return f.unit, f.unitErr }
-func (f *fakeMeasureDriver) SetUnit(_ context.Context, _ string) error        { return nil }
+func (f *fakeMeasureDriver) SetUnit(_ context.Context, unit string) error {
+	f.setUnit = unit
+	return f.unitErr
+}
 func (f *fakeMeasureDriver) CollectData(_ context.Context, _ []int) ([]float64, error) {
 	return f.collectData, f.collectErr
 }
 func (f *fakeMeasureDriver) ReadDeviceInfo(_ context.Context) (map[string]string, error) {
 	return f.info, f.infoErr
 }
-func (f *fakeMeasureDriver) Reset(_ context.Context) error { return f.resetErr }
+func (f *fakeMeasureDriver) Reset(_ context.Context) error {
+	f.resetCalls++
+	return f.resetErr
+}
 func (f *fakeMeasureDriver) CalibrateZero(_ context.Context, _ []int) ([]float64, error) {
+	f.zeroCalls++
 	return []float64{0}, nil
 }
 func (f *fakeMeasureDriver) CalibrateFullScale(_ context.Context, _ []int, _ float64) ([]float64, error) {
@@ -91,10 +101,10 @@ func (s *fakeStore) UpdateUnit(id, unit string) bool {
 	}
 	return false
 }
-func (s *fakeStore) Delete(string)                                 {}
-func (s *fakeStore) Get(id string) (domain.Device, bool)           { d, ok := s.devices[id]; return d, ok }
-func (s *fakeStore) List() []domain.Device                         { return nil }
-func (s *fakeStore) CheckUnitConsistency() (bool, []string)        { return true, nil }
+func (s *fakeStore) Delete(string)                          {}
+func (s *fakeStore) Get(id string) (domain.Device, bool)    { d, ok := s.devices[id]; return d, ok }
+func (s *fakeStore) List() []domain.Device                  { return nil }
+func (s *fakeStore) CheckUnitConsistency() (bool, []string) { return true, nil }
 
 type publisher struct {
 	events []string
@@ -207,6 +217,99 @@ func TestBindMeasureDevicesMulti(t *testing.T) {
 	}
 	if len(data) != 2 || data[0] != 3.0 {
 		t.Fatalf("unexpected m2 data: %v", data)
+	}
+}
+
+func TestAggregateDeviceStateAndTargetedActions(t *testing.T) {
+	m1 := &fakeMeasureDriver{valveStatus: "calibration", unit: "kPa"}
+	m2 := &fakeMeasureDriver{valveErr: errors.New("timeout"), unit: "MPa"}
+	store := newFakeStore(
+		domain.Device{ID: "m1", Type: domain.DeviceTypeMeasure, Unit: "kPa"},
+		domain.Device{ID: "m2", Type: domain.DeviceTypeMeasure, Unit: "MPa"},
+	)
+	provider := &mapProvider{drivers: map[string]device.ConnectionDriver{
+		"m1": embedMeasure{m1},
+		"m2": embedMeasure{m2},
+	}}
+	svc := session.NewService(store, driver.NewFactory(), nil, provider)
+	token, err := svc.BindMeasureDevices([]string{"m1", "m2"}, "", "measurement")
+	if err != nil {
+		t.Fatalf("BindMeasureDevices: %v", err)
+	}
+
+	valves, err := svc.ReadValveStatusAllDevices(context.Background(), token)
+	if err != nil {
+		t.Fatalf("ReadValveStatusAllDevices: %v", err)
+	}
+	if valves["m1"].Value != "calibration" || valves["m1"].Error != "" {
+		t.Fatalf("unexpected m1 valve result: %+v", valves["m1"])
+	}
+	if valves["m2"].Error == "" {
+		t.Fatalf("expected per-device read error, got %+v", valves["m2"])
+	}
+
+	if err := svc.SetMeasureUnitAllDevices(context.Background(), token, "bar"); err != nil {
+		t.Fatalf("SetMeasureUnitAllDevices: %v", err)
+	}
+	if m1.setUnit != "bar" || m2.setUnit != "bar" {
+		t.Fatalf("expected both devices updated, got m1=%q m2=%q", m1.setUnit, m2.setUnit)
+	}
+
+	if _, err := svc.CalibrateZeroForDevice(context.Background(), token, "m2", []int{1}); err != nil {
+		t.Fatalf("CalibrateZeroForDevice: %v", err)
+	}
+	if err := svc.ResetDeviceForDevice(context.Background(), token, "m2"); err != nil {
+		t.Fatalf("ResetDeviceForDevice: %v", err)
+	}
+	if m1.zeroCalls != 0 || m1.resetCalls != 0 || m2.zeroCalls != 1 || m2.resetCalls != 1 {
+		t.Fatalf("actions targeted wrong device: m1 zero/reset=%d/%d m2=%d/%d", m1.zeroCalls, m1.resetCalls, m2.zeroCalls, m2.resetCalls)
+	}
+}
+
+func TestCheckUnitConsistencyUsesCurrentBinding(t *testing.T) {
+	m1 := &fakeMeasureDriver{unit: "kPa"}
+	p1 := &fakePressureDriver{}
+	store := newFakeStore(
+		domain.Device{ID: "m1", Type: domain.DeviceTypeMeasure, Unit: "kPa", Status: domain.DeviceStatusConnected},
+		domain.Device{ID: "p1", Type: domain.DeviceTypePressure, Unit: "kPa", Status: domain.DeviceStatusConnected},
+		domain.Device{ID: "unrelated", Type: domain.DeviceTypeMeasure, Unit: "MPa", Status: domain.DeviceStatusConnected},
+	)
+	provider := &mapProvider{drivers: map[string]device.ConnectionDriver{
+		"m1": embedMeasure{m1},
+		"p1": embedPressure{p1},
+	}}
+	svc := session.NewService(store, driver.NewFactory(), nil, provider)
+	if _, err := svc.BindDevices("m1", "p1", "measurement"); err != nil {
+		t.Fatalf("BindDevices: %v", err)
+	}
+
+	consistent, conflicts := svc.CheckUnitConsistency()
+	if !consistent || len(conflicts) != 0 {
+		t.Fatalf("unrelated connected device must not block session: consistent=%v conflicts=%v", consistent, conflicts)
+	}
+
+	p := store.devices["p1"]
+	p.Unit = "bar"
+	store.devices["p1"] = p
+	consistent, conflicts = svc.CheckUnitConsistency()
+	if consistent || len(conflicts) != 1 || conflicts[0] != "p1" {
+		t.Fatalf("bound pressure mismatch must block session: consistent=%v conflicts=%v", consistent, conflicts)
+	}
+}
+
+func TestUnbindMeasureDevicesReleasesSessionOwnership(t *testing.T) {
+	svc, _, _, _ := setupService()
+	if _, err := svc.BindDevices("m1", "p1", "measurement"); err != nil {
+		t.Fatalf("BindDevices: %v", err)
+	}
+
+	svc.UnbindMeasureDevices()
+
+	if len(svc.MeasureDeviceIDs()) != 0 || svc.MeasureDriver() != nil {
+		t.Fatalf("expected measure binding cleared, ids=%v driver=%v", svc.MeasureDeviceIDs(), svc.MeasureDriver())
+	}
+	if _, err := svc.BindDevices("m1", "p1", "calibration"); err != nil {
+		t.Fatalf("expected another module to bind after unbind: %v", err)
 	}
 }
 

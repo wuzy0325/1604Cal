@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"strings"
 	"sync"
 	"time"
 
@@ -22,6 +23,13 @@ type BindingToken struct {
 	PressureDeviceID string    `json:"pressureDeviceId,omitempty"`
 	BoundBy          string    `json:"boundBy"`
 	CreatedAt        time.Time `json:"createdAt"`
+}
+
+// DeviceValueResult 表示单台设备读取结果；Error 非空时 Value 不可信。
+// 批量读取保留每台设备的结果，避免单台超时掩盖其它设备的真实状态。
+type DeviceValueResult struct {
+	Value string `json:"value,omitempty"`
+	Error string `json:"error,omitempty"`
 }
 
 // allChannels 全部16个通道，用于始终读取全部通道数据。
@@ -241,13 +249,58 @@ func (s *Service) Token() BindingToken {
 	return s.currentToken
 }
 
-// CheckUnitConsistency 检查所有已连接设备（计量与打压）的压力单位是否一致。
-// 返回是否一致以及单位不一致的设备 ID 列表。
+// CheckUnitConsistency 检查当前会话绑定设备的压力单位是否一致。
+// 未参与当前流程的已连接设备不得阻塞本次计量或标定。
 func (s *Service) CheckUnitConsistency() (bool, []string) {
 	if s.deviceManager == nil {
 		return true, nil
 	}
-	return s.deviceManager.CheckUnitConsistency()
+
+	s.mu.Lock()
+	ids := append([]string(nil), s.measureDevIDs...)
+	if s.pressureDevID != "" {
+		ids = append(ids, s.pressureDevID)
+	}
+	s.mu.Unlock()
+
+	baseline := ""
+	conflicts := make([]string, 0)
+	for _, id := range ids {
+		dev, ok := s.deviceManager.Get(id)
+		if !ok {
+			// 测试替身或瞬时配置刷新可能暂未提供设备快照；绑定阶段已校验驱动存在。
+			continue
+		}
+		unit := strings.ToLower(strings.TrimSpace(dev.Unit))
+		if unit == "" {
+			// 单设备旧配置允许单位尚未初始化；连接后的硬件回读会补齐实际单位。
+			continue
+		}
+		if baseline == "" && unit != "" {
+			baseline = unit
+			continue
+		}
+		if unit != baseline {
+			conflicts = append(conflicts, id)
+		}
+	}
+	return len(conflicts) == 0, conflicts
+}
+
+// UnbindMeasureDevices 清除当前计量设备绑定，并释放模块所有权。
+// 打压设备驱动保持连接，由打压设备区独立管理。
+func (s *Service) UnbindMeasureDevices() {
+	s.mu.Lock()
+	measureDevIDs := append([]string(nil), s.measureDevIDs...)
+	s.measureDrivers = make(map[string]device.MeasureDriver)
+	s.measureDevIDs = nil
+	s.boundBy = ""
+	s.currentToken = BindingToken{}
+	s.mu.Unlock()
+
+	s.publish(events.EventSessionDeviceUnbound, map[string]any{
+		"measureDeviceIds": measureDevIDs,
+	})
 }
 
 // MeasureDeviceID 返回当前绑定的首个计量设备 ID（兼容单设备场景）。
@@ -397,6 +450,35 @@ func (s *Service) ReadMeasureDataAllDevices(ctx context.Context, token BindingTo
 	return results, nil
 }
 
+// measureBindingSnapshot 在单次加锁内拷贝当前绑定的计量设备 ID 序列与驱动表。
+// AllDevices 系列方法统一经由本快照取数，避免各处自建加锁拷贝逻辑漂移
+// （有的走 MeasureDeviceIDs 二次加锁、有的锁内手工拷贝）。
+func (s *Service) measureBindingSnapshot() ([]string, map[string]device.MeasureDriver) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	devIDs := append([]string(nil), s.measureDevIDs...)
+	drivers := make(map[string]device.MeasureDriver, len(s.measureDrivers))
+	for id, drv := range s.measureDrivers {
+		drivers[id] = drv
+	}
+	return devIDs, drivers
+}
+
+// collectPerDeviceValue 按绑定顺序逐台调用 read，收集逐台结果：
+// 驱动缺失或单台失败记入该设备 Error，不中断其它设备（批量读语义）。
+func collectPerDeviceValue(devIDs []string, read func(devID string) (string, error)) map[string]DeviceValueResult {
+	results := make(map[string]DeviceValueResult, len(devIDs))
+	for _, id := range devIDs {
+		value, err := read(id)
+		if err != nil {
+			results[id] = DeviceValueResult{Error: err.Error()}
+			continue
+		}
+		results[id] = DeviceValueResult{Value: value}
+	}
+	return results
+}
+
 // ReadValveStatus 读取首个计量设备阀门状态（兼容入口）。
 func (s *Service) ReadValveStatus(ctx context.Context, token BindingToken) (string, error) {
 	return s.ReadValveStatusForDevice(ctx, token, "")
@@ -418,6 +500,24 @@ func (s *Service) ReadValveStatusForDevice(ctx context.Context, token BindingTok
 	return drv.ReadValveStatus(ctx)
 }
 
+// ReadValveStatusAllDevices 逐台读取当前绑定计量设备的阀门状态。
+// 单台失败记录在该设备结果中，其它设备继续读取。
+func (s *Service) ReadValveStatusAllDevices(ctx context.Context, token BindingToken) (map[string]DeviceValueResult, error) {
+	if err := s.validateToken(token); err != nil {
+		return nil, err
+	}
+
+	devIDs, drivers := s.measureBindingSnapshot()
+	results := collectPerDeviceValue(devIDs, func(devID string) (string, error) {
+		drv := drivers[devID]
+		if drv == nil {
+			return "", ErrMeasureDeviceNotSet
+		}
+		return drv.ReadValveStatus(ctx)
+	})
+	return results, nil
+}
+
 // SetValveStatus 设置首个计量设备阀门状态（兼容入口）。
 func (s *Service) SetValveStatus(ctx context.Context, token BindingToken, status string) error {
 	return s.SetValveStatusForDevice(ctx, token, "", status)
@@ -433,13 +533,7 @@ func (s *Service) SetValveStatusAllDevices(ctx context.Context, token BindingTok
 		return err
 	}
 
-	s.mu.Lock()
-	devIDs := append([]string(nil), s.measureDevIDs...)
-	drivers := make(map[string]device.MeasureDriver, len(s.measureDrivers))
-	for k, v := range s.measureDrivers {
-		drivers[k] = v
-	}
-	s.mu.Unlock()
+	devIDs, drivers := s.measureBindingSnapshot()
 
 	if len(drivers) == 0 {
 		return ErrMeasureDeviceNotSet
@@ -591,6 +685,19 @@ func (s *Service) ReadMeasureUnitForDevice(ctx context.Context, token BindingTok
 	return unit, nil
 }
 
+// ReadMeasureUnitAllDevices 逐台读取当前绑定计量设备的实际单位。
+// 刻意委托 ForDevice 变体而非直接读驱动：后者带"硬件单位同步到设备配置存储"
+// 副作用，一致性门禁随后读取的是最新值。
+func (s *Service) ReadMeasureUnitAllDevices(ctx context.Context, token BindingToken) (map[string]DeviceValueResult, error) {
+	if err := s.validateToken(token); err != nil {
+		return nil, err
+	}
+	devIDs, _ := s.measureBindingSnapshot()
+	return collectPerDeviceValue(devIDs, func(devID string) (string, error) {
+		return s.ReadMeasureUnitForDevice(ctx, token, devID)
+	}), nil
+}
+
 // SetMeasureUnit 设置首个计量设备压力单位（兼容入口）。
 func (s *Service) SetMeasureUnit(ctx context.Context, token BindingToken, unit string) error {
 	return s.SetMeasureUnitForDevice(ctx, token, "", unit)
@@ -620,6 +727,22 @@ func (s *Service) SetMeasureUnitForDevice(ctx context.Context, token BindingToke
 	if deviceID != "" {
 		s.deviceManager.UpdateUnit(deviceID, unit)
 		log.Printf("[1604单位设置] 计量设备 %s 单位同步为 %q", deviceID, unit)
+	}
+	return nil
+}
+
+// SetMeasureUnitAllDevices 对当前绑定的全部计量设备设置同一压力单位。
+// 写入非原子：任一设备失败时返回携带 deviceId 的错误，已成功设备保持新单位。
+// 委托 ForDevice 变体以复用其"单位同步到设备配置存储"副作用。
+func (s *Service) SetMeasureUnitAllDevices(ctx context.Context, token BindingToken, unit string) error {
+	if err := s.validateToken(token); err != nil {
+		return err
+	}
+	devIDs, _ := s.measureBindingSnapshot()
+	for _, id := range devIDs {
+		if err := s.SetMeasureUnitForDevice(ctx, token, id, unit); err != nil {
+			return fmt.Errorf("set measure unit on %s: %w", id, err)
+		}
 	}
 	return nil
 }

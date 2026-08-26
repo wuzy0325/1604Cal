@@ -168,6 +168,16 @@ func (a *App) SaveFileContent(path string, content string) error {
 	return os.WriteFile(path, []byte(content), 0o644)
 }
 
+// AppendFrontendLog 将 WebView 诊断信息追加到安装版调试日志。
+// 前端只发送限长后的单行文本，避免异常对象或大响应再次放大内存压力。
+func (a *App) AppendFrontendLog(message string) {
+	message = strings.ReplaceAll(strings.ReplaceAll(message, "\r", " "), "\n", " ")
+	if len(message) > 2000 {
+		message = message[:2000]
+	}
+	log.Printf("[frontend] %s", message)
+}
+
 // ShowSaveFilePath 弹出系统"另存为"对话框，返回用户选择的文件路径。
 // 前置调用方需保证 defaultName 非空，filterPattern 示例："*.xlsx"。
 // 用户取消对话框时返回空字符串（无错误）。

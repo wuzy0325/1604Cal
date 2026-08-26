@@ -79,7 +79,22 @@
 
 ## 偏差记录
 
-1. **3.3 事件常量注释**：`event_types.go` 常量注释未逐条补充 `deviceId`（事件发布点均已携带），归档时补充。
+1. **3.3 事件常量注释**：`event_types.go` 常量注释未逐条补充 `deviceId`；事件发布点已全量携带（含单设备路径 `EventMeasurementDataCollected`、`EventPointCompleted`），归档时补充注释。
 2. **10.4 归档**：`openspec archive` 因 CLI 不可用未执行，待环境就绪后归档。
 3. **前端多设备实时采样**：`EVENT_MEASUREMENT_DATA_UPDATED` 按设备分行写入 `rows`（`CollectedRow.deviceId`），实时采样表多设备时增加「设备」列；单设备行为不变。
 4. **设备状态区展示**：`MeasurementDevicePanel` / `Device1604Panel` 的设备状态区（阀门/单位/校零）仍以首个勾选设备为准，阀门切换按钮整批下发（后端 `SetValveStatusAllDevices` 已支持）；多设备逐台单位设置依赖各设备面板切换查看。
+
+## 评审修复记录（2026-08-25 code-review 后）
+
+1. **跨模块绑定冲突**：校准模块全部绑定调用统一 `moduleName='calibration'`（`deviceControl.ts`），与计量默认 `'measurement'` 区分，后端 `boundBy` 冲突检查恢复生效。
+2. **设备失败点状态**：标定 `CollectDevices` 多设备路径有设备失败时不再先置点 completed / point_done，由 `checkAlarm` 转入 `await_alarm_resolution`；`awaitAlarmDecision` 的跳过设备 / 继续分支补点 completed 收尾。计量 `finalizePointCollect` 补多设备成功路径点状态 completed。
+3. **计量实时采样**：`startCollectLoop` 改为按设备并行读取；单设备失败独立计数并发布设备级 `point.error`（不整批转 error），前端 `useMeasurementSync` 监听提示。
+4. **last-devices 恢复闭环（10.1）**：前端 `fetchLastDevices` + `deviceStore.restoreLastDevices`，设备选择页挂载时恢复勾选，两个设备面板初始勾选优先读上次记录。
+5. **单设备双写**：计量 `updatePointCollectedData` 单设备路径同时写 `CollectedData` 与 `CollectedByDevice`；单设备 `EventMeasurementDataCollected`、标定 `EventPointCompleted` 携带 `deviceId`。
+6. **报告设备编号**：多设备报告按设备派生编号（设备配置无独立编号字段，以设备 ID 作为每台报告编号）。
+7. **跳过原因拼接**：`SkipDeviceDialog` 预设「设备故障/采集超时/人工放弃/其他」+ 可选备注，拼接为「预设 - 备注」（spec 场景「采集超时 - 线缆接触不良」）。
+8. **共享门禁实现**：`checkValveCalibrationGate` 抽至 `internal/device/valvegate.go`（标定与计量共用，消除跨包重复）。
+9. **bind 合并**：`session.ts` 删除 `bindMeasureDevices`，统一 `bindDevices`（支持单/多设备 + trim 去重）。
+10. **字号 token 化**：`SkipDeviceDialog` / `DeviceSelectionPanel` / `MeasurementDataView` 的 10px/13px 字号对齐 DESIGN.md Label（12px/500）层级。
+
+**遗留（判断项，未重构）**：两个 DevicePanel 同构逻辑抽共享 composable、handler 首设备兼容回填与单位同步循环去重——功能正确，属代码味道，后续有需要再处理。

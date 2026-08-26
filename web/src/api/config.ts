@@ -8,7 +8,18 @@ export interface GatesConfig {
   enforceValveCalibrationGate: boolean
 }
 
+/** 上次成功绑定的设备集合（供页面加载时恢复勾选；多设备按勾选顺序） */
+export interface LastDevicesConfig {
+  pressureDeviceId: string
+  measureDeviceIds: string[]
+}
+
 /** 拉取当前启动门禁开关（标定 + 计量启动是否要求阀门=校准） */
 export async function getGatesConfig(): Promise<GatesConfig> {
   return apiGet<GatesConfig>('/config/gates')
+}
+
+/** 拉取上次成功绑定的设备集合，恢复设备勾选 */
+export async function fetchLastDevices(): Promise<LastDevicesConfig> {
+  return apiGet<LastDevicesConfig>('/config/last-devices')
 }

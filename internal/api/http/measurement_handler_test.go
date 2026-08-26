@@ -235,6 +235,61 @@ func TestMeasurementGeneratePointsRejectsInvalidConfig(t *testing.T) {
 	}
 }
 
+// TestMeasurementPendingEndpointsShapeWhenIdle 验证页面刷新恢复用的两个
+// 查询端点在空闲时返回规范形状（pending=false、无报警详情）。
+func TestMeasurementPendingEndpointsShapeWhenIdle(t *testing.T) {
+	router := NewRouter()
+
+	alarmReq := httptest.NewRequest(http.MethodGet, "/api/v1/measurement/alarm/pending", nil)
+	alarmRec := httptest.NewRecorder()
+	router.ServeHTTP(alarmRec, alarmReq)
+	if alarmRec.Code != http.StatusOK {
+		t.Fatalf("expected alarm pending status 200, got %d", alarmRec.Code)
+	}
+
+	var alarmResp dto.Response[struct {
+		Pending bool             `json:"pending"`
+		Alarm   *measurementAlarmDTO `json:"alarm"`
+	}]
+	if err := json.NewDecoder(alarmRec.Body).Decode(&alarmResp); err != nil {
+		t.Fatalf("decode alarm pending response: %v", err)
+	}
+	if alarmResp.Data.Pending {
+		t.Fatal("expected no alarm pending on fresh router")
+	}
+	if alarmResp.Data.Alarm != nil {
+		t.Fatalf("expected nil alarm detail when not pending, got %+v", alarmResp.Data.Alarm)
+	}
+
+	timeoutReq := httptest.NewRequest(http.MethodGet, "/api/v1/measurement/stability-timeout/pending", nil)
+	timeoutRec := httptest.NewRecorder()
+	router.ServeHTTP(timeoutRec, timeoutReq)
+	if timeoutRec.Code != http.StatusOK {
+		t.Fatalf("expected stability timeout pending status 200, got %d", timeoutRec.Code)
+	}
+
+	var timeoutResp dto.Response[struct {
+		Pending    bool `json:"pending"`
+		PointIndex int  `json:"pointIndex"`
+	}]
+	if err := json.NewDecoder(timeoutRec.Body).Decode(&timeoutResp); err != nil {
+		t.Fatalf("decode stability timeout pending response: %v", err)
+	}
+	if timeoutResp.Data.Pending || timeoutResp.Data.PointIndex != 0 {
+		t.Fatalf("expected no stability timeout pending, got %+v", timeoutResp.Data)
+	}
+}
+
+type measurementAlarmDTO struct {
+	PointID           string  `json:"pointId"`
+	DeviceID          string  `json:"deviceId,omitempty"`
+	TargetPressure    float64 `json:"targetPressure"`
+	ActualPressure    float64 `json:"actualPressure"`
+	Threshold         float64 `json:"threshold"`
+	MaxDeviation      float64 `json:"maxDeviation"`
+	OverLimitChannels []int   `json:"overLimitChannels"`
+}
+
 func callMeasurementStateEndpoint(t *testing.T, router http.Handler, method, path, body string) string {
 	t.Helper()
 

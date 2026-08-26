@@ -45,7 +45,12 @@ type setMeasureUnitRequest struct {
 }
 
 type calibrateZeroRequest struct {
-	Channels []int `json:"channels"`
+	DeviceID string `json:"deviceId"`
+	Channels []int  `json:"channels"`
+}
+
+type resetDeviceRequest struct {
+	DeviceID string `json:"deviceId"`
 }
 
 type calibrateFullScaleRequest struct {
@@ -118,6 +123,11 @@ func (s *apiServer) sessionSetMeasureDeviceHandler(w http.ResponseWriter, r *htt
 	writeSuccess(w, http.StatusOK, map[string]string{"status": "ok"})
 }
 
+func (s *apiServer) sessionUnbindMeasureDevicesHandler(w http.ResponseWriter, _ *http.Request) {
+	s.sessionService.UnbindMeasureDevices()
+	writeSuccess(w, http.StatusOK, map[string]string{"status": "ok"})
+}
+
 func (s *apiServer) sessionReadPressureHandler(w http.ResponseWriter, r *http.Request) {
 	pressure, err := s.sessionService.ReadPressure(r.Context(), s.currentToken())
 	if err != nil {
@@ -164,6 +174,15 @@ func (s *apiServer) sessionGetValveHandler(w http.ResponseWriter, r *http.Reques
 	writeSuccess(w, http.StatusOK, valveResponse{Status: status})
 }
 
+func (s *apiServer) sessionGetValveAllHandler(w http.ResponseWriter, r *http.Request) {
+	devices, err := s.sessionService.ReadValveStatusAllDevices(r.Context(), s.currentToken())
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeSuccess(w, http.StatusOK, map[string]any{"devices": devices})
+}
+
 func (s *apiServer) sessionSetValveHandler(w http.ResponseWriter, r *http.Request) {
 	req, err := decodeJSON[setValveRequest](r)
 	if err != nil {
@@ -200,7 +219,7 @@ func (s *apiServer) sessionCalibrateZeroHandler(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	values, err := s.sessionService.CalibrateZero(r.Context(), s.currentToken(), req.Channels)
+	values, err := s.sessionService.CalibrateZeroForDevice(r.Context(), s.currentToken(), req.DeviceID, req.Channels)
 	if err != nil {
 		writeError(w, err)
 		return
@@ -249,6 +268,15 @@ func (s *apiServer) sessionGetMeasureUnitHandler(w http.ResponseWriter, r *http.
 	writeSuccess(w, http.StatusOK, measureUnitResponse{Unit: unit})
 }
 
+func (s *apiServer) sessionGetMeasureUnitAllHandler(w http.ResponseWriter, r *http.Request) {
+	devices, err := s.sessionService.ReadMeasureUnitAllDevices(r.Context(), s.currentToken())
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeSuccess(w, http.StatusOK, map[string]any{"devices": devices})
+}
+
 func (s *apiServer) sessionSetMeasureUnitHandler(w http.ResponseWriter, r *http.Request) {
 	req, err := decodeJSON[setMeasureUnitRequest](r)
 	if err != nil {
@@ -267,6 +295,31 @@ func (s *apiServer) sessionSetMeasureUnitHandler(w http.ResponseWriter, r *http.
 	writeSuccess(w, http.StatusOK, measureUnitResponse(req))
 }
 
+func (s *apiServer) sessionSetMeasureUnitAllHandler(w http.ResponseWriter, r *http.Request) {
+	req, err := decodeJSON[setMeasureUnitRequest](r)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	if strings.TrimSpace(req.Unit) == "" {
+		writeError(w, apperrors.ErrInvalidArgument)
+		return
+	}
+	if err := s.sessionService.SetMeasureUnitAllDevices(r.Context(), s.currentToken(), req.Unit); err != nil {
+		writeError(w, err)
+		return
+	}
+	writeSuccess(w, http.StatusOK, measureUnitResponse(req))
+}
+
+func (s *apiServer) sessionUnitConsistencyHandler(w http.ResponseWriter, _ *http.Request) {
+	consistent, conflicts := s.sessionService.CheckUnitConsistency()
+	writeSuccess(w, http.StatusOK, map[string]any{
+		"consistent": consistent,
+		"conflicts":  conflicts,
+	})
+}
+
 func (s *apiServer) sessionReadDeviceInfoHandler(w http.ResponseWriter, r *http.Request) {
 	info, err := s.sessionService.ReadDeviceInfo(r.Context(), s.currentToken())
 	if err != nil {
@@ -278,7 +331,13 @@ func (s *apiServer) sessionReadDeviceInfoHandler(w http.ResponseWriter, r *http.
 }
 
 func (s *apiServer) sessionResetDeviceHandler(w http.ResponseWriter, r *http.Request) {
-	if err := s.sessionService.ResetDevice(r.Context(), s.currentToken()); err != nil {
+	// deviceId 可省略：空请求体保持"复位首个计量设备"的兼容语义。
+	req, err := decodeJSONOptional[resetDeviceRequest](r)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	if err := s.sessionService.ResetDeviceForDevice(r.Context(), s.currentToken(), req.DeviceID); err != nil {
 		writeError(w, err)
 		return
 	}

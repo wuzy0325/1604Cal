@@ -116,9 +116,14 @@ export async function saveMeasurementAlarmConfig(config: MeasurementAlarmConfig)
   await apiPost('/config/measurement-alarm', config)
 }
 
-/** 检查是否有待处理的报警 */
-export async function checkMeasurementAlarmPending(): Promise<boolean> {
-  return (await apiGet<{ pending: boolean }>('/measurement/alarm/pending')).pending
+/** 检查是否有待处理的报警（挂起时附带报警详情，页面刷新后恢复弹窗用） */
+export async function checkMeasurementAlarmPending(): Promise<{ pending: boolean; alarm?: MeasurementAlarm | null }> {
+  return apiGet<{ pending: boolean; alarm?: MeasurementAlarm | null }>('/measurement/alarm/pending')
+}
+
+/** 查询稳定超时是否挂起（后端阻塞等待决策时，页面刷新恢复弹窗用） */
+export async function fetchStabilityTimeoutPending(): Promise<{ pending: boolean; pointIndex: number }> {
+  return apiGet<{ pending: boolean; pointIndex: number }>('/measurement/stability-timeout/pending')
 }
 
 /** 报警决策：与后端 workflow.AlarmDecision* 常量保持一致 */

@@ -161,8 +161,10 @@ import { ElMessage } from 'element-plus'
 import DeviceStatusBadge from '@/components/common/DeviceStatusBadge.vue'
 import { useDeviceInventoryStore } from '@/stores/device/inventoryStore'
 import { useMeasurementStore } from '@/stores/measurement'
+import { useDeviceStore } from '@/stores/deviceStore'
 import { fetchDevices, upsertDevice } from '@/api/device'
 import { calibrateZero } from '@/api/session'
+import { enabledChannelIndexes, isValvelessModel } from '@/utils/deviceModels'
 import { useValveControl } from '@/composables/useValveControl'
 import {
   normalizeValveStatus as normalizeValveState,
@@ -179,6 +181,7 @@ const emit = defineEmits<{
 
 const deviceStore = useDeviceInventoryStore()
 const measurementStore = useMeasurementStore()
+const moduleDeviceStore = useDeviceStore()
 const { measureDevices } = storeToRefs(deviceStore)
 
 // 多设备勾选列表（保持勾选顺序）；单设备场景与旧 selectedDeviceId 行为一致。
@@ -210,11 +213,7 @@ const device = computed(() =>
 )
 
 // DAQ-P-1603 无阀门协议命令（DLL FFI 路径）：隐藏阀门控件。
-// 型号归一化与后端 factory normalizeModel 语义一致（去空格 + 大小写不敏感）。
-const isValvelessDevice = computed(() => {
-  const model = (device.value?.model || '').replace(/\s+/g, '').toLowerCase()
-  return model === 'daq-p-1603' || model === 'p1603'
-})
+const isValvelessDevice = computed(() => isValvelessModel(device.value?.model))
 
 // 已连接设备集合：勾选列表中处于 connected 状态的设备。
 const connectedDeviceIds = computed(() =>
@@ -250,9 +249,12 @@ watch(
     if (valid.length !== selectedDeviceIds.value.length) {
       selectedDeviceIds.value = valid
     }
-    // 首次加载且无勾选时，默认勾选第一台（与旧单选自动选中行为一致）。
+    // 首次加载且无勾选时，优先恢复上次成功绑定的设备勾选（tasks 10.1），
+    // 设备不存在时回退默认勾选第一台（与旧单选自动选中行为一致）。
     if (selectedDeviceIds.value.length === 0 && devices.length > 0) {
-      selectedDeviceIds.value = [devices[0].id]
+      const saved = moduleDeviceStore.selectionByModule('measurement').measureDeviceIds
+      const validSaved = saved.filter(id => devices.find(d => d.id === id))
+      selectedDeviceIds.value = validSaved.length > 0 ? validSaved : [devices[0].id]
     }
   },
   { immediate: true }
@@ -330,12 +332,7 @@ const handleZeroCalibrate = async () => {
   // 从后端设备配置取启用通道（P1603 各通道带量程配置，启用通道才参与采集）。
   let channels: number[] = []
   try {
-    const devices = await fetchDevices()
-    const dto = devices.find(d => d.id === deviceId)
-    channels = (dto?.channels ?? [])
-      .filter(c => c.enabled)
-      .map(c => c.index)
-      .sort((a, b) => a - b)
+    channels = enabledChannelIndexes(await fetchDevices(), deviceId)
   } catch {
     // 拉取配置失败时回退 1-16 全通道校零，避免阻塞操作。
     channels = Array.from({ length: 16 }, (_, i) => i + 1)

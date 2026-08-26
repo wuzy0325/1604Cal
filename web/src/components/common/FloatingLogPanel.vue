@@ -51,7 +51,7 @@
     />
 
     <div
-      v-show="expanded"
+      v-if="expanded"
       ref="logBodyRef"
       class="log-body"
     >

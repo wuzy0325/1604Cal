@@ -74,7 +74,7 @@
           @change="onUnitChange"
         >
           <el-option
-            v-for="u in unitOptions"
+            v-for="u in availableUnitOptions"
             :key="u.value"
             :label="u.label"
             :value="u.value"
@@ -116,6 +116,7 @@ import { ElMessage } from 'element-plus'
 import DeviceStatusBadge from '@/components/common/DeviceStatusBadge.vue'
 import { useDeviceInventoryStore } from '@/stores/device/inventoryStore'
 import { upsertDevice } from '@/api/device'
+import { isConst820Model } from '@/utils/deviceModels'
 import {
   multipressSetUnit,
   multipressSetPressure,
@@ -136,7 +137,7 @@ const { pressureDevices } = storeToRefs(deviceStore)
 
 const selectedDeviceId = ref('')
 const selectedUnit = ref('kPa')
-const targetPressure = ref(100)
+const targetPressure = ref(10)
 
 const unitOptions = [
   { value: 'kPa', label: 'kPa' },
@@ -145,14 +146,20 @@ const unitOptions = [
   { value: 'bar', label: 'bar' },
   { value: 'mbar', label: 'mbar' },
   { value: 'psi', label: 'psi' },
-  { value: 'kgf/cm2', label: 'kgf/cm²' },
-  { value: 'mmHg', label: 'mmHg' },
-  { value: 'atm', label: 'atm' }
+  { value: 'kgf/cm2', label: 'kgf/cm²' }
 ]
+
+const unitOptions820 = unitOptions.filter(unit =>
+  ['Pa', 'kPa', 'MPa', 'psi', 'kgf/cm2'].includes(unit.value)
+)
 
 // 获取选中的打压设备
 const device = computed(() =>
   deviceStore.pressureDevices.find(d => d.id === selectedDeviceId.value)
+)
+
+const availableUnitOptions = computed(() =>
+  isConst820Model(device.value?.model) ? unitOptions820 : unitOptions
 )
 
 // 计算状态
@@ -248,13 +255,14 @@ const toggleConnection = async () => {
 const setPressure = async () => {
   if (!device.value) return
   try {
-    // 设定压力前必须先同步单位到设备，否则设备当前单位可能与输入值单位不一致，
-    // 导致目标值超出设备量程而被拒绝（表现为设备滴滴响、无响应）。
-    await multipressSetUnit(device.value.id, selectedUnit.value)
+    // 设定压力使用设备当前单位；单位切换是独立操作，失败不能阻断压力设定。
     await multipressSetPressure(device.value.id, targetPressure.value)
     emit('set-pressure', device.value.id, targetPressure.value)
   } catch (err) {
     console.warn('[PressDevicePanel] 设置压力失败:', err)
+    // 将后端错误（如超出量程）反馈给用户，避免设备滴滴响后界面无提示。
+    const msg = err instanceof Error ? err.message : String(err)
+    ElMessage.error(`设定压力失败：${msg}`)
   }
 }
 

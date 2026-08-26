@@ -189,8 +189,10 @@ watch(
   { deep: false }
 )
 
-onMounted(() => {
-  void refreshDevices()
+onMounted(async () => {
+  await refreshDevices()
+  // 恢复上次成功绑定的设备勾选（多设备按勾选顺序），tasks 10.1 闭环。
+  await deviceStore.restoreLastDevices()
 })
 </script>
 
@@ -291,8 +293,8 @@ onMounted(() => {
 }
 
 .checkbox-status {
-  font-size: 10px;
-  font-weight: 600;
+  font-size: 12px;
+  font-weight: 500;
   padding: 1px 5px;
   border-radius: 2px;
   margin-left: auto;
@@ -388,8 +390,8 @@ onMounted(() => {
 }
 
 .summary-count {
-  font-size: 10px;
-  font-weight: 600;
+  font-size: 12px;
+  font-weight: 500;
   padding: 1px 5px;
   border-radius: 2px;
   margin-left: var(--spacing-xs);

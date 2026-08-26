@@ -7,6 +7,7 @@ import (
 
 	"cal1604/internal/application/session"
 	apperrors "cal1604/internal/errors"
+	"cal1604/internal/device"
 	"cal1604/internal/domain"
 	"cal1604/internal/events"
 	"cal1604/internal/workflow"
@@ -41,7 +42,7 @@ func (s *Service) StartWorkflow(ctx context.Context, channels []int) error {
 	// 在状态迁移与 coordinator.Begin 之前完成，避免门禁失败时还要回滚工作流。
 	// 读阀 I/O 不持有 s.mu。
 	if enforceValveGate {
-		if err := checkValveCalibrationGate(ctx, measureDrivers); err != nil {
+		if err := device.CheckValveCalibrationGate(ctx, measureDrivers); err != nil {
 			return err
 		}
 	}

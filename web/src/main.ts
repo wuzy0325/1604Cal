@@ -15,6 +15,7 @@ import { useEventHub } from './composables/useEventHub'
 import { EVENT_HARDWARE_COMMAND, EVENT_HARDWARE_RESPONSE, EVENT_SYSTEM_ERROR } from './shared/events'
 import { useHardwareLogStore } from './stores/hardwareLog'
 import { useGatesStore } from './stores/app/gates'
+import { installFrontendDiagnostics, logVueError } from './services/frontendDiagnostics'
 import type { StreamEventPayload } from './types/api'
 import './styles/global.scss'
 // P2-3：全局补齐自定义 button / input / [tabindex] 的 focus ring，
@@ -66,6 +67,7 @@ async function bootstrap() {
   // Vue 全局错误处理：捕获渲染/观察者异常，防止静默崩溃
   app.config.errorHandler = (err, instance, info) => {
     console.error(`[Vue error] ${info}:`, err)
+    logVueError(err, info)
   }
 
   window.onerror = (message, source, lineno, colno, error) => {
@@ -76,6 +78,7 @@ async function bootstrap() {
     console.error('[unhandled rejection]', event.reason)
   }
 
+  installFrontendDiagnostics(router)
   app.mount('#app')
 }
 

@@ -44,12 +44,12 @@
             {{ opt }}
           </el-radio>
         </el-radio-group>
+        <!-- 备注（可选）：填写后拼接为「预设原因 - 备注」，符合 spec 场景 -->
         <el-input
-          v-if="reason === '其他'"
-          v-model="customReason"
+          v-model="note"
           type="textarea"
           :rows="2"
-          placeholder="请输入跳过原因"
+          placeholder="可选备注，如：线缆接触不良"
           maxlength="100"
           show-word-limit
         />
@@ -87,24 +87,25 @@ const emit = defineEmits<{
   confirm: [reason: string]
 }>()
 
-/** 预设跳过原因，与后端语义对齐 */
-const presetReasons = ['设备故障', '采集超限', '人工放弃', '其他']
+/** 预设跳过原因，与后端语义对齐；「其他」时备注必填作为原因 */
+const presetReasons = ['设备故障', '采集超时', '人工放弃', '其他']
 
 const reason = ref('人工放弃')
-const customReason = ref('')
+const note = ref('')
 
 // 每次打开弹窗时重置为默认原因，避免上次选择残留。
 watch(visible, (v) => {
   if (v) {
     reason.value = '人工放弃'
-    customReason.value = ''
+    note.value = ''
   }
 })
 
-// 最终原因：选择"其他"时取备注，否则取预设项。
+// 最终原因：「其他」时取备注本身；预设项时若填了备注拼接为「预设 - 备注」（spec 场景）。
 const finalReason = computed(() => {
-  if (reason.value === '其他') return customReason.value.trim()
-  return reason.value
+  const trimmedNote = note.value.trim()
+  if (reason.value === '其他') return trimmedNote
+  return trimmedNote ? `${reason.value} - ${trimmedNote}` : reason.value
 })
 
 function confirm() {
@@ -124,7 +125,7 @@ function confirm() {
 .skip-hint {
   margin-top: 6px;
   color: var(--text-secondary);
-  font-size: 13px;
+  font-size: 12px;
   display: flex;
   flex-direction: column;
   gap: 2px;
@@ -137,7 +138,7 @@ function confirm() {
 
   .form-label {
     color: var(--text-secondary);
-    font-size: 13px;
+    font-size: 12px;
     font-weight: 500;
   }
 

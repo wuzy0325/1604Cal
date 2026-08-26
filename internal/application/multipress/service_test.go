@@ -32,7 +32,7 @@ func (s *memoryStore) UpdateUnit(id string, unit string) bool {
 	}
 	return false
 }
-func (s *memoryStore) Delete(id string)            { delete(s.devices, id) }
+func (s *memoryStore) Delete(id string) { delete(s.devices, id) }
 func (s *memoryStore) Get(id string) (domain.Device, bool) {
 	d, ok := s.devices[id]
 	return d, ok
@@ -52,6 +52,7 @@ type fakeSetUnitDriver struct {
 }
 
 func (f *fakeSetUnitDriver) SetUnit(_ context.Context, unit string) error { f.unit = unit; return nil }
+func (f *fakeSetUnitDriver) ReadUnit(_ context.Context) (string, error)   { return f.unit, nil }
 func (f *fakeSetUnitDriver) ReadCurrentPressure(_ context.Context) (float64, error) {
 	return 0, errors.New("not supported")
 }
