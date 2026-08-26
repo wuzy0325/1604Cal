@@ -7,13 +7,10 @@ import {
   upsertDevice
 } from "@/api/device"
 import {
-  bindDevices as bindSessionDevices,
-  readPressure as readSessionPressure
-} from "@/api/session"
-import {
   multipressRegister,
   multipressUnregister,
-  multipressListDevices
+  multipressListDevices,
+  multipressReadPressure
 } from "@/api/multipress"
 import type { DeviceDTO } from "@/types/device"
 import type { ActionResult } from '@/types/api'
@@ -233,15 +230,14 @@ export const useMeasurementDeviceStore = defineStore('measurementDevices', () =>
     }
   }
 
-  // 刷新打压设备的实时压力值
+  // 刷新打压设备的实时压力值。
+  // 走 multipress 直读接口而非改绑会话：此前以 'pressureRefresh' 模块名
+  // 改绑会话会抢占绑定所有权（携带任意一台计量设备），
+  // 导致计量模块随后以多设备集合绑定时触发 device binding conflict，
+  // 多设备采集无法启动。multipress 服务在连接时已注册该设备，可直读。
   const refreshPressureForDevice = async (pressureId: string) => {
     try {
-      const anyMeasure = measureDevices.value.find(d => d.status === 'connected') ?? measureDevices.value[0]
-      const measureId = anyMeasure?.id || '__none__'
-      if (measureId === '__none__') return
-
-      await bindSessionDevices(measureId, pressureId, 'pressureRefresh')
-      const pressure = await readSessionPressure()
+      const pressure = await multipressReadPressure(pressureId)
       const device = pressureDevices.value.find(d => d.id === pressureId)
       if (device) {
         device.currentPressure = pressure
@@ -251,19 +247,15 @@ export const useMeasurementDeviceStore = defineStore('measurementDevices', () =>
     }
   }
 
-  // 刷新所有已连接打压设备的压力值
+  // 刷新所有已连接打压设备的压力值。
+  // 同样走 multipress 直读，不改绑会话；单台失败静默跳过，不影响其他设备。
   const refreshAllConnectedPressures = async () => {
     for (const device of pressureDevices.value) {
-      if (device.status === 'connected') {
-        try {
-          const anyMeasure = measureDevices.value.find(d => d.status === 'connected') ?? measureDevices.value[0]
-          if (!anyMeasure) continue
-          await bindSessionDevices(anyMeasure.id, device.id)
-          const pressure = await readSessionPressure()
-          device.currentPressure = pressure
-        } catch {
-          // 静默失败，不影响其他设备
-        }
+      if (device.status !== 'connected') continue
+      try {
+        device.currentPressure = await multipressReadPressure(device.id)
+      } catch {
+        // 静默失败，不影响其他设备
       }
     }
   }
