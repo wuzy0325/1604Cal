@@ -92,7 +92,10 @@ export function useCalibrationSync() {
     bindingInProgress = true
     try {
       try {
-        await bindMeasureDevice(connectedMeasure.id)
+        // 显式以 'calibration' 身份绑定：本 composable 只在标定视图挂载，
+        // 若使用默认 moduleName='measurement' 会把会话所有权翻转成计量模块，
+        // 与抽屉的整批 'calibration' 绑定互相冲突（断开重连后触发绑定失败）。
+        await bindMeasureDevice(connectedMeasure.id, 'calibration')
       } catch {
         // 绑定失败由后续读取结果决定是否进入修复流程
       }
@@ -110,7 +113,7 @@ export function useCalibrationSync() {
           }
 
           await Promise.all([
-            deviceStore.loadDevices().then(() => bindMeasureDevice(connectedMeasure.id).catch(() => {})),
+            deviceStore.loadDevices().then(() => bindMeasureDevice(connectedMeasure.id, 'calibration').catch(() => {})),
             calibrationStore.refreshDeviceInfo({ retries: 3, retryDelayMs: 500 }).then(r => { loaded = r })
           ])
         }

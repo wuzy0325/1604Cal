@@ -4,6 +4,7 @@ import type { ActionResult } from '@/types/api'
 import {
   bindMeasureDevice,
   bindDevices,
+  unbindMeasureDevices,
   readPressure,
   readStability,
   readMeasureData,
@@ -142,7 +143,12 @@ export const useDeviceControlStore = defineStore('deviceControl', () => {
   const disconnectDevice1604 = async (deviceId: string): Promise<ActionResult> => {
     try {
       const result = await deviceStore.disconnectMeasureDevice(deviceId)
-      return result
+      if (!result.ok) return result
+      // 断开后同步会话绑定：后端 Disconnect 只断 TCP 不清理绑定，
+      // 残留的旧驱动会让后续读取持续报 "not connected"，重连时还会
+      // 因绑定集合与模块名不一致触发 device binding conflict。
+      await syncBindingAfterDisconnect([deviceId])
+      return { ok: true }
     } catch (error) {
       console.error('断开1604设备失败:', error)
       return { ok: false, error: 'DISCONNECT_FAILED', detail: String(error) }
@@ -158,11 +164,31 @@ export const useDeviceControlStore = defineStore('deviceControl', () => {
           return result
         }
       }
+      await syncBindingAfterDisconnect(deviceIds)
       return { ok: true }
     } catch (error) {
       console.error('断开1604设备失败:', error)
       return { ok: false, error: 'DISCONNECT_FAILED', detail: String(error) }
     }
+  }
+
+  // 断开后同步会话绑定（仅计量侧；打压设备绑定保持不变）：
+  // 已无连接中的计量设备时整体解绑并清空本地阀门/单位状态；
+  // 仍有连接中的设备时以 'calibration' 身份重绑剩余集合，
+  // 保证会话中的驱动始终是活跃驱动、绑定集合与实际连接一致。
+  const syncBindingAfterDisconnect = async (disconnectedIds: string[]) => {
+    const remaining = deviceStore.measureDevices
+      .filter(d => d.status === 'connected' && !disconnectedIds.includes(d.id))
+      .map(d => d.id)
+
+    if (remaining.length === 0) {
+      await unbindMeasureDevices()
+      valveStatus.value = ''
+      measureUnit.value = ''
+      deviceInfo.value = {}
+      return
+    }
+    await bindMeasureDevice(remaining, 'calibration')
   }
 
   // 连接打压设备：通过 multipress 服务注册（创建驱动 + TCP连接 + 注册到压力控制模块）

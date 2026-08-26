@@ -182,20 +182,41 @@ func (s *Service) Connect(ctx context.Context, id string) (domain.Device, error)
 	s.publishConnectProgress(dev.ID, "TCP 已连接，读取设备配置...")
 
 	// 连接成功后从硬件读取实际单位，确保显示单位与设备真实单位一致。
-	// 设备可能在新 TCP 连接后立即关闭连接（预期先收命令再返回），首次读取失败时重连重试一次。
+	// 已知设备行为（WTN1604）：新 TCP 建链后可能立即关闭连接或暂不应答，
+	// 且读取超时/对端关闭会把底层连接置为损坏（conn=nil），因此每次
+	// ReadUnit 失败都必须重新建链后再读，最多重试 2 次。
+	// 注意：这里不能用 HTTP 请求的 ctx —— 它可能已临近超时，会导致
+	// 重连被跳过、设备被标记为已连接但链路已死（后续全部 not connected）。
 	if reader, ok := drv.(interface {
 		ReadUnit(context.Context) (string, error)
 	}); ok {
-		unit, readErr := reader.ReadUnit(ctx)
-		if readErr != nil {
-			log.Printf("[connect] ReadUnit first attempt failed, reconnecting: %v", readErr)
-			// 连接已被 ReadUnit 关闭，需重新建链
-			if connectErr := drv.Connect(ctx); connectErr != nil {
-				log.Printf("[connect] reconnect after ReadUnit failure: %v", connectErr)
-			} else if unit2, err2 := reader.ReadUnit(ctx); err2 == nil && unit2 != "" {
-				unit = unit2
-				readErr = nil
+		unit := ""
+		var readErr error
+		for attempt := 0; attempt < 3; attempt++ {
+			if attempt > 0 {
+				// 重新建链：独立超时上下文，不依赖请求生命周期
+				reconnectCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+				connectErr := drv.Connect(reconnectCtx)
+				cancel()
+				if connectErr != nil {
+					log.Printf("[connect] reconnect after ReadUnit failure: %v", connectErr)
+					break
+				}
 			}
+			unit, readErr = reader.ReadUnit(ctx)
+			if readErr == nil {
+				break
+			}
+			log.Printf("[connect] ReadUnit attempt %d failed: %v", attempt+1, readErr)
+		}
+		// 兜底：单位始终读不到时，确保底层链路处于可用状态再标记为已连接，
+		// 避免出现"状态已连接但所有命令都报 not connected"的死驱动。
+		if readErr != nil {
+			reconnectCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			if connectErr := drv.Connect(reconnectCtx); connectErr != nil {
+				log.Printf("[connect] final reconnect after repeated ReadUnit failure: %v", connectErr)
+			}
+			cancel()
 		}
 		if readErr == nil && unit != "" {
 			dev.Unit = unit
