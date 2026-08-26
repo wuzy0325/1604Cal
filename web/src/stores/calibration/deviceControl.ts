@@ -194,8 +194,12 @@ export const useDeviceControlStore = defineStore('deviceControl', () => {
     await bindMeasureDevice(remaining, 'calibration')
   }
 
-  // 连接打压设备：通过 multipress 服务注册（创建驱动 + TCP连接 + 注册到压力控制模块）
+  // 连接打压设备：通过 multipress 服务注册（创建驱动 + TCP连接 + 注册到压力控制模块）。
+  // 注册请求是同步阻塞的（TCP 建链 + 单位读取），耗时不定；必须先置为 connecting，
+  // 让按钮 loading 与状态徽章即时反馈，否则连接期间界面表现为"点连接没反应"。
   const connectPressDevice = async (deviceId: string): Promise<ActionResult> => {
+    const device = deviceStore.pressureDevices.find(d => d.id === deviceId)
+    if (device) device.status = 'connecting'
     try {
       await multipressRegister(deviceId)
       // multipress 服务不更新 DeviceManager 状态，需手动同步前端 store
@@ -226,6 +230,8 @@ export const useDeviceControlStore = defineStore('deviceControl', () => {
       }
       return { ok: true }
     } catch (error) {
+      // 失败回滚为异常态，避免停留在"连接中"假象
+      deviceStore.updateDeviceStatus(deviceId, 'error')
       console.error('连接打压设备失败:', error)
       return { ok: false, error: 'CONNECT_FAILED', detail: '连接打压设备失败' }
     }
