@@ -91,12 +91,15 @@ export const useDeviceControlStore = defineStore('deviceControl', () => {
     }
   }
 
-  // 连接多台1604设备：逐台连接，全部成功后整批绑定到会话。
+  // 连接多台1604设备：逐台连接（跳过已连接设备，避免重复建链），
+  // 全部成功后整批绑定到会话。
   // 与 connectDevice1604 的区别：连接阶段不逐台绑定，避免后端绑定集合被反复覆盖，
   // 全部连接成功后再一次性绑定整批设备。
   const connectMeasureDevices = async (deviceIds: string[]): Promise<ActionResult> => {
     try {
       for (const deviceId of deviceIds) {
+        const device = deviceStore.measureDevices.find(d => d.id === deviceId)
+        if (!device || device.status === 'connected') continue
         const result = await deviceStore.connectMeasureDevice(deviceId)
         if (!result.ok) {
           return result

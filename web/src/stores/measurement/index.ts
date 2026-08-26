@@ -601,13 +601,35 @@ export const useMeasurementStore = defineStore('measurement', () => {
   }
 
   // 启动前确保所有已勾选计量设备已绑定到会话（多设备整批绑定）。
+  // 先与后端实际连接状态对齐：剔除已被外部断开/掉线的设备，
+  // 避免残留绑定在重绑时触发已断开设备的自动重连，或读取时报 not connected。
   const ensureDevicesBound = async () => {
     if (measureDeviceIds.value.length === 0) return
+    await syncMeasureDevicesWithStatus()
+    if (measureDeviceIds.value.length === 0) {
+      throw new Error('计量设备均已断开，请重新选择并连接设备')
+    }
     if (pressureDeviceId.value) {
       await apiBindDevices(measureDeviceIds.value, pressureDeviceId.value)
       return
     }
     await apiBindMeasureDevice(measureDeviceIds.value)
+  }
+
+  // 对齐 measureDeviceIds 与后端实际连接状态：剔除明确已断开的设备。
+  // 仅当设备清单拉取成功且对应设备状态明确为 disconnected 时才剔除；
+  // 拉取失败或设备不在清单中时保守保留，避免因一次网络抖动误删设备。
+  const syncMeasureDevicesWithStatus = async (): Promise<void> => {
+    const deviceStore = useMeasurementDeviceStore()
+    const loaded = await deviceStore.loadDevices()
+    if (!loaded.ok) return
+    const statusById = new Map(
+      deviceStore.measureDevices.map(d => [d.id, d.status] as const)
+    )
+    const valid = measureDeviceIds.value.filter(id => statusById.get(id) !== 'disconnected')
+    if (valid.length === measureDeviceIds.value.length) return
+    measureDeviceIds.value = valid
+    repairActiveDevice()
   }
 
   // 永久跳过指定计量设备（从本批次剩余压力点移除），并记录原因。
@@ -748,10 +770,11 @@ export const useMeasurementStore = defineStore('measurement', () => {
     canStart,
     primaryAction,
     secondaryActions,
-    // 设备绑定
+// 设备绑定
     bindDevices,
     bindMeasureDevice,
     setActiveDevice,
+    syncMeasureDevicesWithStatus,
     resetBindingState,
     clearMeasureDeviceBinding,
     unbindPressureDevice,

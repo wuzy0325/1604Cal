@@ -100,15 +100,18 @@ function mapDTOStatus(s: 'connected' | 'disconnected' | 'connecting' | 'error'):
   return 'disconnected'
 }
 
-/** 合并本地状态与后端状态：本地已连接不降级，否则以后端状态为准 */
+/** 合并本地状态与后端状态：后端状态为权威来源。
+ *  后端明确报 disconnected（设备管理模块或业务模块主动断开）时，
+ *  本地 connected 必须降级，否则跨模块会残留"已连接"的过期状态。
+ *  connecting/error 为瞬时或故障态，直接以后端为准。 */
 function mergeStatus(
   local: 'connected' | 'disconnected' | 'connecting' | 'error',
   remote: DeviceDTO['status']
 ): 'connected' | 'disconnected' | 'connecting' | 'error' {
-  if (local === 'connected') return 'connected'
   if (remote === 'connecting') return 'connecting'
   if (remote === 'error') return 'error'
-  return 'disconnected'
+  if (remote === 'disconnected') return 'disconnected'
+  return local
 }
 
 export const useMeasurementDeviceStore = defineStore('measurementDevices', () => {

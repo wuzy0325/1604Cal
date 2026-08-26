@@ -35,6 +35,7 @@
           <el-icon><ArrowRight /></el-icon>
         </button>
         <CalibrationDeviceDrawer
+          ref="drawerRef"
           v-model="drawerVisible"
           @connect="handleMeasureConnect"
           @disconnect="handleMeasureDisconnect"
@@ -150,24 +151,28 @@ const moduleDeviceStore = useDeviceStore()
 
 // 计量设备抽屉显隐与已选台数（读取模块级勾选配置，连接/断开时同步更新）
 const drawerVisible = ref(false)
+const drawerRef = ref<InstanceType<typeof CalibrationDeviceDrawer> | null>(null)
 const savedMeasureCount = computed(() =>
   moduleDeviceStore.selectionByModule('calibration').measureDeviceIds.length
 )
 
 // 连接多台计量设备：复用 UI 包装（统一错误提示），成功后持久化勾选，
-// 供下次进入标定模块时抽屉恢复上次选择。
+// 供下次进入标定模块时抽屉恢复上次选择。连接完成后整批绑定已建立，
+// 再通知抽屉回读一次阀门/单位，避免绑定完成前触发读取报 binding token 500。
 async function handleMeasureConnect(deviceIds: string[]) {
   await calibrationUI.connectDevice1604(deviceIds)
   if (!calibrationStore.device1604Connected) return
   moduleDeviceStore.setModuleSelection('calibration', { measureDeviceIds: [...deviceIds] })
+  drawerRef.value?.refresh()
 }
 
-// 断开后从恢复配置中移除对应勾选，保持"已选 N 台"与实际一致。
+// 断开后从恢复配置中移除对应勾选，保持"已选 N 台"与实际一致，并刷新抽屉状态。
 async function handleMeasureDisconnect(deviceIds: string[]) {
   await calibrationUI.disconnectDevice1604(deviceIds)
   const saved = moduleDeviceStore.selectionByModule('calibration').measureDeviceIds
   const remaining = saved.filter(id => !deviceIds.includes(id))
   moduleDeviceStore.setModuleSelection('calibration', { measureDeviceIds: remaining })
+  drawerRef.value?.refresh()
 }
 
 const unitConsistent = ref(true)

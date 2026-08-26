@@ -4,8 +4,23 @@ import { createPinia, setActivePinia } from 'pinia'
 import { useMeasurementStore } from '../index'
 import * as sessionApi from '@/api/session'
 import * as measurementApi from '@/api/measurement'
+import * as deviceApi from '@/api/device'
 
 // ── Mock API 层 ──
+
+vi.mock('@/api/device', () => ({
+  fetchDevices: vi.fn().mockResolvedValue([]),
+  connectDevice: vi.fn(),
+  disconnectDevice: vi.fn(),
+  upsertDevice: vi.fn()
+}))
+
+vi.mock('@/api/multipress', () => ({
+  multipressRegister: vi.fn(),
+  multipressUnregister: vi.fn(),
+  multipressListDevices: vi.fn().mockResolvedValue([]),
+  multipressReadPressure: vi.fn()
+}))
 
 vi.mock('@/api/session', () => ({
   bindDevices: vi.fn(),
@@ -337,6 +352,32 @@ describe('useMeasurementStore', () => {
       const store = useMeasurementStore()
       await store.pause()
       expect(store.state).toBe('paused')
+    })
+  })
+
+  describe('syncMeasureDevicesWithStatus', () => {
+    it('剔除明确已断开的设备，保留仍在连接中的设备', async () => {
+      vi.mocked(deviceApi.fetchDevices).mockResolvedValue([
+        { id: 'm1', name: 'a', type: 'measure', model: 'P1603', host: 'h', port: 9000, unit: 'kPa', status: 'connected' },
+        { id: 'm2', name: 'b', type: 'measure', model: 'P1603', host: 'h', port: 9000, unit: 'kPa', status: 'disconnected' }
+      ] as never)
+      const store = useMeasurementStore()
+      await store.bindMeasureDevice(['m1', 'm2'])
+      expect(store.measureDeviceIds).toEqual(['m1', 'm2'])
+
+      await store.syncMeasureDevicesWithStatus()
+
+      expect(store.measureDeviceIds).toEqual(['m1'])
+    })
+
+    it('清单拉取失败时保守保留，不误删设备', async () => {
+      vi.mocked(deviceApi.fetchDevices).mockRejectedValue(new Error('network down'))
+      const store = useMeasurementStore()
+      await store.bindMeasureDevice(['m1', 'm2'])
+
+      await store.syncMeasureDevicesWithStatus()
+
+      expect(store.measureDeviceIds).toEqual(['m1', 'm2'])
     })
   })
 

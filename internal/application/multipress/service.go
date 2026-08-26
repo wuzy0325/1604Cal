@@ -160,13 +160,17 @@ func (s *Service) RegisterDevice(ctx context.Context, deviceID string) error {
 }
 
 // UnregisterDevice 注销打压设备：停止 -> 断开 -> 从活跃列表移除。
+// 幂等：设备未注册时视为已断开，仅同步 DeviceManager 状态，
+// 避免设备管理模块已断开后，业务模块再次点击断开报 "not registered"。
 func (s *Service) UnregisterDevice(ctx context.Context, deviceID string) error {
 	s.mu.Lock()
 	entry, ok := s.entries[deviceID]
 	s.mu.Unlock()
 
 	if !ok {
-		return fmt.Errorf("device %s not registered", deviceID)
+		s.deviceManager.UpdateStatus(deviceID, domain.DeviceStatusDisconnected)
+		s.deviceManager.UpdateUnit(deviceID, "")
+		return nil
 	}
 
 	entry.mu.Lock()

@@ -20,7 +20,7 @@
           <el-button
             type="primary"
             :loading="connecting"
-            :disabled="selectedDeviceIds.length === 0 || hasConnectedDevices"
+            :disabled="pendingConnectIds.length === 0"
             @click="emit('connect', [...selectedDeviceIds])"
           >
             连接选中设备
@@ -183,13 +183,28 @@
             <h3 id="selection-section-title">
               设备选择
             </h3>
-            <span>连接后锁定选择，断开后可重新配置</span>
+            <span>勾选需要连接的设备，可随时调整</span>
           </div>
         </div>
-        <el-checkbox-group
-          v-model="selectedDeviceIds"
-          :disabled="hasConnectedDevices"
-        >
+        <div class="selection-toolbar">
+          <el-button
+            text
+            size="small"
+            :disabled="inventoryStore.measureDevices.length === 0"
+            @click="selectAll"
+          >
+            全部选择
+          </el-button>
+          <el-button
+            text
+            size="small"
+            :disabled="selectedDeviceIds.length === 0"
+            @click="clearSelection"
+          >
+            取消选择
+          </el-button>
+        </div>
+        <el-checkbox-group v-model="selectedDeviceIds">
           <el-checkbox
             v-for="device in inventoryStore.measureDevices"
             :key="device.id"
@@ -197,6 +212,15 @@
           >
             <span class="device-choice-name">{{ device.name || device.model || device.id }}</span>
             <span :class="['connection-state', device.status]">{{ connectionLabel(device.status) }}</span>
+            <el-button
+              v-if="device.status === 'connected'"
+              text
+              size="small"
+              class="row-disconnect"
+              @click.stop="disconnectOne(device.id)"
+            >
+              断开
+            </el-button>
           </el-checkbox>
         </el-checkbox-group>
         <el-empty
@@ -271,6 +295,11 @@ const connectedDeviceIds = computed(() => selectedDeviceIds.value.filter(id =>
   inventoryStore.measureDevices.some(device => device.id === id && device.status === 'connected')
 ))
 const hasConnectedDevices = computed(() => connectedDeviceIds.value.length > 0)
+// 本次可发起连接的设备：勾选中且尚未处于已连接状态的设备。
+// 连接后仍允许调整勾选，新增设备只会补连未连接的，已连接设备不会被重复连接。
+const pendingConnectIds = computed(() => selectedDeviceIds.value.filter(id =>
+  inventoryStore.measureDevices.some(device => device.id === id && device.status !== 'connected')
+))
 const connecting = computed(() => selectedDeviceIds.value.some(id =>
   inventoryStore.measureDevices.some(device => device.id === id && device.status === 'connecting')
 ))
@@ -325,11 +354,6 @@ watch(boundDevices, devices => {
   if (devices.some(device => device.id === focusedDeviceId.value)) return
   focusedDeviceId.value = devices[0]?.id ?? ''
 }, { immediate: true })
-
-// 连接成功后自动回读一次逐台状态，免去用户手动点刷新。
-watch(hasConnectedDevices, connected => {
-  if (connected) void refreshSettings()
-})
 
 function handleOpen() {
   if (hasConnectedDevices.value) void refreshSettings()
@@ -457,6 +481,24 @@ function connectionLabel(status: string): string {
   if (status === 'error') return '异常'
   return '未连接'
 }
+
+// 全部选择 / 取消选择：作用于设备清单全集，便于多设备场景快速勾选。
+function selectAll() {
+  selectedDeviceIds.value = inventoryStore.measureDevices.map(device => device.id)
+}
+function clearSelection() {
+  selectedDeviceIds.value = []
+}
+
+// 单台断开：从勾选中移除并触发断开，仅断开该设备，不影响其他已连接设备。
+function disconnectOne(deviceId: string) {
+  selectedDeviceIds.value = selectedDeviceIds.value.filter(id => id !== deviceId)
+  emit('disconnect', [deviceId])
+}
+
+// 暴露给父级：连接/断开完成后由侧栏主动触发回读，
+// 避免"某台设备先 connected 就刷新"导致整批绑定尚未完成时读取报 binding token 500。
+defineExpose({ refresh: refreshSettings })
 </script>
 
 <style scoped lang="scss">
@@ -483,12 +525,15 @@ function connectionLabel(status: string): string {
 .section-actions, .unit-actions { display: flex; align-items: center; gap: 8px; }
 .unit-actions :deep(.el-select) { flex: 1; }
 .selection-section :deep(.el-checkbox-group) { display: flex; flex-direction: column; gap: 4px; }
+.selection-toolbar { display: flex; align-items: center; justify-content: flex-end; gap: 4px; margin-bottom: 4px; }
 .selection-section :deep(.el-checkbox) { width: 100%; min-height: 34px; margin-right: 0; }
 .selection-section :deep(.el-checkbox__label) { display: flex; align-items: center; width: 100%; min-width: 0; }
 .device-choice-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .connection-state { font-size: 11px; color: $slate-400; }
 .connection-state.connected { color: $green; }
 .connection-state.error { color: $red; }
+.row-disconnect { margin-left: 4px; flex-shrink: 0; color: $slate-400; }
+.row-disconnect:hover { color: $red; }
 @media (max-width: 600px) {
   .connection-actions, .unit-actions { align-items: stretch !important; flex-direction: column; }
   .connection-actions :deep(.el-button), .unit-actions :deep(.el-button) { width: 100%; margin-left: 0; }

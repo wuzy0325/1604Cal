@@ -181,9 +181,13 @@ const checkUnitConsistency = async () => {
   }
 }
 
-// 连接多台计量设备：逐台连接，全部成功后整批绑定到会话。
+// 连接多台计量设备：逐台连接（跳过已连接设备，避免重复建链），
+// 然后整批绑定到会话。设备集合为勾选全集，保证"已连接基础上追加设备"时
+// 不会把旧设备从绑定中挤出。
 const handleMeasureDeviceConnect = async (deviceIds: string[]) => {
   for (const deviceId of deviceIds) {
+    const device = deviceStore.measureDevices.find(d => d.id === deviceId)
+    if (!device || device.status === 'connected') continue
     const result = await deviceStore.connectMeasureDevice(deviceId)
     if (!result.ok) {
       return
