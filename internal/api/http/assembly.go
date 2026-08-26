@@ -169,6 +169,14 @@ func newDependencies(
 		embedFS = templateEmbedFS[0]
 	}
 	reportSvc := report.NewService(templateDir, embedFS)
+	// 多设备导出：报告文件名后缀优先使用设备名而非内部设备 ID，
+	// 设备不存在或名称为空时由报告服务自行回退到设备 ID。
+	reportSvc.SetDeviceNameResolver(func(id string) string {
+		if dev, ok := deviceManager.Get(id); ok {
+			return dev.Name
+		}
+		return ""
+	})
 
 	// 分批计量服务（纯内存状态，不持久化）
 	batchSvc := batch.NewService()

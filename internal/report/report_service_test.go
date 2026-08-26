@@ -229,6 +229,138 @@ func TestExportMeasurementReportSkipsMissingBackwardPoints(t *testing.T) {
 	}
 }
 
+// buildMultiDevicePoints 构造两台计量设备（dev-a/dev-b）共同参与的多设备压力点。
+// 每台设备在每个已完成点写入 numChannels 个采样值 = baseValue + devOffset + ch*0.1。
+func buildMultiDevicePoints(t *testing.T, standards []float64, numChannels int, devOffsets map[string]float64) []domain.PressurePoint {
+	t.Helper()
+	result := make([]domain.PressurePoint, 0, len(standards))
+	for i, std := range standards {
+		collected := make(map[string]domain.DevicePointData, len(devOffsets))
+		for devID, offset := range devOffsets {
+			samples := make([]float64, numChannels)
+			for ch := 0; ch < numChannels; ch++ {
+				samples[ch] = std + offset + float64(ch)*0.0001
+			}
+			collected[devID] = domain.DevicePointData{
+				DeviceID:  devID,
+				Collected: samples,
+				Status:    domain.PointStatusCompleted,
+			}
+		}
+		result = append(result, domain.PressurePoint{
+			Index:             i + 1,
+			TargetPressure:    std,
+			Direction:         "forward",
+			Status:            domain.PointStatusCompleted,
+			CollectedByDevice: collected,
+		})
+	}
+	return result
+}
+
+// TestExportMeasurementReportUsesDeviceNameAsFileSuffix 回归测试：
+// 多设备计量导出时，报告文件名后缀必须是设备名（而非内部设备 ID），
+// 且设备名中的非法文件名字符被替换为下划线。
+func TestExportMeasurementReportUsesDeviceNameAsFileSuffix(t *testing.T) {
+	svc := report.NewService("") // 不指定模板目录 → 走 fallback
+	svc.SetDeviceNameResolver(func(id string) string {
+		switch id {
+		case "dev-a":
+			return "压力采集-01"
+		case "dev-b":
+			return `DAQ#2:测\试`
+		}
+		return ""
+	})
+
+	numChannels := 16
+	standards := []float64{0, 10, 20}
+	points := buildMultiDevicePoints(t, standards, numChannels, map[string]float64{
+		"dev-a": 0.001,
+		"dev-b": 0.002,
+	})
+
+	dir := t.TempDir()
+	outPath := filepath.Join(dir, "报告.xlsx")
+	cfg := domain.WorkflowConfig{PointCount: len(standards)}
+	paths, err := svc.ExportMeasurementReport(context.Background(), points, cfg, outPath, "kPa")
+	if err != nil {
+		t.Fatalf("ExportMeasurementReport: %v", err)
+	}
+
+	wantNames := map[string]bool{
+		"报告_压力采集-01.xlsx": false,
+		"报告_DAQ#2_测_试.xlsx": false,
+	}
+	if len(paths) != len(wantNames) {
+		t.Fatalf("expected %d report paths, got %v", len(wantNames), paths)
+	}
+	for _, p := range paths {
+		name := filepath.Base(p)
+		seen, known := wantNames[name]
+		if !known {
+			t.Fatalf("unexpected report file name %q in %v", name, paths)
+		}
+		if seen {
+			t.Fatalf("duplicate report file name %q in %v", name, paths)
+		}
+		wantNames[name] = true
+		if _, err := os.Stat(p); err != nil {
+			t.Fatalf("report file not created: %v", err)
+		}
+	}
+}
+
+// TestExportMeasurementReportFallsBackToDeviceIDWhenNameMissing 验证：
+// 未注入名称解析器或解析结果为空时，回退使用设备 ID 作为文件名后缀；
+// 多台设备名称重复时第二台追加序号后缀，避免文件互相覆盖。
+func TestExportMeasurementReportFallsBackToDeviceIDWhenNameMissing(t *testing.T) {
+	numChannels := 16
+	standards := []float64{0, 10}
+	cfg := domain.WorkflowConfig{PointCount: len(standards)}
+
+	t.Run("no resolver falls back to device id", func(t *testing.T) {
+		svc := report.NewService("")
+		points := buildMultiDevicePoints(t, standards, numChannels, map[string]float64{
+			"dev-a": 0.001,
+			"dev-b": 0.002,
+		})
+		dir := t.TempDir()
+		paths, err := svc.ExportMeasurementReport(context.Background(), points, cfg, filepath.Join(dir, "报告.xlsx"), "kPa")
+		if err != nil {
+			t.Fatalf("ExportMeasurementReport: %v", err)
+		}
+		got := map[string]bool{}
+		for _, p := range paths {
+			got[filepath.Base(p)] = true
+		}
+		if !got["报告_dev-a.xlsx"] || !got["报告_dev-b.xlsx"] {
+			t.Fatalf("expected id-suffixed files, got %v", paths)
+		}
+	})
+
+	t.Run("duplicate names get numeric suffix", func(t *testing.T) {
+		svc := report.NewService("")
+		svc.SetDeviceNameResolver(func(string) string { return "同名设备" })
+		points := buildMultiDevicePoints(t, standards, numChannels, map[string]float64{
+			"dev-a": 0.001,
+			"dev-b": 0.002,
+		})
+		dir := t.TempDir()
+		paths, err := svc.ExportMeasurementReport(context.Background(), points, cfg, filepath.Join(dir, "报告.xlsx"), "kPa")
+		if err != nil {
+			t.Fatalf("ExportMeasurementReport: %v", err)
+		}
+		names := map[string]bool{}
+		for _, p := range paths {
+			names[filepath.Base(p)] = true
+		}
+		if !names["报告_同名设备.xlsx"] || !names["报告_同名设备_2.xlsx"] {
+			t.Fatalf("expected deduplicated names, got %v", paths)
+		}
+	})
+}
+
 // itoa 把 int 转字符串，仅是 strconv.Itoa 的本地别名以保持调用点简洁。
 func itoa(n int) string {
 	return strconv.Itoa(n)

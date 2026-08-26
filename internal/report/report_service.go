@@ -24,6 +24,10 @@ import (
 type Service struct {
 	templateDir           string
 	embedTemplateProvider *EmbedTemplateProvider
+
+	// deviceNameResolver 将设备 ID 解析为设备名（可注入、可空）。
+	// 多设备导出时报告文件名后缀优先使用设备名；未注入或解析为空时回退设备 ID。
+	deviceNameResolver func(deviceID string) string
 }
 
 // ReportTemplate 描述一个可用报告模板。
@@ -58,6 +62,48 @@ func NewServiceWithPrefix(templateDir string, embedFS fs.FS, embedPrefix string)
 // SetEmbedTemplateProvider 设置嵌入模板提供者（用于运行时动态注入）。
 func (s *Service) SetEmbedTemplateProvider(provider *EmbedTemplateProvider) {
 	s.embedTemplateProvider = provider
+}
+
+// SetDeviceNameResolver 注入设备名称解析器（设备 ID → 设备名）。
+// 多设备导出时报告文件名后缀优先使用设备名，未注入或解析为空时回退设备 ID。
+func (s *Service) SetDeviceNameResolver(resolver func(deviceID string) string) {
+	s.deviceNameResolver = resolver
+}
+
+// deviceFileLabel 计算单台设备在报告文件名中的后缀标识。
+// 优先设备名（经文件名安全化），名称缺失时回退设备 ID；
+// 标识与先前设备冲突时追加序号后缀（如 "_2"），确保多台设备的报告文件互不覆盖。
+func (s *Service) deviceFileLabel(deviceID string, used map[string]bool) string {
+	label := sanitizeFileName(s.deviceDisplayName(deviceID))
+	if label == "" {
+		label = sanitizeFileName(deviceID)
+	}
+	base := label
+	for suffix := 2; label == "" || used[label]; suffix++ {
+		label = fmt.Sprintf("%s_%d", base, suffix)
+	}
+	used[label] = true
+	return label
+}
+
+// deviceDisplayName 返回设备展示名；解析器未注入或结果为空时返回空串。
+func (s *Service) deviceDisplayName(deviceID string) string {
+	if s.deviceNameResolver == nil {
+		return ""
+	}
+	return strings.TrimSpace(s.deviceNameResolver(deviceID))
+}
+
+// sanitizeFileName 把任意字符串转换为 Windows/Linux 通用的安全文件名片段：
+// 非法字符（\ / : * ? " < > |）替换为下划线，去除首尾空白与点号
+// （避免相对路径语义与 Windows 尾点问题）。结果可能为空，由调用方回退。
+func sanitizeFileName(name string) string {
+	replacer := strings.NewReplacer(
+		`\`, "_", "/", "_", ":", "_", "*", "_",
+		"?", "_", `"`, "_", "<", "_", ">", "_", "|", "_",
+	)
+	cleaned := strings.TrimSpace(replacer.Replace(name))
+	return strings.Trim(cleaned, ".")
 }
 
 // CleanupEmbedTemplates 清理嵌入模板解压的临时目录。
@@ -98,8 +144,9 @@ func (s *Service) ExportReport(ctx context.Context, session *calibration.Calibra
 	}
 	if len(devIDs) > 1 {
 		paths := make([]string, 0, len(devIDs))
+		used := make(map[string]bool, len(devIDs))
 		for _, devID := range devIDs {
-			devPath := perDeviceReportPath(outputPath, devID)
+			devPath := perDeviceReportPath(outputPath, s.deviceFileLabel(devID, used))
 			if err := s.exportReportForDevice(ctx, session, devID, devPath, unit); err != nil {
 				return nil, err
 			}
@@ -114,7 +161,8 @@ func (s *Service) ExportReport(ctx context.Context, session *calibration.Calibra
 }
 
 // perDeviceReportPath 为多设备场景生成单台设备的报告文件路径。
-// 在扩展名前插入设备 ID，保留原路径的目录与扩展名，不改变 outputPath 的文件语义。
+// 在扩展名前插入设备文件名标识（优先设备名，回退设备 ID，见 deviceFileLabel），
+// 保留原路径的目录与扩展名，不改变 outputPath 的文件语义。
 func perDeviceReportPath(outputPath, deviceID string) string {
 	ext := filepath.Ext(outputPath)
 	if ext == "" {
@@ -363,8 +411,9 @@ func (s *Service) ExportMeasurementReport(ctx context.Context, points []domain.P
 	deviceIDs := detectDeviceIDs(points)
 	if len(deviceIDs) > 1 {
 		paths := make([]string, 0, len(deviceIDs))
+		used := make(map[string]bool, len(deviceIDs))
 		for _, devID := range deviceIDs {
-			devPath := perDeviceReportPath(outputPath, devID)
+			devPath := perDeviceReportPath(outputPath, s.deviceFileLabel(devID, used))
 			if err := s.exportMeasurementReportForDevice(ctx, points, config, devPath, devID, unit); err != nil {
 				return nil, err
 			}
