@@ -75,7 +75,7 @@ func (d *ConST811ADriver) ReadUnit(ctx context.Context) (string, error) {
 }
 
 func (d *ConST811ADriver) SetUnit(ctx context.Context, unit string) error {
-	unitCode, ok := pressureUnitToCode(unit)
+	unitCode, ok := pressureUnitToCode811A(unit)
 	if !ok {
 		return fmt.Errorf("unsupported pressure unit: %s", unit)
 	}
@@ -103,5 +103,3 @@ func (d *ConST811ADriver) StartControl(ctx context.Context) error {
 	}
 	return nil
 }
-
-

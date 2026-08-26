@@ -28,6 +28,8 @@ func TestNormalizePressureUnit(t *testing.T) {
 
 func TestParseConSTGeneralUnit_NormalizesCase(t *testing.T) {
 	cases := []struct{ input, want string }{
+		{"1131", "Pa"},
+		{"1130", "Pa"},
 		{"1133", "kPa"},
 		{"1132", "MPa"},
 		{"kpa", "kPa"},
@@ -40,6 +42,13 @@ func TestParseConSTGeneralUnit_NormalizesCase(t *testing.T) {
 		if got != c.want {
 			t.Errorf("parseConSTGeneralUnit(%q) = %q, want %q", c.input, got, c.want)
 		}
+	}
+}
+
+func TestPressureUnitToCode811AUsesDevicePaCode(t *testing.T) {
+	got, ok := pressureUnitToCode811A("Pa")
+	if !ok || got != "1131" {
+		t.Fatalf("pressureUnitToCode811A(Pa) = %q, %v; want 1131, true", got, ok)
 	}
 }
 

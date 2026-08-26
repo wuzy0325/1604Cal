@@ -38,6 +38,16 @@ func pressureUnitToCode(unit string) (string, bool) {
 	return code, ok
 }
 
+// pressureUnitToCode811A 将压力单位映射为 811A 实机使用的单位码。
+// 该设备的 Pa 单位码为 1131；1130 会被设备静默拒绝。
+func pressureUnitToCode811A(unit string) (string, bool) {
+	code, ok := pressureUnitToCode(unit)
+	if strings.EqualFold(strings.TrimSpace(unit), "Pa") {
+		return "1131", true
+	}
+	return code, ok
+}
+
 // pressureUnitToCode820 将压力单位映射为 LabVIEW 程序已验证的 820 单位值。
 // kgf/cm2 的枚举序号虽然是 4，但设备命令参数必须使用 10。
 func pressureUnitToCode820(unit string) (string, bool) {
@@ -62,7 +72,7 @@ func pressureUnitToCodeSPC4000(unit string) (string, bool) {
 func parseConSTGeneralUnit(resp string) string {
 	trimmed := strings.TrimSpace(resp)
 	m := map[string]string{
-		"1130": "Pa", "1133": "kPa", "1132": "MPa",
+		"1130": "Pa", "1131": "Pa", "1133": "kPa", "1132": "MPa",
 		"1105": "bar", "1104": "mbar", "1141": "psi",
 		"1145": "kgf/cm2", "1134": "mmHg", "1135": "atm",
 	}
