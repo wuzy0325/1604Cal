@@ -53,6 +53,12 @@ export const useCalibrationStore = defineStore('calibration', () => {
   const pressDeviceConnected = computed(() => deviceControlStore.pressDeviceConnected)
   const channelsSelected = computed(() => selectedChannels.value.length > 0)
   const hasCollectedData = computed(() => pressurePointStore.hasCollectedData)
+  // 所有压力点是否已采集完成（completed 或 skipped）。用于在 point_done 会话态下
+  // 区分"单点完成、流程仍在进行"与"全部点采集完毕、等待拟合"。
+  const allPointsCollected = computed(() => {
+    const pts = pressurePointStore.pressurePoints
+    return pts.length > 0 && pts.every(p => p.status === 'completed' || p.status === 'skipped')
+  })
   const valveReady = computed(() => deviceControlStore.valveStatus === 'calibration')
   // 阀门=校准模式是标定与计量启动的必要条件。
   // 开关由 gate store 从后端 /api/v1/config/gates 拉取，避免前端硬编码短路后端配置。
@@ -77,9 +83,19 @@ export const useCalibrationStore = defineStore('calibration', () => {
       case 'pressurizing':
       case 'stabilizing':
       case 'collecting':
-      case 'point_done':
       case 'await_manual_collect':
       case 'recovering':
+        return { key: 'pause', label: '暂停', icon: 'VideoPause', variant: 'slate' }
+      case 'point_done':
+        // 全部压力点采集完成后主按钮切换为"拟合"，引导用户进入拟合流程；
+        // 采集中途的单点完成（下一点尚未打压）仍保留"暂停"。
+        if (allPointsCollected.value && hasCollectedData.value) {
+          return { key: 'fit', label: '拟合', icon: 'DataAnalysis', variant: 'mint' }
+        }
+        if (allPointsCollected.value) {
+          // 全部点位被跳过、无数据可拟合：引导重新开始
+          return { key: 'reset', label: '重新开始', icon: 'RefreshRight', variant: 'slate' }
+        }
         return { key: 'pause', label: '暂停', icon: 'VideoPause', variant: 'slate' }
       case 'paused':
         return { key: 'resume', label: '继续标定', icon: 'RefreshRight', variant: 'mint' }
@@ -105,11 +121,20 @@ export const useCalibrationStore = defineStore('calibration', () => {
       case 'pressurizing':
       case 'stabilizing':
       case 'collecting':
-      case 'point_done':
       case 'await_manual_collect':
       case 'recovering':
       case 'paused':
         out.push({ key: 'stop', label: '停止', variant: 'red', confirm: '确认终止标定？已采集数据将保留。' })
+        break
+      case 'point_done':
+        // 全部点位采集完成：提供"重新开始"；否则仍提供"停止"以便中断流程。
+        if (allPointsCollected.value) {
+          if (hasCollectedData.value) {
+            out.push({ key: 'reset', label: '重新开始', variant: 'slate', confirm: '将清空当前结果，重新开始标定？' })
+          }
+        } else {
+          out.push({ key: 'stop', label: '停止', variant: 'red', confirm: '确认终止标定？已采集数据将保留。' })
+        }
         break
       case 'await_alarm_resolution':
         // 报警态副按钮：跳过此点 / 重新采集 / 停止标定
@@ -438,6 +463,7 @@ export const useCalibrationStore = defineStore('calibration', () => {
     pressDeviceConnected,
     channelsSelected,
     hasCollectedData,
+    allPointsCollected,
     valveReady,
     canStartCalibration,
     isRunning,

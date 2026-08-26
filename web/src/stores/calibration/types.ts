@@ -11,7 +11,7 @@ export interface PressurePoint {
   id: string
   index: number
   targetPressure: number
-  status: 'pending' | 'pressurizing' | 'stabilizing' | 'collecting' | 'completed' | 'error'
+  status: 'pending' | 'pressurizing' | 'stabilizing' | 'collecting' | 'completed' | 'error' | 'skipped'
   direction?: 'forward' | 'backward'
   collectedData?: number[]
   collectedByDevice?: Record<string, DevicePointData>

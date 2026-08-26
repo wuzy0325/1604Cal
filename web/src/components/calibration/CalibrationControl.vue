@@ -164,6 +164,8 @@ async function dispatchPrimary() {
     case 'resume':         await calibrationUI.resumeCalibration(); break
     case 'end':            await calibrationUI.endCalibration(); break
     case 'stop':           await calibrationUI.stopCalibration(); break
+    case 'fit':            await calibrationUI.fitData(); break
+    case 'reset':          calibrationStore.resetCollection(); break
     case 'alarm-continue': await calibrationUI.resolveAlarm('continue'); break
   }
 }

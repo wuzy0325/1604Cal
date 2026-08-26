@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
 
+import { useCalibrationStore } from '../index'
+import { usePressurePointStore } from '../pressurePoints'
 import { useDeviceControlStore } from '../deviceControl'
 import * as sessionApi from '@/api/session'
 
@@ -59,5 +61,58 @@ describe('calibration store refreshDeviceInfo', () => {
     expect(loaded).toBe(true)
     expect(deviceControlStore.valveStatus).toBe('measurement')
     expect(deviceControlStore.measureUnit).toBe('kPa')
+  })
+})
+
+describe('calibration store point_done actions', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    vi.resetAllMocks()
+    localStorage.clear()
+  })
+
+  it('shows 拟合 as primary and 重新开始 as secondary when all points are collected', () => {
+    const pressurePointStore = usePressurePointStore()
+    pressurePointStore.pressurePoints = [
+      { id: 'p1', index: 1, targetPressure: 10, status: 'completed' },
+      { id: 'p2', index: 2, targetPressure: 20, status: 'completed' }
+    ]
+
+    const calibrationStore = useCalibrationStore()
+    calibrationStore.syncSessionState('point_done')
+
+    expect(calibrationStore.primaryAction.key).toBe('fit')
+    expect(calibrationStore.primaryAction.label).toBe('拟合')
+    expect(calibrationStore.secondaryActions.map(a => a.key)).toEqual(['reset'])
+  })
+
+  it('keeps 暂停/停止 while collection is still in progress at point_done', () => {
+    const pressurePointStore = usePressurePointStore()
+    pressurePointStore.pressurePoints = [
+      { id: 'p1', index: 1, targetPressure: 10, status: 'completed' },
+      { id: 'p2', index: 2, targetPressure: 20, status: 'pending' }
+    ]
+
+    const calibrationStore = useCalibrationStore()
+    calibrationStore.syncSessionState('point_done')
+
+    expect(calibrationStore.primaryAction.key).toBe('pause')
+    expect(calibrationStore.primaryAction.label).toBe('暂停')
+    expect(calibrationStore.secondaryActions.map(a => a.key)).toEqual(['stop'])
+  })
+
+  it('shows 重新开始 as primary when all points were skipped (no data to fit)', () => {
+    const pressurePointStore = usePressurePointStore()
+    pressurePointStore.pressurePoints = [
+      { id: 'p1', index: 1, targetPressure: 10, status: 'skipped' },
+      { id: 'p2', index: 2, targetPressure: 20, status: 'skipped' }
+    ]
+
+    const calibrationStore = useCalibrationStore()
+    calibrationStore.syncSessionState('point_done')
+
+    expect(calibrationStore.primaryAction.key).toBe('reset')
+    expect(calibrationStore.primaryAction.label).toBe('重新开始')
+    expect(calibrationStore.secondaryActions).toEqual([])
   })
 })
