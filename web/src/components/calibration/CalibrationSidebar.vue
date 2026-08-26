@@ -21,15 +21,24 @@
       v-show="!collapsed"
       class="sidebar-content"
     >
-      <!-- 1604 计量设备 -->
+      <!-- 计量采集设备：触发按钮 + 抽屉，交互与计量模块侧栏保持一致。
+           连接/断开/单位变更仍走标定会话（moduleName='calibration'）。 -->
       <div class="sidebar-section">
-        <h3 class="sidebar-title">
+        <button
+          type="button"
+          class="device-drawer-trigger"
+          @click="drawerVisible = true"
+        >
           <el-icon><Monitor /></el-icon>
-          1604 计量设备
-        </h3>
-        <Device1604Panel
-          @connect="calibrationUI.connectDevice1604"
-          @disconnect="calibrationUI.disconnectDevice1604"
+          <span class="trigger-label">计量采集设备</span>
+          <span class="trigger-status">{{ savedMeasureCount }} 台已选</span>
+          <el-icon><ArrowRight /></el-icon>
+        </button>
+        <CalibrationDeviceDrawer
+          v-model="drawerVisible"
+          @connect="handleMeasureConnect"
+          @disconnect="handleMeasureDisconnect"
+          @unit-change="checkUnitConsistency"
         />
       </div>
 
@@ -119,10 +128,11 @@ import {
   CircleClose
 } from '@element-plus/icons-vue'
 
-import Device1604Panel from '@/components/common/Device1604Panel.vue'
+import CalibrationDeviceDrawer from '@/components/calibration/CalibrationDeviceDrawer.vue'
 import PressDevicePanel from '@/components/common/PressDevicePanel.vue'
 import { useCalibrationStore } from '@/stores/calibration'
 import { useCalibrationUI } from '@/composables/useCalibrationUI'
+import { useDeviceStore } from '@/stores/deviceStore'
 import { fetchUnitConsistency } from '@/api/device'
 import { ControlMode } from '@/types/calibration'
 
@@ -136,8 +146,48 @@ defineEmits<{
 
 const calibrationStore = useCalibrationStore()
 const calibrationUI = useCalibrationUI()
+const moduleDeviceStore = useDeviceStore()
+
+// 计量设备抽屉显隐与已选台数（读取模块级勾选配置，连接/断开时同步更新）
+const drawerVisible = ref(false)
+const savedMeasureCount = computed(() =>
+  moduleDeviceStore.selectionByModule('calibration').measureDeviceIds.length
+)
+
+// 连接多台计量设备：复用 UI 包装（统一错误提示），成功后持久化勾选，
+// 供下次进入标定模块时抽屉恢复上次选择。
+async function handleMeasureConnect(deviceIds: string[]) {
+  await calibrationUI.connectDevice1604(deviceIds)
+  if (!calibrationStore.device1604Connected) return
+  moduleDeviceStore.setModuleSelection('calibration', { measureDeviceIds: [...deviceIds] })
+}
+
+// 断开后从恢复配置中移除对应勾选，保持"已选 N 台"与实际一致。
+async function handleMeasureDisconnect(deviceIds: string[]) {
+  await calibrationUI.disconnectDevice1604(deviceIds)
+  const saved = moduleDeviceStore.selectionByModule('calibration').measureDeviceIds
+  const remaining = saved.filter(id => !deviceIds.includes(id))
+  moduleDeviceStore.setModuleSelection('calibration', { measureDeviceIds: remaining })
+}
 
 const unitConsistent = ref(true)
+
+// 单位一致性检查：先于 watcher 定义，避免 immediate 回调触发 TDZ 引用错误
+// （设备已连接时切入标定页，immediate 回调同步执行会读到未初始化的 const）。
+const checkUnitConsistency = async () => {
+  try {
+    const result = await fetchUnitConsistency()
+    unitConsistent.value = result.consistent
+  } catch {
+    // 静默失败
+  }
+}
+
+const handleUnitChange = async () => {
+  if (calibrationStore.device1604Connected && calibrationStore.pressDeviceConnected) {
+    await checkUnitConsistency()
+  }
+}
 
 // 当计量设备和打压设备都连接时，自动检查单位一致性
 watch(
@@ -166,21 +216,6 @@ watch(
     }
   }
 )
-
-const checkUnitConsistency = async () => {
-  try {
-    const result = await fetchUnitConsistency()
-    unitConsistent.value = result.consistent
-  } catch {
-    // 静默失败
-  }
-}
-
-const handleUnitChange = async () => {
-  if (calibrationStore.device1604Connected && calibrationStore.pressDeviceConnected) {
-    await checkUnitConsistency()
-  }
-}
 
 const prerequisites = computed(() => {
   const items = [
@@ -328,6 +363,35 @@ const prerequisites = computed(() => {
   &:hover {
     box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.07), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
   }
+}
+
+/* 计量设备抽屉触发按钮：与计量模块 MeasurementSidebar 同风格 */
+.device-drawer-trigger {
+  width: 100%;
+  min-height: 40px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid $slate-200;
+  border-radius: 8px;
+  background: #fff;
+  color: $slate-700;
+  cursor: pointer;
+  font-family: $font-sans;
+  transition: border-color 0.15s ease, background 0.15s ease;
+
+  &:hover,
+  &:focus-visible {
+    border-color: $mint;
+    background: rgba(16, 185, 129, 0.05);
+    outline: none;
+  }
+
+  > .el-icon:first-child { color: $mint; font-size: 16px; }
+  > .el-icon:last-child { color: $slate-400; font-size: 13px; }
+  .trigger-label { flex: 1; min-width: 0; text-align: left; font-size: 13px; font-weight: 600; }
+  .trigger-status { color: $slate-500; font-size: 11px; white-space: nowrap; }
 }
 
 /* Section 标题：左侧 Mint 竖线 + 文字 */

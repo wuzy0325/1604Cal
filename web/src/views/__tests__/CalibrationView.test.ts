@@ -51,8 +51,8 @@ describe('CalibrationView', () => {
           RouterLink: {
             template: '<a><slot /></a>'
           },
-          Device1604Panel: {
-            template: '<div>Device1604Stub</div>'
+          CalibrationDeviceDrawer: {
+            template: '<div>CalibrationDeviceDrawerStub</div>'
           },
           PressDevicePanel: {
             template: '<div>PressDeviceStub</div>'
@@ -70,7 +70,7 @@ describe('CalibrationView', () => {
     })
 
     expect(wrapper.text()).toContain('标定工作台')
-    expect(wrapper.text()).toContain('Device1604Stub')
+    expect(wrapper.text()).toContain('CalibrationDeviceDrawerStub')
     expect(wrapper.text()).toContain('PressDeviceStub')
     expect(wrapper.text()).toContain('压力点设置')
     expect(wrapper.text()).toContain('采集数据')
