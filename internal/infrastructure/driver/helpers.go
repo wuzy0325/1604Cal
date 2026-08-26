@@ -29,23 +29,46 @@ func NormalizePressureUnit(unit string) string {
 	return device.NormalizePressureUnit(unit)
 }
 
-func pressureUnitToCode(unit string) (string, bool) {
+// pressureUnitToCode811A 将压力单位映射为 ConST811A 官方通讯指令集定义的单位码。
+// 官方码表（ConST811A通讯指令集-气体介质）：1130=Pa、1131=GPa、1132=MPa、
+// 1133=kPa、1137=bar、1138=mbar、1140=atm、1141=psi、1145=kgf/cm2、1156=inHg、1158=mmHg。
+// 注意：部分量程的模块（如实测的 (-0.1~10)MPa 表压模块）固件会按量程过滤
+// 显示位数不够的单位（Pa/mPa/μPa），设置时静默拒绝并保持原单位，
+// 这是设备侧行为；上层应通过设置后回读单位来发现此类不支持情况。
+func pressureUnitToCode811A(unit string) (string, bool) {
 	m := map[string]string{
-		"pa": "1130", "kpa": "1133", "mpa": "1132", "bar": "1105", "mbar": "1104",
-		"psi": "1141", "kgf/cm2": "1145", "mmhg": "1134", "atm": "1135",
+		"pa": "1130", "kpa": "1133", "mpa": "1132",
+		"bar": "1137", "mbar": "1138", "atm": "1140",
+		"psi": "1141", "kgf/cm2": "1145", "inhg": "1156", "mmhg": "1158",
 	}
 	code, ok := m[strings.ToLower(strings.TrimSpace(unit))]
 	return code, ok
 }
 
-// pressureUnitToCode811A 将压力单位映射为 811A 实机使用的单位码。
-// 该设备的 Pa 单位码为 1131；1130 会被设备静默拒绝。
-func pressureUnitToCode811A(unit string) (string, bool) {
-	code, ok := pressureUnitToCode(unit)
-	if strings.EqualFold(strings.TrimSpace(unit), "Pa") {
-		return "1131", true
+// parseConST811AUnit 解析 ConST811A 的单位查询响应，按官方通讯指令集码表映射。
+// 与 860 共用的 parseConSTGeneralUnit 不同：811A 的 1134/1135 是 mPa/μPa 而非
+// mmHg/atm，且 1131 是 GPa 而非 Pa（历史上曾误将 1131 当作 Pa 导致设备被设成 GPa）。
+// 无法识别的响应回退为 MPa，与既有驱动行为保持一致。
+func parseConST811AUnit(resp string) string {
+	trimmed := strings.TrimSpace(resp)
+	m := map[string]string{
+		"1130": "Pa", "1131": "GPa", "1132": "MPa", "1133": "kPa",
+		"1134": "mPa", "1135": "μPa", "1136": "hPa",
+		"1137": "bar", "1138": "mbar", "1139": "torr", "1140": "atm",
+		"1141": "psi", "1142": "psia", "1143": "psig",
+		"1144": "gf/cm2", "1145": "kgf/cm2",
+		"1147": "inH2O@4C", "1148": "inH2O@68F",
+		"1150": "mmH2O@4C", "1151": "mmH2O@20C",
+		"1153": "ftH2O@4C", "1154": "ftH2O@68F",
+		"1156": "inHg@0C", "1158": "mmHg@0C",
 	}
-	return code, ok
+	if unit, ok := m[trimmed]; ok {
+		return unit
+	}
+	if isValidPressureUnit(trimmed) {
+		return NormalizePressureUnit(trimmed)
+	}
+	return "MPa"
 }
 
 // pressureUnitToCode820 将压力单位映射为 LabVIEW 程序已验证的 820 单位值。
@@ -67,12 +90,14 @@ func pressureUnitToCodeSPC4000(unit string) (string, bool) {
 	return code, ok
 }
 
-// parseConSTGeneralUnit 解析 ConST 811A/860 等通用型号的单位查询响应。
-// 支持 SCPI 标准单位代码（1132=MPa 等）和字符串格式。
+// parseConSTGeneralUnit 解析 ConST 860 等通用型号的单位查询响应。
+// 支持 SCPI 标准单位代码和字符串格式。
+// 注意：不要把 811A 的码表加进来——两代设备的码含义不同（如 811A 的
+// 1134=mPa、1135=μPa、1131=GPa），811A 请使用 parseConST811AUnit。
 func parseConSTGeneralUnit(resp string) string {
 	trimmed := strings.TrimSpace(resp)
 	m := map[string]string{
-		"1130": "Pa", "1131": "Pa", "1133": "kPa", "1132": "MPa",
+		"1130": "Pa", "1133": "kPa", "1132": "MPa",
 		"1105": "bar", "1104": "mbar", "1141": "psi",
 		"1145": "kgf/cm2", "1134": "mmHg", "1135": "atm",
 	}

@@ -69,7 +69,7 @@ func (d *ConST811ADriver) ReadUnit(ctx context.Context) (string, error) {
 		log.Printf("[811A] ReadUnit error: %v", err)
 		return "", fmt.Errorf("read unit: %w", err)
 	}
-	unit := NormalizePressureUnit(parseConSTGeneralUnit(resp))
+	unit := NormalizePressureUnit(parseConST811AUnit(resp))
 	log.Printf("[811A] ReadUnit raw=%q parsed=%q", resp, unit)
 	return unit, nil
 }
